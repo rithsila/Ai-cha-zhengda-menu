@@ -24,7 +24,7 @@ export function BrandTabs({ activeBrand, onChange }: BrandTabsProps) {
           activeBrand === 'zhengda' ? 'bg-tg-bg text-brand-zhengda shadow-sm' : 'text-tg-hint'
         }`}
       >
-        <Fire size={20} weight={activeBrand === 'zhengda' ? 'duotone' : 'regular'} />
+        <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className={`h-8 w-auto object-contain ${activeBrand === 'zhengda' ? '' : 'opacity-50 grayscale'}`} />
         Zhengda
       </button>
     </div>
