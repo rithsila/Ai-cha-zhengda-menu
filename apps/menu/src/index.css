@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dynamic Telegram theme variable mapping */
+  --color-tg-bg: var(--tg-theme-bg-color);
+  --color-tg-text: var(--tg-theme-text-color);
+  --color-tg-hint: var(--tg-theme-hint-color);
+  --color-tg-link: var(--tg-theme-link-color);
+  --color-tg-primary: var(--tg-theme-button-color);
+  --color-tg-primary-text: var(--tg-theme-button-text-color);
+  --color-tg-secondary-bg: var(--tg-theme-secondary-bg-color);
+  
+  /* Brand Specific Additions */
+  --color-brand-primary: oklch(0.65 0.2 140); /* Vibrant Matcha Green */
+  --color-brand-zhengda: #e53935; /* Zhengda Crispy Red */
+  --color-brand-accent: oklch(0.5 0.15 300); /* Taro Purple */
+
+  /* Typography */
+  --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    /* Respect safe areas in Telegram Web App */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  * {
+    /* Prevents default tap highlight in mobile webviews */
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .mask-edges-x {
+    mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
+  }
+}

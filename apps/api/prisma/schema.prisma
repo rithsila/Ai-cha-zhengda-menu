@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model MenuItem {
+  id          String          @id @default(uuid())
+  brand       String
+  category    String
+  name        String
+  description String?
+  basePrice   Float
+  image       String?
+  modifiers   ModifierGroup[]
+  orderItems  OrderItem[]
+}
+
+model ModifierGroup {
+  id         String           @id @default(uuid())
+  name       String
+  type       String           // "single" | "multiple"
+  required   Boolean          @default(false)
+  menuItemId String
+  menuItem   MenuItem         @relation(fields: [menuItemId], references: [id])
+  options    ModifierOption[]
+}
+
+model ModifierOption {
+  id              String        @id @default(uuid())
+  name            String
+  priceDelta      Float         @default(0)
+  modifierGroupId String
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id])
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  totalAmount   Float
+  paymentMethod String      // "khqr" | "cash"
+  status        String      @default("pending") // "pending" | "paid" | "preparing" | "ready"
+  createdAt     DateTime    @default(now())
+  pickupCode    String?
+  items         OrderItem[]
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  quantity   Int      @default(1)
+  price      Float
+  modifiers  String   // JSON string of selected modifiers
+}
