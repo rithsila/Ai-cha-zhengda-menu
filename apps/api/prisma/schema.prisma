@@ -7,6 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  telegramUserId String  @id
+  loyaltyPoints  Int     @default(0)
+  orders         Order[]
+}
+
+model Branch {
+  id       String  @id @default(uuid())
+  name     String
+  address  String
+  isActive Boolean @default(true)
+  orders   Order[]
+}
+
 model MenuItem {
   id          String          @id @default(uuid())
   brand       String
@@ -15,6 +29,7 @@ model MenuItem {
   description String?
   basePrice   Float
   image       String?
+  isSoldOut   Boolean         @default(false)
   modifiers   ModifierGroup[]
   orderItems  OrderItem[]
 }
@@ -41,10 +56,18 @@ model Order {
   id            String      @id @default(uuid())
   totalAmount   Float
   paymentMethod String      // "khqr" | "cash"
-  status        String      @default("pending") // "pending" | "paid" | "preparing" | "ready"
-  createdAt     DateTime    @default(now())
-  pickupCode    String?
-  items         OrderItem[]
+  status         String      @default("pending") // "pending" | "paid" | "preparing" | "ready"
+  createdAt      DateTime    @default(now())
+  pickupCode     String?
+  telegramUserId String?
+  user           User?       @relation(fields: [telegramUserId], references: [telegramUserId])
+  orderType      String      @default("pickup") // "pickup" | "delivery"
+  deliveryAddress String?
+  branchId       String?
+  branch         Branch?     @relation(fields: [branchId], references: [id])
+  pointsEarned   Int         @default(0)
+  discountApplied Float      @default(0)
+  items          OrderItem[]
 }
 
 model OrderItem {

@@ -49,26 +49,28 @@ The application will support a dual-brand menu structure, split into two main se
 
 ## 3. Phased Implementation Plan
 
-**Phase 0 — Setup & Architecture:**
-- Configure BotFather bot.
-- Set up ABA PayWay / KHQR integration.
-- Initialize React + Vite frontend and set up the design system (Tailwind, Telegram Theme syncing).
+**Phase 0 — Setup & Architecture:** *(Completed)*
+- [x] Configure BotFather bot.
+- [x] Set up ABA PayWay / KHQR integration.
+- [x] Initialize React + Vite frontend and set up the design system (Tailwind, Telegram Theme syncing).
 
-**Phase 1 — MVP (Pickup & Dual-Menu):**
-- **UI:** Two main tabs for Ai-Cha and Zhengda.
-- **Flow:** Browse menu → Build item with modifiers (sizes/toppings/flavors) → Cart → Checkout via KHQR/Cash → Receive pickup code.
-- **Languages:** English, Khmer, and Chinese.
-- **Staff Ops:** New orders appear on the Staff Tablet Web Dashboard and trigger notifications.
+**Phase 1 — MVP (Pickup & Dual-Menu):** *(Completed)*
+- [x] **UI:** Two main tabs for Ai-Cha and Zhengda.
+- [x] **Flow:** Browse menu → Build item with modifiers (sizes/toppings/flavors) → Cart → Checkout via KHQR/Cash → Receive pickup code.
+- [x] **Languages:** English, Khmer, and Chinese.
+- [x] **Staff Ops:** New orders appear on the Staff Tablet Web Dashboard and trigger notifications.
 
-**Phase 2 — Order Tracking & Expansion:**
-- Live order status for the customer (Preparing → Ready for Pickup).
-- Order history and one-tap reordering.
-- Admin dashboard to toggle items as "Sold Out".
+*(See `README.md`, `TESTING.md`, and `INFRA.md` for full documentation on Phase 0 and 1)*
 
-**Phase 3 — Delivery & Loyalty:**
-- Add "Delivery" as an `order_type` alongside "Pickup".
-- Loyalty points and promotional discounts.
-- Multi-branch support.
+**Phase 2 — Order Tracking & Expansion:** *(Completed)*
+- [x] Live order status for the customer (Preparing → Ready for Pickup).
+- [x] Order history and one-tap reordering.
+- [x] Admin dashboard to toggle items as "Sold Out".
+
+**Phase 3 — Delivery & Loyalty:** *(Completed)*
+- [x] Add "Delivery" as an `order_type` alongside "Pickup".
+- [x] Loyalty points and promotional discounts.
+- [x] Multi-branch support.
 
 ---
 

@@ -22,6 +22,7 @@ export interface MenuItem {
   description?: string;
   basePrice: number;
   imageFallback?: string;
+  isSoldOut?: boolean;
   modifiers?: ModifierGroup[];
 }
 

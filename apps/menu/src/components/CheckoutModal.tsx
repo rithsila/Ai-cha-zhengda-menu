@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
+import { CaretRight, MapPin, Storefront, Coins } from '@phosphor-icons/react';
+import twa from '@twa-dev/sdk';
+const WebApp = (twa as any)?.WebApp || twa || {};
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -15,21 +18,89 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: CheckoutModalProps) {
   const { t } = useTranslation();
+  const [step, setStep] = useState<1 | 2>(1);
   const [method, setMethod] = useState<'khqr' | 'cash'>('khqr');
+  const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
+  const [branchId, setBranchId] = useState<string>('');
+  const [deliveryAddress, setDeliveryAddress] = useState<string>('');
+  const [usePoints, setUsePoints] = useState(false);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [branches, setBranches] = useState<any[]>([]);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Fetch branches and user profile on mount
+  useState(() => {
+    const fetchData = async () => {
+      try {
+        const [branchRes, userRes] = await Promise.all([
+          fetch('http://localhost:4000/api/branches'),
+          fetch(`http://localhost:4000/api/user/${WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id'}`)
+        ]);
+        if (branchRes.ok) {
+          const data = await branchRes.json();
+          setBranches(data);
+          if (data.length > 0) setBranchId(data[0].id);
+        }
+        if (userRes.ok) {
+          setUserProfile(await userRes.json());
+        }
+      } catch (err) {
+        console.error('Failed to fetch checkout data', err);
+      }
+    };
+    fetchData();
+  });
+
+  const maxDiscountFromPoints = userProfile ? userProfile.loyaltyPoints / 100 : 0;
+  const discountApplied = usePoints ? Math.min(maxDiscountFromPoints, total) : 0;
+  const finalTotal = total - discountApplied;
+
+  const handleNext = () => {
+    if (!branchId) {
+      setError('Please select a branch.');
+      return;
+    }
+    if (orderType === 'delivery' && !deliveryAddress.trim()) {
+      setError('Please provide a delivery address.');
+      return;
+    }
+    setError(null);
+    setStep(2);
+  };
 
   const handleConfirm = async () => {
     setIsLoading(true);
     setError(null);
     try {
+      if (method === 'khqr') {
+        // Mock KHQR Integration call
+        const khqrRes = await fetch('http://localhost:4000/api/payment/khqr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: finalTotal }),
+        });
+        if (!khqrRes.ok) throw new Error('Failed to generate KHQR');
+        await khqrRes.json();
+        
+        // Simulate waiting for user to scan and pay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
       const response = await fetch('http://localhost:4000/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: cart,
-          totalAmount: total,
+          totalAmount: total, // send original total, server handles points logic
           paymentMethod: method,
+          telegramUserId: WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id',
+          branchId,
+          orderType,
+          deliveryAddress,
+          usePoints
         }),
       });
 
@@ -64,8 +135,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             onClick={e => e.stopPropagation()}
           >
             <div className="text-center">
-              <h2 className="text-2xl font-bold">{t('checkout')}</h2>
-              <p className="text-tg-hint mt-1">{t('total')}: {formatCurrency(total)}</p>
+              <h2 className="text-2xl font-bold">{step === 1 ? t('Order Details', 'Order Details') : t('checkout')}</h2>
+              {step === 2 && <p className="text-tg-hint mt-1">{t('total')}: {formatCurrency(finalTotal)}</p>}
             </div>
 
             {error && (
@@ -74,37 +145,129 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               </div>
             )}
 
-            <div className="flex flex-col gap-3">
-              <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
-              
-              <button 
-                onClick={() => setMethod('khqr')}
-                className={`p-4 rounded-xl border-2 transition-colors flex justify-between items-center ${
-                  method === 'khqr' ? 'border-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 bg-tg-secondary-bg'
-                }`}
-              >
-                <div className="font-bold text-lg">{t('khqr')}</div>
-                <div className="w-5 h-5 rounded-full border-2 border-brand-primary flex items-center justify-center">
-                  {method === 'khqr' && <div className="w-3 h-3 bg-brand-primary rounded-full" />}
+            {step === 1 ? (
+              <div className="flex flex-col gap-4">
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Select Branch</h3>
+                  <div className="flex flex-col gap-2">
+                    {branches.map(b => (
+                      <button 
+                        key={b.id}
+                        onClick={() => setBranchId(b.id)}
+                        className={`p-3 rounded-xl border-2 transition-colors flex justify-between items-center text-left ${branchId === b.id ? 'border-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 bg-tg-secondary-bg'}`}
+                      >
+                        <div>
+                          <div className="font-bold">{b.name}</div>
+                          <div className="text-xs text-tg-hint">{b.address}</div>
+                        </div>
+                        {branchId === b.id && <div className="w-3 h-3 bg-brand-primary rounded-full" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </button>
 
-              <button 
-                onClick={() => setMethod('cash')}
-                className={`p-4 rounded-xl border-2 transition-colors flex justify-between items-center ${
-                  method === 'cash' ? 'border-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 bg-tg-secondary-bg'
-                }`}
-              >
-                <div className="font-bold text-lg">{t('cash')}</div>
-                <div className="w-5 h-5 rounded-full border-2 border-brand-primary flex items-center justify-center">
-                  {method === 'cash' && <div className="w-3 h-3 bg-brand-primary rounded-full" />}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Order Type</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => setOrderType('pickup')}
+                      className={`p-3 rounded-xl border-2 font-bold flex items-center justify-center gap-2 ${orderType === 'pickup' ? 'border-brand-primary text-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 text-tg-hint'}`}
+                    >
+                      <Storefront size={20} /> Pickup
+                    </button>
+                    <button 
+                      onClick={() => setOrderType('delivery')}
+                      className={`p-3 rounded-xl border-2 font-bold flex items-center justify-center gap-2 ${orderType === 'delivery' ? 'border-brand-primary text-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 text-tg-hint'}`}
+                    >
+                      <MapPin size={20} /> Delivery
+                    </button>
+                  </div>
                 </div>
-              </button>
-            </div>
 
-            <Button fullWidth onClick={handleConfirm} className="py-4" disabled={isLoading}>
-              {isLoading ? t('processing', 'Processing...') : t('confirmOrder')}
-            </Button>
+                {orderType === 'delivery' && (
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm">Delivery Address</h3>
+                    <textarea 
+                      value={deliveryAddress}
+                      onChange={e => setDeliveryAddress(e.target.value)}
+                      placeholder="Enter your full address..."
+                      className="w-full bg-tg-secondary-bg border-2 border-tg-hint/20 rounded-xl p-3 text-sm focus:outline-none focus:border-brand-primary"
+                      rows={3}
+                    />
+                  </div>
+                )}
+                
+                <Button fullWidth onClick={handleNext} className="py-4 mt-2">
+                  Continue to Payment <CaretRight size={20} />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {userProfile && userProfile.loyaltyPoints > 0 && (
+                  <div className="bg-brand-primary/10 border-2 border-brand-primary/20 rounded-xl p-4 flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-brand-primary flex items-center gap-2">
+                        <Coins size={20} weight="fill" /> 
+                        {userProfile.loyaltyPoints} Points Available
+                      </div>
+                      <div className="text-xs text-brand-primary/80 mt-1">
+                        Use {Math.min(userProfile.loyaltyPoints, total * 100)} points for {formatCurrency(Math.min(maxDiscountFromPoints, total))} off
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={usePoints} onChange={() => setUsePoints(!usePoints)} />
+                      <div className="w-11 h-6 bg-tg-hint/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary"></div>
+                    </label>
+                  </div>
+                )}
+
+                {usePoints && discountApplied > 0 && (
+                  <div className="flex justify-between items-center text-sm font-bold text-brand-primary px-2">
+                    <span>Discount Applied:</span>
+                    <span>-{formatCurrency(discountApplied)}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3">
+                  <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
+                  <button 
+                    onClick={() => setMethod('khqr')}
+                    className={`p-4 rounded-xl border-2 transition-colors flex justify-between items-center ${
+                      method === 'khqr' ? 'border-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 bg-tg-secondary-bg'
+                    }`}
+                  >
+                    <div className="font-bold text-lg">{t('khqr')}</div>
+                    <div className="w-5 h-5 rounded-full border-2 border-brand-primary flex items-center justify-center">
+                      {method === 'khqr' && <div className="w-3 h-3 bg-brand-primary rounded-full" />}
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setMethod('cash')}
+                    className={`p-4 rounded-xl border-2 transition-colors flex justify-between items-center ${
+                      method === 'cash' ? 'border-brand-primary bg-brand-primary/5' : 'border-tg-hint/20 bg-tg-secondary-bg'
+                    }`}
+                  >
+                    <div className="font-bold text-lg">{t('cash')}</div>
+                    <div className="w-5 h-5 rounded-full border-2 border-brand-primary flex items-center justify-center">
+                      {method === 'cash' && <div className="w-3 h-3 bg-brand-primary rounded-full" />}
+                    </div>
+                  </button>
+                </div>
+
+                <div className="flex gap-3 mt-2">
+                  <button 
+                    onClick={() => setStep(1)}
+                    className="flex-1 py-4 bg-tg-secondary-bg text-tg-text font-bold rounded-xl active:scale-95 transition-transform"
+                  >
+                    Back
+                  </button>
+                  <Button className="flex-[2] py-4" onClick={handleConfirm} disabled={isLoading}>
+                    {isLoading ? t('processing', 'Processing...') : `Pay ${formatCurrency(finalTotal)}`}
+                  </Button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}

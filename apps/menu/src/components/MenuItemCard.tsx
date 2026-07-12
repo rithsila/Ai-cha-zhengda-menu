@@ -20,8 +20,8 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
 
   return (
     <motion.div 
-      whileTap={{ scale: 0.98 }}
-      className="bg-tg-secondary-bg rounded-2xl overflow-hidden shadow-sm flex flex-col"
+      whileTap={{ scale: item.isSoldOut ? 1 : 0.98 }}
+      className={`bg-tg-secondary-bg rounded-2xl overflow-hidden shadow-sm flex flex-col ${item.isSoldOut ? 'opacity-60 grayscale-[0.5]' : ''}`}
     >
       <div className={`h-32 flex items-center justify-center relative ${item.imageFallback ? 'bg-tg-hint/10' : brandBg}`}>
          {item.imageFallback ? (
@@ -39,9 +39,15 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
              )}
            </div>
          )}
-         <div className={`absolute top-2 right-2 bg-tg-bg/90 backdrop-blur-sm text-xs font-bold px-2 py-1 rounded-full ${brandColor}`}>
-           {formatCurrency(item.basePrice)}
-         </div>
+         {item.isSoldOut ? (
+           <div className="absolute top-2 right-2 bg-red-500/90 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-full">
+             Sold Out
+           </div>
+         ) : (
+           <div className={`absolute top-2 right-2 bg-tg-bg/90 backdrop-blur-sm text-xs font-bold px-2 py-1 rounded-full ${brandColor}`}>
+             {formatCurrency(item.basePrice)}
+           </div>
+         )}
          {onToggleFavorite && (
            <button 
              onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
@@ -62,10 +68,11 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
         </div>
         <Button 
           brand={item.brand}
-          onClick={() => onAdd(item)}
-          className="py-2"
+          onClick={() => !item.isSoldOut && onAdd(item)}
+          className={`py-2 ${item.isSoldOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={item.isSoldOut}
         >
-          {item.modifiers && item.modifiers.length > 0 ? t('customize') : t('add')}
+          {item.isSoldOut ? t('soldOut', 'Sold Out') : (item.modifiers && item.modifiers.length > 0 ? t('customize') : t('add'))}
         </Button>
       </div>
     </motion.div>

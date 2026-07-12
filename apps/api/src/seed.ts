@@ -9,6 +9,29 @@ async function main() {
   await prisma.modifierOption.deleteMany({});
   await prisma.modifierGroup.deleteMany({});
   await prisma.menuItem.deleteMany({});
+  
+  // Seed Branches
+  const b1 = await prisma.branch.upsert({
+    where: { id: 'branch-toul-kork' },
+    update: {},
+    create: {
+      id: 'branch-toul-kork',
+      name: 'Toul Kork Branch',
+      address: 'Street 315, Toul Kork, Phnom Penh',
+      isActive: true,
+    }
+  });
+
+  const b2 = await prisma.branch.upsert({
+    where: { id: 'branch-bkk1' },
+    update: {},
+    create: {
+      id: 'branch-bkk1',
+      name: 'BKK1 Branch',
+      address: 'Street 51, BKK1, Phnom Penh',
+      isActive: true,
+    }
+  });
 
   const ai1 = await prisma.menuItem.create({
     data: {
@@ -74,7 +97,7 @@ async function main() {
     }
   });
 
-  console.log('Seeded successfully!', { ai1, zh1 });
+  console.log('Seeded successfully!', { ai1, zh1, b1, b2 });
 }
 
 main()

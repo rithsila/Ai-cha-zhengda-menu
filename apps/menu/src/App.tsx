@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import twa from '@twa-dev/sdk';
 const WebApp = (twa as any)?.WebApp || twa || {};
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, Translate, MagnifyingGlass, X } from '@phosphor-icons/react';
+import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { formatCurrency } from './utils/format';
@@ -17,6 +17,7 @@ import { MenuItemCard } from './components/MenuItemCard';
 import { ModifierModal } from './components/ModifierModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
+import { OrdersView } from './components/OrdersView';
 import { Button } from './components/ui/Button';
 
 const isSameModifiers = (a: Record<string, ModifierOption[]>, b: Record<string, ModifierOption[]>) => {
@@ -38,6 +39,8 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'menu' | 'orders'>('menu');
+  const [catalogOverrides, setCatalogOverrides] = useState<Record<string, { isSoldOut: boolean }>>({});
   
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeModalItem, setActiveModalItem] = useState<MenuItem | null>(null);
@@ -49,15 +52,38 @@ export default function App() {
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [pickupCode, setPickupCode] = useState('');
 
-  // Simulate initial data loading
+  // Simulate initial data loading and fetch catalog overrides
   const [isLoading, setIsLoading] = useState(true);
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(timer);
+    const fetchCatalog = async () => {
+      try {
+        const res = await fetch('http://localhost:4000/api/catalog');
+        if (res.ok) {
+          const data = await res.json();
+          const overrides: Record<string, { isSoldOut: boolean }> = {};
+          data.forEach((item: any) => {
+            overrides[item.id] = { isSoldOut: item.isSoldOut };
+          });
+          setCatalogOverrides(overrides);
+        }
+      } catch (error) {
+        console.error('Failed to fetch catalog overrides', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCatalog();
+    const interval = setInterval(fetchCatalog, 10000); // Check for sold-out status every 10s
+    return () => clearInterval(interval);
   }, []);
 
   // Derived state for current brand's items
-  const brandItems = useMemo(() => CATALOG.filter(i => i.brand === activeBrand), [activeBrand]);
+  const brandItems = useMemo(() => {
+    return CATALOG.filter(i => i.brand === activeBrand).map(item => ({
+      ...item,
+      isSoldOut: catalogOverrides[item.id]?.isSoldOut || false
+    }));
+  }, [activeBrand, catalogOverrides]);
   const categories = useMemo(() => {
     const cats = ['All', ...new Set(brandItems.map(i => i.category))];
     const hasBrandFavorites = brandItems.some(i => favorites.includes(i.id));
@@ -69,9 +95,14 @@ export default function App() {
   
   // Filtered items
   const visibleItems = useMemo(() => {
+    const allMapped = CATALOG.map(item => ({
+      ...item,
+      isSoldOut: catalogOverrides[item.id]?.isSoldOut || false
+    }));
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      return CATALOG.filter(i => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
+      return allMapped.filter(i => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
     }
     if (activeCategory === 'Favorites') {
       return brandItems.filter(i => favorites.includes(i.id));
@@ -159,6 +190,12 @@ export default function App() {
     setEditingCartItemId(null);
   };
 
+  const handleReorder = (items: CartItem[]) => {
+    setCart([...cart, ...items]);
+    setActiveTab('menu');
+    setIsCartOpen(true);
+  };
+
   const removeFromCart = (id: string) => {
     setCart(cart.filter(item => item.id !== id));
   };
@@ -221,26 +258,32 @@ export default function App() {
       {/* Header */}
       <header className="mb-6 pt-2 flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold font-sans">{t('menuTitle')}</h1>
-          <p className="text-tg-hint text-sm">{t('menuSubtitle')}</p>
+          <h1 className="text-3xl font-bold font-sans">{activeTab === 'menu' ? t('menuTitle') : 'My Orders'}</h1>
+          <p className="text-tg-hint text-sm">{activeTab === 'menu' ? t('menuSubtitle') : 'Track your active and past orders'}</p>
         </div>
         <div className="flex gap-2">
-          <button 
-            onClick={() => {
-              setIsSearchVisible(!isSearchVisible);
-              if (isSearchVisible) setSearchQuery('');
-            }} 
-            className={`p-3 rounded-xl flex items-center justify-center transition-colors ${isSearchVisible ? 'bg-brand-primary text-white' : 'bg-tg-secondary-bg text-tg-hint'}`}
-          >
-            <MagnifyingGlass size={20} weight={isSearchVisible ? "bold" : "regular"} />
-          </button>
+          {activeTab === 'menu' && (
+            <button 
+              onClick={() => {
+                setIsSearchVisible(!isSearchVisible);
+                if (isSearchVisible) setSearchQuery('');
+              }} 
+              className={`p-3 rounded-xl flex items-center justify-center transition-colors ${isSearchVisible ? 'bg-brand-primary text-white' : 'bg-tg-secondary-bg text-tg-hint'}`}
+            >
+              <MagnifyingGlass size={20} weight={isSearchVisible ? "bold" : "regular"} />
+            </button>
+          )}
           <button onClick={cycleLanguage} className="bg-tg-secondary-bg p-3 rounded-xl text-tg-hint flex items-center gap-2 font-bold text-sm">
             <Translate size={20} /> {i18n.language.toUpperCase()}
           </button>
         </div>
       </header>
 
-      {/* Search Bar */}
+      {activeTab === 'orders' ? (
+        <OrdersView onReorder={handleReorder} />
+      ) : (
+        <>
+          {/* Search Bar */}
       <AnimatePresence>
         {isSearchVisible && (
           <motion.div 
@@ -340,13 +383,33 @@ export default function App() {
           )}
         </div>
       )}
+      </>
+      )}
+
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.1)] rounded-full py-1.5 px-6 flex justify-center gap-8 z-20 supports-[backdrop-filter]:bg-white/20">
+        <button 
+          onClick={() => setActiveTab('menu')}
+          className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'menu' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
+        >
+          <List size={22} weight={activeTab === 'menu' ? 'fill' : 'regular'} />
+          <span className="text-[10px] font-bold mt-0.5">Menu</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('orders')}
+          className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'orders' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
+        >
+          <ClockCounterClockwise size={22} weight={activeTab === 'orders' ? 'fill' : 'regular'} />
+          <span className="text-[10px] font-bold mt-0.5">Orders</span>
+        </button>
+      </div>
 
       {/* Floating Cart Button (Fallback if Telegram MainButton is not available) */}
       {(!WebApp?.isExpanded && cart.length > 0 && !isCartOpen) && (
         <motion.div 
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-6 left-4 right-4 z-30"
+          className="fixed bottom-20 left-4 right-4 z-30"
         >
           <button 
             onClick={() => setIsCartOpen(true)}
