@@ -254,75 +254,93 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-tg-bg text-tg-text p-4 pb-28">
-      {/* Header */}
-      <header className="mb-6 pt-2 flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold font-sans">{activeTab === 'menu' ? t('menuTitle') : 'My Orders'}</h1>
-          <p className="text-tg-hint text-sm">{activeTab === 'menu' ? t('menuSubtitle') : 'Track your active and past orders'}</p>
-        </div>
-        <div className="flex gap-2">
-          {activeTab === 'menu' && (
-            <button 
-              onClick={() => {
-                setIsSearchVisible(!isSearchVisible);
-                if (isSearchVisible) setSearchQuery('');
-              }} 
-              className={`p-3 rounded-xl flex items-center justify-center transition-colors ${isSearchVisible ? 'bg-brand-primary text-white' : 'bg-tg-secondary-bg text-tg-hint'}`}
-            >
-              <MagnifyingGlass size={20} weight={isSearchVisible ? "bold" : "regular"} />
-            </button>
-          )}
-          <button onClick={cycleLanguage} className="bg-tg-secondary-bg p-3 rounded-xl text-tg-hint flex items-center gap-2 font-bold text-sm">
-            <Translate size={20} /> {i18n.language.toUpperCase()}
-          </button>
-        </div>
-      </header>
-
-      {activeTab === 'orders' ? (
-        <OrdersView onReorder={handleReorder} />
-      ) : (
-        <>
-          {/* Search Bar */}
-      <AnimatePresence>
-        {isSearchVisible && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-6 relative"
-          >
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-tg-hint">
-              <MagnifyingGlass size={20} />
-            </div>
-            <input 
-              type="text" 
-              autoFocus
-              placeholder={t('searchMenu', 'Search menu...')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-tg-secondary-bg text-tg-text pl-12 pr-10 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition-shadow"
-            />
-            {searchQuery && (
+    <div className="min-h-screen bg-tg-bg text-tg-text pb-28">
+      {/* Top Banner Section */}
+      <div 
+        className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-6 shadow-sm overflow-hidden"
+        style={{ backgroundImage: 'url(/banner.png)' }}
+      >
+        <div className="absolute inset-0 bg-black/40 z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-0 pointer-events-none"></div>
+        
+        {/* Header */}
+        <header className="mb-6 flex justify-between items-start relative z-10 text-white">
+          <div>
+            <h1 className="text-3xl font-bold font-sans drop-shadow-md">{activeTab === 'menu' ? t('menuTitle') : 'My Orders'}</h1>
+            <p className="text-white/90 text-sm drop-shadow-md">{activeTab === 'menu' ? t('menuSubtitle') : 'Track your active and past orders'}</p>
+          </div>
+          <div className="flex gap-2">
+            {activeTab === 'menu' && (
               <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-4 flex items-center text-tg-hint hover:text-tg-text"
+                onClick={() => {
+                  setIsSearchVisible(!isSearchVisible);
+                  if (isSearchVisible) setSearchQuery('');
+                }} 
+                className={`p-3 rounded-xl flex items-center justify-center transition-colors backdrop-blur-md border border-white/20 shadow-sm ${isSearchVisible ? 'bg-brand-primary text-white' : 'bg-black/30 text-white hover:bg-black/40'}`}
               >
-                <X size={20} weight="bold" />
+                <MagnifyingGlass size={20} weight={isSearchVisible ? "bold" : "regular"} />
               </button>
             )}
-          </motion.div>
+            <button onClick={cycleLanguage} className="bg-black/30 hover:bg-black/40 border border-white/20 backdrop-blur-md p-3 rounded-xl text-white flex items-center gap-2 font-bold text-sm transition-colors shadow-sm">
+              <Translate size={20} /> {i18n.language.toUpperCase()}
+            </button>
+          </div>
+        </header>
+
+        {activeTab === 'menu' && (
+          <div className="relative z-10">
+            {/* Search Bar */}
+            <AnimatePresence>
+              {isSearchVisible && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="mb-2 relative"
+                >
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400">
+                    <MagnifyingGlass size={20} />
+                  </div>
+                  <input 
+                    type="text" 
+                    autoFocus
+                    placeholder={t('searchMenu', 'Search menu...')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/95 backdrop-blur-md text-gray-900 pl-12 pr-10 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition-shadow shadow-md"
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      className="absolute inset-y-0 right-4 flex items-center text-gray-400 hover:text-gray-900"
+                    >
+                      <X size={20} weight="bold" />
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {!searchQuery && (
+              <div className="mt-2">
+                {/* Brand Tabs */}
+                <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} />
+              </div>
+            )}
+          </div>
         )}
-      </AnimatePresence>
+      </div>
 
-      {!searchQuery && (
-        <>
-          {/* Brand Tabs */}
-          <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} />
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeBrand}
+      <div className="px-4 pt-6">
+        {activeTab === 'orders' ? (
+          <OrdersView onReorder={handleReorder} />
+        ) : (
+          <>
+            {!searchQuery && (
+              <>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeBrand}
               initial={{ opacity: 0, x: activeBrand === 'ai-cha' ? -10 : 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: activeBrand === 'ai-cha' ? 10 : -10 }}
@@ -385,6 +403,7 @@ export default function App() {
       )}
       </>
       )}
+      </div>
 
       {/* Bottom Navigation */}
       <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.1)] rounded-full py-1.5 px-6 flex justify-center gap-8 z-20 supports-[backdrop-filter]:bg-white/20">
