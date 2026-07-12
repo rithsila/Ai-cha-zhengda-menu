@@ -1,4 +1,4 @@
-import { Coffee, Fire } from '@phosphor-icons/react';
+
 import type { Brand } from '../../types';
 
 interface BrandTabsProps {
@@ -15,7 +15,7 @@ export function BrandTabs({ activeBrand, onChange }: BrandTabsProps) {
           activeBrand === 'ai-cha' ? 'bg-tg-bg text-brand-primary shadow-sm' : 'text-tg-hint'
         }`}
       >
-        <Coffee size={20} weight={activeBrand === 'ai-cha' ? 'duotone' : 'regular'} />
+        <img src="/images/aicha-logo.png" alt="Ai-Cha" className={`h-8 w-auto object-contain ${activeBrand === 'ai-cha' ? '' : 'opacity-50 grayscale'}`} />
         Ai-Cha
       </button>
       <button

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Coffee, Hamburger, Heart } from '@phosphor-icons/react';
+import { Heart } from '@phosphor-icons/react';
 import type { MenuItem } from '../types';
 import { Button } from './ui/Button';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ interface MenuItemCardProps {
 export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: MenuItemCardProps) {
   const { t } = useTranslation();
   const isAiCha = item.brand === 'ai-cha';
-  const Icon = isAiCha ? Coffee : Hamburger;
   const brandColor = isAiCha ? 'text-brand-primary' : 'text-brand-zhengda';
   const brandBg = isAiCha ? 'bg-brand-primary/10' : 'bg-brand-zhengda/10';
 
@@ -33,7 +32,11 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
            />
          ) : (
            <div className="p-3 rounded-full bg-tg-bg/60 backdrop-blur-sm shadow-sm border border-tg-hint/10">
-             <Icon size={40} weight="duotone" className={brandColor} />
+             {isAiCha ? (
+               <img src="/images/aicha-icon-cropped.png" alt="Ai-Cha" className="h-10 w-auto object-contain" />
+             ) : (
+               <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className="h-10 w-auto object-contain" />
+             )}
            </div>
          )}
          <div className={`absolute top-2 right-2 bg-tg-bg/90 backdrop-blur-sm text-xs font-bold px-2 py-1 rounded-full ${brandColor}`}>
