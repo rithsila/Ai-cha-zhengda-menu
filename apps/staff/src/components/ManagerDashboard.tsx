@@ -50,12 +50,16 @@ export function ManagerDashboard({ managerPin }: { managerPin: string }) {
   const handleSavePoints = async () => {
     if (!foundUser) return;
     try {
-      await fetch(`http://localhost:4000/api/users/${foundUser.telegramUserId}/points`, {
+      const res = await fetch(`http://localhost:4000/api/users/${foundUser.telegramUserId}/points`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'x-manager-pin': managerPin },
         body: JSON.stringify({ points: pointsAdjust })
       });
-      alert('Points updated!');
+      if (res.ok) {
+        alert('Points updated!');
+      } else {
+        alert('Failed to update points. Please check your Manager PIN.');
+      }
     } catch (e) {
       console.error(e);
     }
