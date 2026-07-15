@@ -3,3 +3,6 @@ node_modules
 .env
 
 /generated/prisma
+
+prisma/test.db
+prisma/test.db-journal
