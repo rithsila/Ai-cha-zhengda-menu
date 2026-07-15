@@ -67,6 +67,8 @@ model Order {
   user           User?       @relation(fields: [telegramUserId], references: [telegramUserId])
   orderType      String      @default("pickup") // "pickup" | "delivery"
   deliveryAddress String?
+  deliveryLat     Float?
+  deliveryLng     Float?
   branchId       String?
   branch         Branch?     @relation(fields: [branchId], references: [id])
   pointsEarned   Int         @default(0)

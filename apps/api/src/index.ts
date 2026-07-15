@@ -77,7 +77,7 @@ app.put('/api/catalog/:id/sold-out', async (req, res) => {
 
 app.post('/api/orders', async (req, res) => {
   try {
-    const { items, totalAmount: reqTotalAmount, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, usePoints } = req.body;
+    const { items, totalAmount: reqTotalAmount, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, usePoints } = req.body;
     
     // Check if user exists to handle points
     let user = null;
@@ -127,6 +127,8 @@ app.post('/api/orders', async (req, res) => {
           pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`, // mock code
           orderType: orderType || 'pickup',
           deliveryAddress: deliveryAddress || null,
+          deliveryLat: deliveryLat || null,
+          deliveryLng: deliveryLng || null,
           branchId: branchId || null,
           pointsEarned,
           discountApplied,
