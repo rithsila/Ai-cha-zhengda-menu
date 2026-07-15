@@ -13,6 +13,28 @@ type OrderItem = {
   };
 };
 
+/**
+ * Safely parse order item modifiers JSON.
+ * Returns an array of [group, optionNames] pairs.
+ * Handles invalid JSON, non-object values, non-array group values, and missing .name properties.
+ */
+function parseModifiers(raw: string): [string, string[]][] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return [];
+    }
+    return Object.entries(parsed)
+      .filter(([_, value]) => Array.isArray(value))
+      .map(([group, opts]) => [
+        group,
+        (opts as any[]).map((o) => o?.name ?? String(o))
+      ]);
+  } catch {
+    return [];
+  }
+}
+
 type Order = {
   id: string;
   totalAmount: number;
@@ -204,9 +226,9 @@ function App() {
                           </div>
                           {item.modifiers && item.modifiers !== '{}' && (
                             <div className="text-gray-500 text-xs mt-1 pl-4 border-l-2 border-gray-200">
-                              {Object.entries(JSON.parse(item.modifiers)).map(([group, opts]: any) => (
+                              {parseModifiers(item.modifiers).map(([group, optionNames]) => (
                                 <div key={group}>
-                                  {opts.map((o: any) => o.name).join(', ')}
+                                  {optionNames.join(', ')}
                                 </div>
                               ))}
                             </div>
