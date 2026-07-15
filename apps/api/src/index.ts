@@ -97,44 +97,49 @@ app.post('/api/orders', async (req, res) => {
       const maxDiscountFromPoints = user.loyaltyPoints / 100;
       discountApplied = Math.min(maxDiscountFromPoints, finalAmount);
       finalAmount = finalAmount - discountApplied;
-      
-      // Deduct points
-      await prisma.user.update({
-        where: { telegramUserId },
-        data: { loyaltyPoints: { decrement: discountApplied * 100 } }
-      });
     }
 
     // Earn points on final amount: 10 points per $1
     const pointsEarned = Math.floor(finalAmount * 10);
-    if (user && finalAmount > 0) {
-      await prisma.user.update({
-        where: { telegramUserId },
-        data: { loyaltyPoints: { increment: pointsEarned } }
-      });
-    }
 
-    const order = await prisma.order.create({
-      data: {
-        totalAmount: finalAmount,
-        paymentMethod,
-        telegramUserId,
-        status: 'pending',
-        pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`, // mock code
-        orderType: orderType || 'pickup',
-        deliveryAddress: deliveryAddress || null,
-        branchId: branchId || null,
-        pointsEarned,
-        discountApplied,
-        items: {
-          create: items.map((item: any) => ({
-            menuItemId: item.menuItemId,
-            quantity: item.quantity,
-            price: item.totalPrice,
-            modifiers: JSON.stringify(item.selectedModifiers)
-          }))
-        }
+    const order = await prisma.$transaction(async (tx) => {
+      if (usePoints && user && user.loyaltyPoints > 0) {
+        // Deduct points
+        await tx.user.update({
+          where: { telegramUserId },
+          data: { loyaltyPoints: { decrement: discountApplied * 100 } }
+        });
       }
+
+      if (user && finalAmount > 0) {
+        await tx.user.update({
+          where: { telegramUserId },
+          data: { loyaltyPoints: { increment: pointsEarned } }
+        });
+      }
+
+      return tx.order.create({
+        data: {
+          totalAmount: finalAmount,
+          paymentMethod,
+          telegramUserId,
+          status: 'pending',
+          pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`, // mock code
+          orderType: orderType || 'pickup',
+          deliveryAddress: deliveryAddress || null,
+          branchId: branchId || null,
+          pointsEarned,
+          discountApplied,
+          items: {
+            create: items.map((item: any) => ({
+              menuItemId: item.menuItemId,
+              quantity: item.quantity,
+              price: item.totalPrice,
+              modifiers: JSON.stringify(item.selectedModifiers)
+            }))
+          }
+        }
+      });
     });
 
     res.json(order);
