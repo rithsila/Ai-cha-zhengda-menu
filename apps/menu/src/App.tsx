@@ -32,6 +32,39 @@ const isSameModifiers = (a: Record<string, ModifierOption[]>, b: Record<string, 
   return true;
 };
 
+const WebLogin = () => {
+  const botName = import.meta.env.VITE_BOT_NAME || 'YourBotUsername';
+
+  return (
+    <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-50 p-6 text-center">
+      <div className="bg-white p-8 rounded-2xl shadow-sm max-w-sm w-full">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome</h1>
+        <p className="text-gray-500 mb-8">Please log in with Telegram to access the menu from your browser.</p>
+        
+        <div 
+          id="telegram-login-widget" 
+          className="flex justify-center min-h-[40px]"
+          ref={(el) => {
+            if (el && !el.hasChildNodes()) {
+              const script = document.createElement('script');
+              script.src = "https://telegram.org/js/telegram-widget.js?22";
+              script.setAttribute('data-telegram-login', botName);
+              script.setAttribute('data-size', 'large');
+              script.setAttribute('data-auth-url', `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/auth/telegram/callback`);
+              script.setAttribute('data-request-access', 'write');
+              el.appendChild(script);
+            }
+          }}
+        ></div>
+        
+        <p className="text-xs text-gray-400 mt-6">
+          Or open this link directly inside the Telegram app.
+        </p>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
@@ -244,6 +277,12 @@ export default function App() {
     const next = langs[(langs.indexOf(i18n.language) + 1) % langs.length];
     i18n.changeLanguage(next);
   };
+
+  const isTelegramWebApp = typeof window !== 'undefined' && !!(window as any).Telegram?.WebApp?.initData;
+  
+  if (!isTelegramWebApp && import.meta.env.PROD) {
+    return <WebLogin />;
+  }
 
   if (isSuccessOpen) {
     return (
