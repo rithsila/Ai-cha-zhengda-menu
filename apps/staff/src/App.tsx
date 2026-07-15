@@ -87,6 +87,8 @@ type Order = {
   pickupCode: string | null;
   orderType: string;
   deliveryAddress: string | null;
+  deliveryLat: number | null;
+  deliveryLng: number | null;
   items: OrderItem[];
 };
 
@@ -258,6 +260,18 @@ function App() {
                       <div className="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100 text-sm">
                         <span className="text-gray-500 font-bold block mb-1 text-xs">Delivery Address:</span>
                         {order.deliveryAddress}
+                        {order.deliveryLat && order.deliveryLng && (
+                          <div className="mt-2">
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryLat},${order.deliveryLng}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline font-bold text-xs inline-flex items-center gap-1"
+                            >
+                              <MapPin size={12} /> View on Google Maps
+                            </a>
+                          </div>
+                        )}
                       </div>
                     )}
 
