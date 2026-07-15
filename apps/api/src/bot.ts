@@ -1,7 +1,7 @@
 import { Telegraf } from 'telegraf';
 
 export const setupBot = () => {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   
   if (!token) {
     console.warn('TELEGRAM_BOT_TOKEN is not set in environment variables. Telegram bot features will be disabled.');

@@ -8,6 +8,10 @@ const prisma = new PrismaClient();
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Ai-Cha & Zhengda API is running' });
+});
+
 app.get('/api/branches', async (req, res) => {
   try {
     const branches = await prisma.branch.findMany({
