@@ -32,8 +32,15 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [branches, setBranches] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
 
-  // Fetch branches and user profile on mount
+  // Fetch branches and user profile dynamically when open, reset on close
   useEffect(() => {
+    if (!isOpen) {
+      // Reset state on close
+      setStep(1);
+      setError(null);
+      return;
+    }
+
     const fetchData = async () => {
       try {
         const [branchRes, userRes] = await Promise.all([
@@ -53,7 +60,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       }
     };
     fetchData();
-  }, []);
+  }, [isOpen]);
 
   const deliveryFee = orderType === 'delivery' ? 1.00 : 0;
   const maxDiscountFromPoints = userProfile ? userProfile.loyaltyPoints / 100 : 0;
@@ -126,7 +133,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           initial={shouldReduceMotion ? { opacity: 0 } : { y: '100%' }}
           animate={shouldReduceMotion ? { opacity: 1 } : { y: 0 }}
           exit={shouldReduceMotion ? { opacity: 0 } : { y: '100%' }}
-          transition={shouldReduceMotion ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 200 }}
+          transition={shouldReduceMotion ? { duration: 0.2 } : { type: 'spring', damping: 28, stiffness: 220 }}
           className="fixed inset-0 z-50 bg-tg-bg flex flex-col overflow-hidden"
         >
           {/* Sticky top navigation header */}
@@ -185,6 +192,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => setOrderType('pickup')}
+                      aria-pressed={orderType === 'pickup'}
                       className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
                         orderType === 'pickup' 
                           ? 'border-brand-primary text-brand-primary bg-brand-primary/5' 
@@ -195,6 +203,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     </button>
                     <button 
                       onClick={() => setOrderType('delivery')}
+                      aria-pressed={orderType === 'delivery'}
                       className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
                         orderType === 'delivery' 
                           ? 'border-brand-primary text-brand-primary bg-brand-primary/5' 
@@ -235,11 +244,12 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <h3 className="font-semibold text-sm">Delivery Address</h3>
+                    <h3 id="delivery-address-label" className="font-semibold text-sm">Delivery Address</h3>
                     <textarea 
                       value={deliveryAddress}
                       onChange={e => setDeliveryAddress(e.target.value)}
                       placeholder="Enter your full address..."
+                      aria-labelledby="delivery-address-label"
                       className="w-full bg-tg-secondary-bg border border-tg-hint/15 rounded-2xl p-4 text-sm focus:outline-none focus:border-brand-primary min-h-[88px] text-tg-text"
                       rows={3}
                     />
@@ -260,7 +270,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer min-h-[44px] px-2">
-                      <input type="checkbox" className="sr-only peer" checked={usePoints} onChange={() => setUsePoints(!usePoints)} />
+                      <input type="checkbox" className="sr-only peer" checked={usePoints} onChange={() => setUsePoints(!usePoints)} aria-label="Use loyalty points" />
                       <div className="w-11 h-6 bg-tg-hint/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary"></div>
                     </label>
                   </div>
@@ -270,6 +280,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
                   <button 
                     onClick={() => setMethod('khqr')}
+                    aria-pressed={method === 'khqr'}
                     className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
                       method === 'khqr' 
                         ? 'border-brand-primary bg-brand-primary/5 shadow-sm' 
@@ -289,6 +300,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
                   <button 
                     onClick={() => setMethod('cash')}
+                    aria-pressed={method === 'cash'}
                     className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
                       method === 'cash' 
                         ? 'border-brand-primary bg-brand-primary/5 shadow-sm' 
