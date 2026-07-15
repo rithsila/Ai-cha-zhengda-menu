@@ -1,12 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import { setupBot } from './bot';
-const app = express();
+import { setupBot, sendOrderNotification } from './bot';
+import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
+
 const prisma = new PrismaClient();
 
+const app = express();
+
+// Middleware to parse raw body for webhook verification
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(cors());
-app.use(express.json());
+
+// Initialize ABA PayWay client
+const aba = new ABAPayWay({
+  merchantId: process.env.ABA_MERCHANT_ID || 'rithsila_sandbox', // mock sandbox
+  apiKey: process.env.ABA_API_KEY || 'sandbox_api_key_mock',
+  baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
+  webhookSecret: process.env.ABA_WEBHOOK_SECRET || 'sandbox_secret_mock',
+});
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Ai-Cha & Zhengda API is running' });
@@ -224,20 +240,107 @@ app.put('/api/orders/:id/status', async (req, res) => {
   }
 });
 
-// Mock KHQR Integration
-app.post('/api/payment/khqr', async (req, res) => {
+// ABA PayWay Integration
+app.post('/api/payment/aba/create', async (req, res) => {
   try {
-    const { amount, orderId } = req.body;
-    // Simulating a request to ABA PayWay to generate KHQR
-    const mockKhqrString = `00020101021229300016aicha_and_zhengda0104test5204481453038405404${amount}5802KH5915Ai Cha Zhengda6010Phnom Penh63041A2B`;
+    const { orderId } = req.body;
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    const transactionId = generateTransactionId();
     
-    res.json({
-      khqrString: mockKhqrString,
-      paymentId: `PAY-${Date.now()}`
+    // Update order with transactionId
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { transactionId }
     });
+
+    const purchase = await aba.createPurchase({
+      transactionId,
+      amount: order.totalAmount,
+      currency: "USD",
+      items: `Order ${order.pickupCode}`,
+      firstName: "Ai Cha",
+      lastName: "Customer",
+      email: "customer@aichamenu.com",
+      returnUrl: process.env.WEBAPP_URL || "https://t.me/your_bot/menu",
+      cancelUrl: process.env.WEBAPP_URL || "https://t.me/your_bot/menu",
+    });
+
+    if (purchase.success) {
+      const khqrSvg = await generateKHQR({
+        emvData: purchase.qrString ?? "",
+        amount: order.totalAmount,
+        currency: "USD",
+        merchantName: "Ai Cha Zhengda",
+        headerColor: "#d42b2b",
+      });
+
+      res.json({
+        checkoutUrl: purchase.checkoutUrl,
+        qrString: purchase.qrString,
+        khqrSvg,
+        transactionId
+      });
+    } else {
+      res.status(400).json({ error: 'Failed to create ABA purchase' });
+    }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to generate KHQR' });
+    res.status(500).json({ error: 'Failed to generate ABA payment' });
+  }
+});
+
+app.post('/api/payment/aba/webhook', async (req: any, res) => {
+  try {
+    const rawBody = req.rawBody?.toString('utf-8');
+    const signatureHeader = req.headers['x-payway-signature'] || '';
+    
+    // In dev mode without real webhook secret, we might bypass verify for testing
+    // but we use the SDK to verify if available
+    if (process.env.ABA_WEBHOOK_SECRET) {
+      const isValid = await aba.verifyWebhook(
+        rawBody,
+        signatureHeader as string,
+        process.env.ABA_WEBHOOK_SECRET
+      );
+      if (!isValid) return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    // Usually ABA sends tran_id and status in a base64 encoded 'response' field
+    // For simplicity, assuming body has tran_id directly or we parse response
+    let tran_id;
+    let status;
+    
+    if (req.body.response) {
+      const decoded = Buffer.from(req.body.response, 'base64').toString('utf-8');
+      const parsed = JSON.parse(decoded);
+      tran_id = parsed.tran_id;
+      status = parsed.status;
+    } else {
+      tran_id = req.body.tran_id;
+      status = req.body.status;
+    }
+
+    if (status === 'APPROVED' || status === '0') {
+      const order = await prisma.order.findUnique({
+        where: { transactionId: tran_id }
+      });
+      
+      if (order) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'paid' }
+        });
+        
+        // Notify user if possible
+      }
+    }
+    
+    res.json({ message: 'Webhook processed' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to process webhook' });
   }
 });
 
