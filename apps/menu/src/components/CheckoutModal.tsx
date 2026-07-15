@@ -42,6 +42,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setOrderType('pickup');
       setDeliveryAddress('');
       setUsePoints(false);
+      setBranchId('');
       return;
     }
 
@@ -192,7 +193,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             {step === 1 ? (
               <div className="flex flex-col gap-4">
                 <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Order Type</h3>
+                  <h3 className="font-semibold text-sm">{t('orderType', 'Order Type')}</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => setOrderType('pickup')}
@@ -203,7 +204,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                           : 'border-tg-hint/15 text-tg-hint bg-tg-secondary-bg'
                       }`}
                     >
-                      <Storefront size={20} /> Pickup
+                      <Storefront size={20} /> {t('pickup', 'Pickup')}
                     </button>
                     <button 
                       onClick={() => setOrderType('delivery')}
@@ -214,14 +215,14 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                           : 'border-tg-hint/15 text-tg-hint bg-tg-secondary-bg'
                       }`}
                     >
-                      <MapPin size={20} /> Delivery
+                      <MapPin size={20} /> {t('delivery', 'Delivery')}
                     </button>
                   </div>
                 </div>
 
                 {orderType === 'pickup' ? (
                   <div className="space-y-2">
-                    <h3 className="font-semibold text-sm">Select Branch</h3>
+                    <h3 className="font-semibold text-sm">{t('selectBranch', 'Select Branch')}</h3>
                     <div className="flex flex-col gap-2">
                       {branches.map(b => (
                         <button 
@@ -248,11 +249,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <h3 id="delivery-address-label" className="font-semibold text-sm">Delivery Address</h3>
+                    <h3 id="delivery-address-label" className="font-semibold text-sm">{t('deliveryAddress', 'Delivery Address')}</h3>
                     <textarea 
                       value={deliveryAddress}
                       onChange={e => setDeliveryAddress(e.target.value)}
-                      placeholder="Enter your full address..."
+                      placeholder={t('enterFullAddress', 'Enter your full address...')}
                       aria-labelledby="delivery-address-label"
                       className="w-full bg-tg-secondary-bg border border-tg-hint/15 rounded-2xl p-4 text-sm focus:outline-none focus:border-brand-primary min-h-[88px] text-tg-text"
                       rows={3}
@@ -267,10 +268,13 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     <div>
                       <div className="font-bold text-brand-primary flex items-center gap-2">
                         <Coins size={20} weight="fill" /> 
-                        {userProfile.loyaltyPoints} Points Available
+                        {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')}
                       </div>
                       <div className="text-xs text-brand-primary/80 mt-1">
-                        Use {Math.min(userProfile.loyaltyPoints, Math.round((total + deliveryFee) * 100))} points for {formatCurrency(Math.min(maxDiscountFromPoints, total + deliveryFee))} off
+                        {t('usePointsText', 'Use {{points}} points for {{discount}} off', {
+                          points: Math.min(userProfile.loyaltyPoints, Math.round((total + deliveryFee) * 100)),
+                          discount: formatCurrency(Math.min(maxDiscountFromPoints, total + deliveryFee))
+                        })}
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer min-h-[44px] px-2">
