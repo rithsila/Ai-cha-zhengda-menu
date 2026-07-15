@@ -9,6 +9,10 @@ datasource db {
 
 model User {
   telegramUserId String  @id
+  phoneNumber    String?
+  username       String?
+  firstName      String?
+  lastName       String?
   loyaltyPoints  Int     @default(0)
   orders         Order[]
 }
