@@ -1,15 +1,18 @@
 import { PrismaClient } from '@prisma/client';
+import { CATALOG } from './catalog-data';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding database...');
-  
-  // Clear existing
+
+  // Clear existing (FK-safe order)
+  await prisma.orderItem.deleteMany({});
+  await prisma.order.deleteMany({});
   await prisma.modifierOption.deleteMany({});
   await prisma.modifierGroup.deleteMany({});
   await prisma.menuItem.deleteMany({});
-  
+
   // Seed Branches
   const b1 = await prisma.branch.upsert({
     where: { id: 'branch-toul-kork' },
@@ -33,71 +36,36 @@ async function main() {
     }
   });
 
-  const ai1 = await prisma.menuItem.create({
-    data: {
-      brand: 'ai-cha',
-      category: 'Milk Tea',
-      name: 'Brown Sugar Boba Milk',
-      description: 'Classic signature drink',
-      basePrice: 1.35,
-      modifiers: {
-        create: [
-          {
-            name: 'Size / Cup Type',
-            type: 'single',
-            required: true,
+  // Seed MenuItems from the static catalog, preserving static ids
+  for (const item of CATALOG) {
+    await prisma.menuItem.create({
+      data: {
+        id: item.id,
+        brand: item.brand,
+        category: item.category,
+        name: item.name,
+        description: item.description,
+        basePrice: item.basePrice,
+        image: item.imageFallback ?? null,
+        isSoldOut: false,
+        modifiers: {
+          create: (item.modifiers ?? []).map((group) => ({
+            name: group.name,
+            type: group.type,
+            required: group.required ?? false,
             options: {
-              create: [
-                { name: 'Hot (400ml)', priceDelta: 0 },
-                { name: 'Cold M (500ml)', priceDelta: 0 },
-                { name: 'Cold L (700ml)', priceDelta: 0.25 },
-              ]
+              create: group.options.map((option) => ({
+                name: option.name,
+                priceDelta: option.priceDelta,
+              }))
             }
-          },
-          {
-            name: 'Ice Level',
-            type: 'single',
-            required: true,
-            options: {
-              create: [
-                { name: 'No Ice', priceDelta: 0 },
-                { name: 'Less Ice', priceDelta: 0 },
-                { name: 'Normal Ice', priceDelta: 0 },
-              ]
-            }
-          }
-        ]
+          }))
+        }
       }
-    }
-  });
+    });
+  }
 
-  const zh1 = await prisma.menuItem.create({
-    data: {
-      brand: 'zhengda',
-      category: 'Signature',
-      name: 'Signature XXL Crispy Chicken',
-      description: 'Giant chicken breast',
-      basePrice: 2.50,
-      modifiers: {
-        create: [
-          {
-            name: 'Flavor Powder',
-            type: 'single',
-            required: true,
-            options: {
-              create: [
-                { name: 'Signature', priceDelta: 0 },
-                { name: 'Mala', priceDelta: 0 },
-                { name: 'Plum', priceDelta: 0 }
-              ]
-            }
-          }
-        ]
-      }
-    }
-  });
-
-  console.log('Seeded successfully!', { ai1, zh1, b1, b2 });
+  console.log(`Seeded successfully! ${CATALOG.length} menu items, branches:`, { b1, b2 });
 }
 
 main()
