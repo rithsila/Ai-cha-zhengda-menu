@@ -13,7 +13,7 @@ export function AccountView() {
       try {
         const userId = WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id';
         const [userRes, rewardsRes] = await Promise.all([
-          fetch(`http://localhost:4000/api/users/${userId}`),
+          fetch(`http://localhost:4000/api/user/${userId}`),
           fetch('http://localhost:4000/api/rewards')
         ]);
         
@@ -45,9 +45,11 @@ export function AccountView() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-tg-text">
-            {profile.firstName} {profile.lastName}
+            {[profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Telegram User'}
           </h2>
-          <p className="text-sm text-tg-hint font-medium">+{profile.phoneNumber}</p>
+          <p className="text-sm text-tg-hint font-medium">
+            {profile.phoneNumber ? `+${profile.phoneNumber}` : 'No phone linked yet'}
+          </p>
         </div>
       </div>
 

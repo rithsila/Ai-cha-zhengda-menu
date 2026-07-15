@@ -466,10 +466,27 @@ export function createApp() {
     }
   });
 
+  // Find-only user lookup (no auth required)
+  app.get('/api/users/:telegramUserId', async (req, res) => {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { telegramUserId: req.params.telegramUserId }
+      });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(user);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch user' });
+    }
+  });
+
   // User Points Adjust
   app.put('/api/users/:telegramUserId/points', requireManager, async (req, res) => {
     try {
-      const { points } = req.body;
+      const { points } = req.body || {};
+      if (typeof points !== 'number' || !Number.isInteger(points) || points < 0) {
+        return res.status(400).json({ error: 'points must be a whole number of 0 or more' });
+      }
       const user = await prisma.user.update({
         where: { telegramUserId: req.params.telegramUserId },
         data: { loyaltyPoints: points }
