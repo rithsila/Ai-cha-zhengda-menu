@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import type { CartItem } from '../types';
@@ -18,6 +18,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: CheckoutModalProps) {
   const { t } = useTranslation();
+  const shouldReduceMotion = useReducedMotion();
   const [step, setStep] = useState<1 | 2>(1);
   const [method, setMethod] = useState<'khqr' | 'cash'>('khqr');
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
@@ -32,7 +33,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [userProfile, setUserProfile] = useState<any>(null);
 
   // Fetch branches and user profile on mount
-  useState(() => {
+  useEffect(() => {
     const fetchData = async () => {
       try {
         const [branchRes, userRes] = await Promise.all([
@@ -52,7 +53,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       }
     };
     fetchData();
-  });
+  }, []);
 
   const maxDiscountFromPoints = userProfile ? userProfile.loyaltyPoints / 100 : 0;
   const discountApplied = usePoints ? Math.min(maxDiscountFromPoints, total) : 0;
@@ -121,10 +122,10 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          initial={shouldReduceMotion ? { opacity: 0 } : { y: '100%' }}
+          animate={shouldReduceMotion ? { opacity: 1 } : { y: 0 }}
+          exit={shouldReduceMotion ? { opacity: 0 } : { y: '100%' }}
+          transition={shouldReduceMotion ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 200 }}
           className="fixed inset-0 z-50 bg-tg-bg flex flex-col overflow-hidden"
         >
           {/* Sticky top navigation header */}
