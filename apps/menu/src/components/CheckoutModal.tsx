@@ -139,7 +139,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           animate={shouldReduceMotion ? { opacity: 1 } : { y: 0 }}
           exit={shouldReduceMotion ? { opacity: 0 } : { y: '100%' }}
           transition={shouldReduceMotion ? { duration: 0.2 } : { type: 'spring', damping: 28, stiffness: 220 }}
-          className="fixed inset-0 z-50 bg-tg-bg flex flex-col overflow-hidden"
+          className="fixed inset-0 z-50 bg-tg-bg/75 backdrop-blur-lg backdrop-brightness-200 flex flex-col overflow-hidden"
         >
           {/* Sticky top navigation header */}
           <div className="sticky top-0 bg-tg-bg/95 backdrop-blur-md border-b border-tg-hint/10 px-4 py-3 flex items-center justify-between z-10">
@@ -200,22 +200,22 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       aria-pressed={orderType === 'pickup'}
                       className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
                         orderType === 'pickup' 
-                          ? 'border-brand-primary text-brand-primary bg-brand-primary/5' 
-                          : 'border-tg-hint/15 text-tg-hint bg-tg-secondary-bg'
+                          ? 'bg-brand-primary/10 border-brand-primary/30 text-tg-text shadow-sm' 
+                          : 'bg-tg-secondary-bg border-tg-hint/15 text-tg-hint hover:bg-tg-hint/5'
                       }`}
                     >
-                      <Storefront size={20} /> {t('pickup', 'Pickup')}
+                      <Storefront size={20} className={orderType === 'pickup' ? 'text-brand-primary' : ''} /> {t('pickup', 'Pickup')}
                     </button>
                     <button 
                       onClick={() => setOrderType('delivery')}
                       aria-pressed={orderType === 'delivery'}
                       className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
                         orderType === 'delivery' 
-                          ? 'border-brand-primary text-brand-primary bg-brand-primary/5' 
-                          : 'border-tg-hint/15 text-tg-hint bg-tg-secondary-bg'
+                          ? 'bg-brand-primary/10 border-brand-primary/30 text-tg-text shadow-sm' 
+                          : 'bg-tg-secondary-bg border-tg-hint/15 text-tg-hint hover:bg-tg-hint/5'
                       }`}
                     >
-                      <MapPin size={20} /> {t('delivery', 'Delivery')}
+                      <MapPin size={20} className={orderType === 'delivery' ? 'text-brand-primary' : ''} /> {t('delivery', 'Delivery')}
                     </button>
                   </div>
                 </div>
@@ -230,8 +230,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                           onClick={() => setBranchId(b.id)}
                           className={`rounded-2xl border p-4 flex items-center justify-between transition-all text-left ${
                             branchId === b.id 
-                              ? 'border-brand-primary bg-brand-primary/5 shadow-sm' 
-                              : 'border-tg-hint/15 bg-tg-secondary-bg hover:bg-tg-hint/5'
+                              ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                              : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
                           }`}
                         >
                           <div>
@@ -264,22 +264,26 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             ) : (
               <div className="flex flex-col gap-6">
                 {userProfile && userProfile.loyaltyPoints > 0 && (
-                  <div className="bg-brand-primary/10 border border-brand-primary/20 rounded-2xl p-4 flex justify-between items-center transition-all">
+                  <div className={`rounded-2xl p-4 flex justify-between items-center transition-all border ${
+                    usePoints 
+                      ? 'bg-brand-primary/10 border-brand-primary/30' 
+                      : 'bg-tg-secondary-bg border-tg-hint/15'
+                  }`}>
                     <div>
-                      <div className="font-bold text-brand-primary flex items-center gap-2">
-                        <Coins size={20} weight="fill" /> 
+                      <div className="font-bold text-tg-text flex items-center gap-2">
+                        <Coins size={20} weight="fill" className={usePoints ? 'text-brand-primary' : 'text-tg-hint'} /> 
                         {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')}
                       </div>
-                      <div className="text-xs text-brand-primary/80 mt-1">
+                      <div className="text-xs text-tg-hint mt-1">
                         {t('usePointsText', 'Use {{points}} points for {{discount}} off', {
                           points: Math.min(userProfile.loyaltyPoints, Math.round((total + deliveryFee) * 100)),
                           discount: formatCurrency(Math.min(maxDiscountFromPoints, total + deliveryFee))
                         })}
                       </div>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer min-h-[44px] px-2">
+                    <label className="inline-flex items-center cursor-pointer min-h-[44px] px-2">
                       <input type="checkbox" className="sr-only peer" checked={usePoints} onChange={() => setUsePoints(!usePoints)} aria-label="Use loyalty points" />
-                      <div className="w-11 h-6 bg-tg-hint/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary"></div>
+                      <div className="relative w-11 h-6 bg-tg-hint/30 border border-tg-hint peer-focus:outline-none rounded-full peer peer-checked:bg-brand-primary peer-checked:border-brand-primary peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                     </label>
                   </div>
                 )}
@@ -291,8 +295,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     aria-pressed={method === 'khqr'}
                     className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
                       method === 'khqr' 
-                        ? 'border-brand-primary bg-brand-primary/5 shadow-sm' 
-                        : 'border-tg-hint/15 bg-tg-secondary-bg hover:bg-tg-hint/5'
+                        ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                        : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
                     }`}
                   >
                     <div>
@@ -311,8 +315,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     aria-pressed={method === 'cash'}
                     className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
                       method === 'cash' 
-                        ? 'border-brand-primary bg-brand-primary/5 shadow-sm' 
-                        : 'border-tg-hint/15 bg-tg-secondary-bg hover:bg-tg-hint/5'
+                        ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                        : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
                     }`}
                   >
                     <div>
@@ -362,7 +366,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           </div>
 
           {/* Bottom sticky action bar */}
-          <div className="sticky bottom-0 bg-tg-bg border-t border-tg-hint/10 w-full z-10">
+          <div className="sticky bottom-0 bg-tg-bg/90 backdrop-blur-md border-t border-tg-hint/10 w-full z-10">
             <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
               {step === 1 ? (
                 <Button fullWidth onClick={handleNext} className="py-4 flex items-center justify-center gap-2">
