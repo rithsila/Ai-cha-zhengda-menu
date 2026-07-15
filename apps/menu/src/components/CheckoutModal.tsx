@@ -373,17 +373,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   {t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} />
                 </Button>
               ) : (
-                <>
-                  <button 
-                    onClick={() => setStep(1)}
-                    className="flex-1 py-4 bg-tg-secondary-bg hover:bg-tg-hint/5 text-tg-text font-bold rounded-2xl active:scale-95 transition-transform border border-tg-hint/15"
-                  >
-                    {t('back', 'Back')}
-                  </button>
-                  <Button className="flex-[2] py-4" onClick={handleConfirm} disabled={isLoading}>
-                    {isLoading ? t('processing', 'Processing...') : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
-                  </Button>
-                </>
+                <Button fullWidth className="py-4" onClick={handleConfirm} disabled={isLoading}>
+                  {isLoading ? t('processing', 'Processing...') : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
+                </Button>
               )}
             </div>
           </div>
