@@ -74,6 +74,8 @@ model Order {
   branch         Branch?     @relation(fields: [branchId], references: [id])
   pointsEarned   Int         @default(0)
   discountApplied Float      @default(0)
+  pointsRedeemed Int         @default(0)
+  pointsSettled  Boolean     @default(false)
   items          OrderItem[]
 }
 

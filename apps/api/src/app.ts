@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
+import { settleOrderPoints } from './loyalty';
 
 export const prisma = new PrismaClient();
 
@@ -114,7 +115,7 @@ export function createApp() {
 
   app.post('/api/orders', async (req, res) => {
     try {
-      const { items, totalAmount: reqTotalAmount, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, usePoints } = req.body;
+      const { items, totalAmount: reqTotalAmount, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, usePoints, pointsToUse } = req.body;
 
       // Check if user exists to handle points
       let user = null;
@@ -126,59 +127,47 @@ export function createApp() {
         });
       }
 
-      let discountApplied = 0;
-      let finalAmount = reqTotalAmount;
+      const POINTS_PER_DOLLAR = 100; // Task 6 makes this configurable
+      const EARN_POINTS_PER_DOLLAR = 10;
 
-      if (usePoints && user && user.loyaltyPoints > 0) {
-        // 100 points = $1
-        const maxDiscountFromPoints = user.loyaltyPoints / 100;
-        discountApplied = Math.min(maxDiscountFromPoints, finalAmount);
-        finalAmount = finalAmount - discountApplied;
+      let requestedPoints = 0;
+      if (typeof pointsToUse === 'number' && Number.isInteger(pointsToUse) && pointsToUse > 0) {
+        requestedPoints = pointsToUse;
+      } else if (usePoints) {
+        requestedPoints = user?.loyaltyPoints ?? 0; // legacy boolean = use max (removed in Task 7)
       }
 
-      // Earn points on final amount: 10 points per $1
-      const pointsEarned = Math.floor(finalAmount * 10);
+      const available = user?.loyaltyPoints ?? 0;
+      const maxByTotal = Math.floor(reqTotalAmount * POINTS_PER_DOLLAR);
+      const pointsRedeemed = Math.min(requestedPoints, available, maxByTotal);
+      const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
+      const finalAmount = Math.round((reqTotalAmount - discountApplied) * 100) / 100;
+      const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
 
-      const order = await prisma.$transaction(async (tx) => {
-        if (usePoints && user && user.loyaltyPoints > 0) {
-          // Deduct points
-          await tx.user.update({
-            where: { telegramUserId },
-            data: { loyaltyPoints: { decrement: discountApplied * 100 } }
-          });
-        }
-
-        if (user && finalAmount > 0) {
-          await tx.user.update({
-            where: { telegramUserId },
-            data: { loyaltyPoints: { increment: pointsEarned } }
-          });
-        }
-
-        return tx.order.create({
-          data: {
-            totalAmount: finalAmount,
-            paymentMethod,
-            telegramUserId,
-            status: 'pending',
-            pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`, // mock code
-            orderType: orderType || 'pickup',
-            deliveryAddress: deliveryAddress || null,
-            deliveryLat: deliveryLat || null,
-            deliveryLng: deliveryLng || null,
-            branchId: branchId || null,
-            pointsEarned,
-            discountApplied,
-            items: {
-              create: items.map((item: any) => ({
-                menuItemId: item.menuItemId,
-                quantity: item.quantity,
-                price: item.totalPrice,
-                modifiers: JSON.stringify(item.selectedModifiers)
-              }))
-            }
+      const order = await prisma.order.create({
+        data: {
+          totalAmount: finalAmount,
+          paymentMethod,
+          telegramUserId,
+          status: 'pending',
+          pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
+          orderType: orderType || 'pickup',
+          deliveryAddress: deliveryAddress || null,
+          deliveryLat: deliveryLat || null,
+          deliveryLng: deliveryLng || null,
+          branchId: branchId || null,
+          pointsEarned,
+          pointsRedeemed,
+          discountApplied,
+          items: {
+            create: items.map((item: any) => ({
+              menuItemId: item.menuItemId,
+              quantity: item.quantity,
+              price: item.totalPrice,
+              modifiers: JSON.stringify(item.selectedModifiers)
+            }))
           }
-        });
+        }
       });
 
       res.json(order);
@@ -265,6 +254,10 @@ export function createApp() {
         where: { id },
         data: { status }
       });
+
+      if (status === 'completed' || status === 'paid') {
+        await settleOrderPoints(prisma, id);
+      }
 
       // In a real app, you might notify the user via Telegram bot here that their order status changed
 
@@ -367,6 +360,8 @@ export function createApp() {
             where: { id: order.id },
             data: { status: 'paid' }
           });
+
+          await settleOrderPoints(prisma, order.id);
 
           // Notify user if possible
         }

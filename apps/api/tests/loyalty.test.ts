@@ -1,0 +1,77 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import request from 'supertest';
+import { randomUUID } from 'crypto';
+import { createApp, prisma } from '../src/app';
+
+const app = createApp();
+const uid = `test-${randomUUID()}`;
+const itemId = `test-item-${randomUUID()}`;
+
+const orderBody = (pointsToUse: number) => ({
+  items: [{ menuItemId: itemId, quantity: 1, totalPrice: 5.0, selectedModifiers: {} }],
+  totalAmount: 5.0,
+  paymentMethod: 'khqr',
+  telegramUserId: uid,
+  orderType: 'pickup',
+  pointsToUse,
+});
+
+beforeAll(async () => {
+  delete process.env.ABA_WEBHOOK_SECRET; // webhook signature check skipped in tests
+  // Reset rate config so a previous run of config.test.ts can't change this suite's math
+  await prisma.systemConfig.deleteMany({
+    where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
+  });
+  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 200 } });
+  await prisma.menuItem.create({
+    data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Test Tea', basePrice: 5.0 },
+  });
+});
+
+describe('order creation does not move points', () => {
+  it('keeps user points unchanged while order is pending', async () => {
+    const res = await request(app).post('/api/orders').send(orderBody(100));
+    expect(res.status).toBe(200);
+    expect(res.body.pointsRedeemed).toBe(100);
+    expect(res.body.discountApplied).toBe(1);      // 100 pts / 100 per $ = $1
+    expect(res.body.totalAmount).toBe(4);          // 5 - 1
+    expect(res.body.pointsEarned).toBe(40);        // floor(4 * 10)
+    const user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
+    expect(user?.loyaltyPoints).toBe(200);         // untouched
+  });
+});
+
+describe('settlement on completion (cash path)', () => {
+  it('settles exactly once', async () => {
+    const created = await request(app).post('/api/orders').send(orderBody(100));
+    const id = created.body.id;
+
+    await request(app).put(`/api/orders/${id}/status`).send({ status: 'completed' });
+    let user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
+    const afterFirst = user!.loyaltyPoints;        // 200 - 100 + 40 = 140 (relative to fresh 200 minus prior test noise)
+
+    await request(app).put(`/api/orders/${id}/status`).send({ status: 'completed' });
+    user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
+    expect(user!.loyaltyPoints).toBe(afterFirst);  // idempotent
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.pointsSettled).toBe(true);
+  });
+});
+
+describe('settlement on webhook (ABA path)', () => {
+  it('marks paid and settles points', async () => {
+    const created = await request(app).post('/api/orders').send(orderBody(0));
+    const tranId = `t-${randomUUID()}`;
+    await prisma.order.update({ where: { id: created.body.id }, data: { transactionId: tranId } });
+    const before = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
+
+    const res = await request(app).post('/api/payment/aba/webhook').send({ tran_id: tranId, status: 'APPROVED' });
+    expect(res.status).toBe(200);
+
+    const order = await prisma.order.findUnique({ where: { id: created.body.id } });
+    expect(order!.status).toBe('paid');
+    expect(order!.pointsSettled).toBe(true);
+    const after = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
+    expect(after).toBe(before + order!.pointsEarned); // earned credited at payment
+  });
+});
