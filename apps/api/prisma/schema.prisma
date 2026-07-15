@@ -87,3 +87,17 @@ model OrderItem {
   price      Float
   modifiers  String   // JSON string of selected modifiers
 }
+
+model Reward {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  pointsCost  Int
+  image       String?
+  isActive    Boolean  @default(true)
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+}

@@ -67,10 +67,16 @@ The application will support a dual-brand menu structure, split into two main se
 - [x] Order history and one-tap reordering.
 - [x] Admin dashboard to toggle items as "Sold Out".
 
-**Phase 3 — Delivery & Loyalty:** *(Completed)*
+**Phase 3 — Delivery & Multi-Branch:** *(Completed)*
 - [x] Add "Delivery" as an `order_type` alongside "Pickup".
-- [x] Loyalty points and promotional discounts.
+- [x] In-app GPS Map tracking (`react-leaflet`) for delivery coordinate selection.
 - [x] Multi-branch support.
+
+**Phase 4 — Loyalty, Manager Mode & Integrations:** *(Completed)*
+- [x] **Telegram Bot-First Gate:** Forced phone number collection on first launch.
+- [x] **Payments:** ABA PayWay native deep-link integration & KHQR webhook polling.
+- [x] **Loyalty Program:** Reward Catalog and Points redemption at checkout.
+- [x] **Manager Mode:** PIN-protected analytics and point override dashboard in Staff App.
 
 ---
 

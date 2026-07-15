@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Clock, CheckCircle2, Package, RefreshCw, LayoutDashboard, ListPlus, MapPin, Store } from 'lucide-react';
+import { Clock, CheckCircle2, Package, RefreshCw, LayoutDashboard, ListPlus, MapPin, Store, BarChart3 } from 'lucide-react';
 import { MenuManagement } from './components/MenuManagement';
+import { ManagerDashboard } from './components/ManagerDashboard';
 
 const StaffLogin = ({ onLogin }: { onLogin: () => void }) => {
   const [pin, setPin] = useState('');
@@ -44,6 +45,51 @@ const StaffLogin = ({ onLogin }: { onLogin: () => void }) => {
     </div>
   );
 };
+
+const ManagerLogin = ({ onLogin }: { onLogin: () => void }) => {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+  
+  const expectedPin = import.meta.env.VITE_MANAGER_PIN || '9999';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin === expectedPin) {
+      onLogin();
+    } else {
+      setError(true);
+      setPin('');
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full items-center justify-center py-20">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 w-80 text-center">
+        <h2 className="text-2xl font-black mb-2 text-indigo-900">Manager Mode</h2>
+        <p className="text-sm text-gray-500 mb-6 font-medium">Enter Manager PIN to access analytics</p>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="password"
+            maxLength={6}
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            className="w-full text-center text-3xl tracking-widest p-4 border-2 rounded-xl mb-4 bg-gray-50 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none font-bold"
+            placeholder="****"
+            autoFocus
+          />
+          {error && <p className="text-red-500 mb-4 text-sm font-bold">Incorrect PIN</p>}
+          <button
+            type="submit"
+            className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl hover:bg-indigo-700 transition shadow-sm"
+          >
+            Authenticate
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 
 type OrderItem = {
   id: string;
@@ -94,7 +140,8 @@ type Order = {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'manager'>('orders');
+  const [isManagerAuthenticated, setIsManagerAuthenticated] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<any[]>([]);
@@ -203,6 +250,12 @@ function App() {
             >
               <ListPlus size={18} /> Menu Management
             </button>
+            <button 
+              onClick={() => setActiveTab('manager')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors ${activeTab === 'manager' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-900'}`}
+            >
+              <BarChart3 size={18} /> Manager
+            </button>
           </div>
           
           <div className="w-10 flex justify-end">
@@ -220,7 +273,9 @@ function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'menu' ? (
+        {activeTab === 'manager' ? (
+          isManagerAuthenticated ? <ManagerDashboard /> : <ManagerLogin onLogin={() => setIsManagerAuthenticated(true)} />
+        ) : activeTab === 'menu' ? (
           <MenuManagement />
         ) : (
           orders.length === 0 && !loading ? (

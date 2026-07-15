@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import twa from '@twa-dev/sdk';
 const WebApp = (twa as any)?.WebApp || twa || {};
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise } from '@phosphor-icons/react';
+import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise, User } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { formatCurrency } from './utils/format';
@@ -18,6 +18,7 @@ import { ModifierModal } from './components/ModifierModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrdersView } from './components/OrdersView';
+import { AccountView } from './components/AccountView';
 import { Button } from './components/ui/Button';
 
 const isSameModifiers = (a: Record<string, ModifierOption[]>, b: Record<string, ModifierOption[]>) => {
@@ -72,7 +73,7 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'menu' | 'orders'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'orders' | 'account'>('menu');
   const [catalogOverrides, setCatalogOverrides] = useState<Record<string, { isSoldOut: boolean }>>({});
   
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -314,8 +315,8 @@ export default function App() {
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
           <div>
-            <h1 className="text-3xl font-bold font-sans drop-shadow-md">{activeTab === 'menu' ? t('menuTitle') : 'My Orders'}</h1>
-            <p className="text-white/90 text-sm drop-shadow-md">{activeTab === 'menu' ? t('menuSubtitle') : 'Track your active and past orders'}</p>
+            <h1 className="text-3xl font-bold font-sans drop-shadow-md">{activeTab === 'menu' ? t('menuTitle') : activeTab === 'orders' ? 'My Orders' : 'My Account'}</h1>
+            <p className="text-white/90 text-sm drop-shadow-md">{activeTab === 'menu' ? t('menuSubtitle') : activeTab === 'orders' ? 'Track your active and past orders' : 'Manage your profile and rewards'}</p>
           </div>
           <div className="flex gap-2">
             {activeTab === 'menu' && (
@@ -382,6 +383,8 @@ export default function App() {
       <div className="px-4 pt-6">
         {activeTab === 'orders' ? (
           <OrdersView onReorder={handleReorder} />
+        ) : activeTab === 'account' ? (
+          <AccountView />
         ) : (
           <>
             {!searchQuery && (
@@ -468,6 +471,13 @@ export default function App() {
         >
           <ClockCounterClockwise size={22} weight={activeTab === 'orders' ? 'fill' : 'regular'} />
           <span className="text-[10px] font-bold mt-0.5">Orders</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('account')}
+          className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'account' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
+        >
+          <User size={22} weight={activeTab === 'account' ? 'fill' : 'regular'} />
+          <span className="text-[10px] font-bold mt-0.5">Account</span>
         </button>
       </div>
 

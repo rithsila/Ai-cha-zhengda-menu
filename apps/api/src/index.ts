@@ -358,6 +358,107 @@ app.post('/api/payment/aba/webhook', async (req: any, res) => {
   }
 });
 
+// Loyalty & Rewards API
+app.get('/api/config', async (req, res) => {
+  try {
+    const configs = await prisma.systemConfig.findMany();
+    res.json(configs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch config' });
+  }
+});
+
+app.put('/api/config', async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    const config = await prisma.systemConfig.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value }
+    });
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update config' });
+  }
+});
+
+app.get('/api/rewards', async (req, res) => {
+  try {
+    const rewards = await prisma.reward.findMany({ where: { isActive: true } });
+    res.json(rewards);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch rewards' });
+  }
+});
+
+app.post('/api/rewards', async (req, res) => {
+  try {
+    const reward = await prisma.reward.create({ data: req.body });
+    res.json(reward);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create reward' });
+  }
+});
+
+app.put('/api/rewards/:id', async (req, res) => {
+  try {
+    const reward = await prisma.reward.update({
+      where: { id: req.params.id },
+      data: req.body
+    });
+    res.json(reward);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update reward' });
+  }
+});
+
+app.delete('/api/rewards/:id', async (req, res) => {
+  try {
+    await prisma.reward.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete reward' });
+  }
+});
+
+// Analytics API
+app.get('/api/analytics/sales', async (req, res) => {
+  try {
+    const paidOrders = await prisma.order.findMany({
+      where: { status: 'paid' },
+      select: { totalAmount: true, createdAt: true }
+    });
+    
+    const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+    const orderCount = paidOrders.length;
+    
+    // Group by date string (YYYY-MM-DD)
+    const byDate: Record<string, number> = {};
+    paidOrders.forEach(o => {
+      const d = o.createdAt.toISOString().split('T')[0];
+      byDate[d] = (byDate[d] || 0) + o.totalAmount;
+    });
+
+    res.json({ totalRevenue, orderCount, byDate });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// User Points Adjust
+app.put('/api/users/:telegramUserId/points', async (req, res) => {
+  try {
+    const { points } = req.body;
+    const user = await prisma.user.update({
+      where: { telegramUserId: req.params.telegramUserId },
+      data: { loyaltyPoints: points }
+    });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user points' });
+  }
+});
+
 setupBot();
 
 const PORT = process.env.PORT || 4000;
