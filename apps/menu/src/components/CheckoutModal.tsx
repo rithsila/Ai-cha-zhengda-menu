@@ -56,7 +56,7 @@ interface CheckoutModalProps {
 export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: CheckoutModalProps) {
   const { t } = useTranslation();
   const shouldReduceMotion = useReducedMotion();
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [method, setMethod] = useState<'khqr' | 'cash'>('khqr');
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
@@ -66,11 +66,30 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [isLocating, setIsLocating] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   
+  const [paymentScreen, setPaymentScreen] = useState<{ checkoutUrl: string; khqrSvg: string; orderId: string; } | null>(null);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [branches, setBranches] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
+
+  useEffect(() => {
+    let interval: any;
+    if (paymentScreen) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`http://localhost:4000/api/orders/${paymentScreen.orderId}`);
+          const data = await res.json();
+          if (data.status === 'paid') {
+            setPaymentScreen(null);
+            onSuccess(data.pickupCode);
+          }
+        } catch(e) {}
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [paymentScreen, onSuccess]);
 
   // Fetch branches and user profile dynamically when open, reset on close
   useEffect(() => {
@@ -131,20 +150,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     setIsLoading(true);
     setError(null);
     try {
-      if (method === 'khqr') {
-        // Mock KHQR Integration call
-        const khqrRes = await fetch('http://localhost:4000/api/payment/khqr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ amount: finalTotal }),
-        });
-        if (!khqrRes.ok) throw new Error('Failed to generate KHQR');
-        await khqrRes.json();
-        
-        // Simulate waiting for user to scan and pay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-      }
-
       const response = await fetch('http://localhost:4000/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,11 +171,34 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         throw new Error('Failed to create order');
       }
 
-      const data = await response.json();
-      onSuccess(data.pickupCode);
+      const orderData = await response.json();
+
+      if (method === 'khqr') {
+        const abaRes = await fetch('http://localhost:4000/api/payment/aba/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderData.id }),
+        });
+        
+        if (!abaRes.ok) {
+          throw new Error('Failed to generate ABA payment link');
+        }
+        
+        const abaData = await abaRes.json();
+        
+        setPaymentScreen({
+          checkoutUrl: abaData.checkoutUrl,
+          khqrSvg: abaData.khqrSvg,
+          orderId: orderData.id
+        });
+        setStep(3);
+        setIsLoading(false);
+        return;
+      }
+
+      onSuccess(orderData.pickupCode);
     } catch (err: any) {
       setError(err.message || 'An error occurred during checkout');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -200,7 +228,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             </h2>
 
             <div className="text-sm font-semibold text-tg-hint min-w-[44px] text-right">
-              {step}/2
+              {step === 3 ? 'Pay' : `${step}/2`}
             </div>
           </div>
 
@@ -234,7 +262,35 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               </div>
             )}
 
-            {step === 1 ? (
+            {step === 3 && paymentScreen ? (
+              <div className="flex flex-col gap-6 items-center w-full">
+                <div className="text-center">
+                  <h3 className="font-bold text-lg mb-2 text-tg-text">Complete Payment</h3>
+                  <p className="text-sm text-tg-hint mb-4">You can pay with ABA Mobile or scan the KHQR below.</p>
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    if (WebApp?.openLink) {
+                      WebApp.openLink(paymentScreen.checkoutUrl);
+                    } else {
+                      window.location.href = paymentScreen.checkoutUrl;
+                    }
+                  }}
+                  className="w-full bg-[#005E8E] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#004A70] transition-colors"
+                >
+                  Pay with ABA Mobile
+                </button>
+
+                <div className="relative w-full max-w-[280px] bg-white p-4 rounded-2xl shadow-sm border border-tg-hint/15 mt-4 flex items-center justify-center">
+                  <img src={paymentScreen.khqrSvg} alt="KHQR" className="w-full max-w-[250px] h-auto" />
+                </div>
+                
+                <p className="text-xs text-tg-hint text-center flex items-center justify-center gap-2 mt-4 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-brand-primary"></span> Waiting for payment confirmation...
+                </p>
+              </div>
+            ) : step === 1 ? (
               <div className="flex flex-col gap-4">
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">{t('orderType', 'Order Type')}</h3>
@@ -459,17 +515,19 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
           {/* Bottom sticky action bar */}
           <div className="sticky bottom-0 bg-tg-bg/90 backdrop-blur-md border-t border-tg-hint/10 w-full z-10">
-            <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
-              {step === 1 ? (
-                <Button fullWidth onClick={handleNext} className="py-4 flex items-center justify-center gap-2">
-                  {t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} />
-                </Button>
-              ) : (
-                <Button fullWidth className="py-4" onClick={handleConfirm} disabled={isLoading}>
-                  {isLoading ? t('processing', 'Processing...') : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
-                </Button>
-              )}
-            </div>
+            {step !== 3 && (
+              <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
+                {step === 1 ? (
+                  <Button fullWidth onClick={handleNext} className="py-4 flex items-center justify-center gap-2">
+                    {t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} />
+                  </Button>
+                ) : (
+                  <Button fullWidth className="py-4" onClick={handleConfirm} disabled={isLoading}>
+                    {isLoading ? t('processing', 'Processing...') : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </motion.div>
       )}

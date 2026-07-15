@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import { setupBot, sendOrderNotification } from './bot';
+import { setupBot } from './bot';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
 
 const prisma = new PrismaClient();
@@ -201,23 +201,37 @@ app.get('/api/orders', async (req, res) => {
 app.get('/api/orders/user/:telegramUserId', async (req, res) => {
   try {
     const { telegramUserId } = req.params;
-    const orders = await prisma.order.findMany({
+    const userOrders = await prisma.order.findMany({
       where: { telegramUserId },
       include: {
         items: {
-          include: {
-            menuItem: true
-          }
+          include: { menuItem: true }
         }
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      orderBy: { createdAt: 'desc' }
     });
-    res.json(orders);
+    res.json(userOrders);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch user orders' });
+  }
+});
+
+app.get('/api/orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: {
+          include: { menuItem: true }
+        }
+      }
+    });
+    if (!order) return res.status(404).json({ error: 'Not found' });
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch order' });
   }
 });
 
