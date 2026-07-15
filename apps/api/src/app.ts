@@ -115,7 +115,40 @@ export function createApp() {
 
   app.post('/api/orders', async (req, res) => {
     try {
-      const { items, totalAmount: reqTotalAmount, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, usePoints, pointsToUse } = req.body;
+      const { items, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, usePoints, pointsToUse } = req.body;
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'Order must contain at least one item' });
+      }
+
+      const menuItems = await prisma.menuItem.findMany({
+        where: { id: { in: items.map((i: any) => i?.menuItemId).filter(Boolean) } },
+        include: { modifiers: { include: { options: true } } },
+      });
+
+      let itemsTotal = 0;
+      const pricedItems: { menuItemId: string; quantity: number; price: number; modifiers: string }[] = [];
+      for (const item of items) {
+        const menuItem = menuItems.find((m) => m.id === item?.menuItemId);
+        if (!menuItem) {
+          return res.status(400).json({ error: `Unknown menu item: ${item?.menuItemId}` });
+        }
+        const quantity = Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1;
+        const allOptions = menuItem.modifiers.flatMap((g) => g.options);
+        const selected = item.selectedModifiers && typeof item.selectedModifiers === 'object' ? item.selectedModifiers : {};
+        const optionIds = Object.values(selected).flat().map((o: any) => o?.id).filter(Boolean);
+        let unitPrice = menuItem.basePrice;
+        for (const oid of optionIds) {
+          const opt = allOptions.find((o) => o.id === oid);
+          if (opt) unitPrice += opt.priceDelta;   // DB price, never the client's
+        }
+        const lineTotal = Math.round(unitPrice * quantity * 100) / 100;
+        itemsTotal += lineTotal;
+        pricedItems.push({ menuItemId: menuItem.id, quantity, price: lineTotal, modifiers: JSON.stringify(selected) });
+      }
+
+      const DELIVERY_FEE = 1.0;
+      const serverTotal = Math.round((itemsTotal + (orderType === 'delivery' ? DELIVERY_FEE : 0)) * 100) / 100;
 
       // Check if user exists to handle points
       let user = null;
@@ -138,10 +171,10 @@ export function createApp() {
       }
 
       const available = user?.loyaltyPoints ?? 0;
-      const maxByTotal = Math.floor(reqTotalAmount * POINTS_PER_DOLLAR);
+      const maxByTotal = Math.floor(serverTotal * POINTS_PER_DOLLAR);
       const pointsRedeemed = Math.min(requestedPoints, available, maxByTotal);
       const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
-      const finalAmount = Math.round((reqTotalAmount - discountApplied) * 100) / 100;
+      const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
       const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
 
       const order = await prisma.order.create({
@@ -159,14 +192,7 @@ export function createApp() {
           pointsEarned,
           pointsRedeemed,
           discountApplied,
-          items: {
-            create: items.map((item: any) => ({
-              menuItemId: item.menuItemId,
-              quantity: item.quantity,
-              price: item.totalPrice,
-              modifiers: JSON.stringify(item.selectedModifiers)
-            }))
-          }
+          items: { create: pricedItems }
         }
       });
 
