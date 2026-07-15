@@ -1,5 +1,5 @@
 import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
+import type { RequestHandler } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
@@ -21,7 +21,7 @@ export function createApp() {
   const staffPin = () => process.env.STAFF_PIN || '1234';
   const managerPin = () => process.env.MANAGER_PIN || '9999';
 
-  const requireManager = (req: Request, res: Response, next: NextFunction) => {
+  const requireManager: RequestHandler = (req, res, next) => {
     if (req.headers['x-manager-pin'] !== managerPin()) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -419,7 +419,7 @@ export function createApp() {
   app.put('/api/rewards/:id', requireManager, async (req, res) => {
     try {
       const reward = await prisma.reward.update({
-        where: { id: req.params.id },
+        where: { id: String(req.params.id) },
         data: req.body
       });
       res.json(reward);
@@ -430,7 +430,7 @@ export function createApp() {
 
   app.delete('/api/rewards/:id', requireManager, async (req, res) => {
     try {
-      await prisma.reward.delete({ where: { id: req.params.id } });
+      await prisma.reward.delete({ where: { id: String(req.params.id) } });
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Failed to delete reward' });
@@ -465,7 +465,7 @@ export function createApp() {
   app.get('/api/users/:telegramUserId', requireManager, async (req, res) => {
     try {
       const user = await prisma.user.findUnique({
-        where: { telegramUserId: req.params.telegramUserId }
+        where: { telegramUserId: String(req.params.telegramUserId) }
       });
       if (!user) return res.status(404).json({ error: 'User not found' });
       res.json(user);
@@ -483,7 +483,7 @@ export function createApp() {
         return res.status(400).json({ error: 'points must be a whole number of 0 or more' });
       }
       const user = await prisma.user.update({
-        where: { telegramUserId: req.params.telegramUserId },
+        where: { telegramUserId: String(req.params.telegramUserId) },
         data: { loyaltyPoints: points }
       });
       res.json(user);
