@@ -38,6 +38,10 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       // Reset state on close
       setStep(1);
       setError(null);
+      setMethod('khqr');
+      setOrderType('pickup');
+      setDeliveryAddress('');
+      setUsePoints(false);
       return;
     }
 
@@ -141,7 +145,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             <button
               onClick={step === 2 ? () => setStep(1) : onClose}
               className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-tg-hint/10 text-tg-text transition-colors"
-              aria-label="Back"
+              aria-label={step === 2 ? t('back', 'Back') : t('close', 'Close')}
             >
               {step === 2 ? <CaretLeft size={24} /> : <X size={24} />}
             </button>
