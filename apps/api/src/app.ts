@@ -1,4 +1,5 @@
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
@@ -15,6 +16,26 @@ export function createApp() {
     }
   }));
   app.use(cors());
+
+  const staffPin = () => process.env.STAFF_PIN || '1234';
+  const managerPin = () => process.env.MANAGER_PIN || '9999';
+
+  const requireManager = (req: Request, res: Response, next: NextFunction) => {
+    if (req.headers['x-manager-pin'] !== managerPin()) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+  };
+
+  app.post('/api/auth/staff-login', (req, res) => {
+    const { pin, role } = req.body || {};
+    if (typeof pin !== 'string' || (role !== 'staff' && role !== 'manager')) {
+      return res.status(400).json({ error: 'pin and role are required' });
+    }
+    const expected = role === 'manager' ? managerPin() : staffPin();
+    if (pin !== expected) return res.status(401).json({ error: 'Invalid PIN' });
+    res.json({ ok: true });
+  });
 
   // Initialize ABA PayWay client
   const aba = new ABAPayWay({
@@ -368,7 +389,7 @@ export function createApp() {
     }
   });
 
-  app.put('/api/config', async (req, res) => {
+  app.put('/api/config', requireManager, async (req, res) => {
     try {
       const { key, value } = req.body;
       const config = await prisma.systemConfig.upsert({
@@ -391,7 +412,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/rewards', async (req, res) => {
+  app.post('/api/rewards', requireManager, async (req, res) => {
     try {
       const reward = await prisma.reward.create({ data: req.body });
       res.json(reward);
@@ -400,7 +421,7 @@ export function createApp() {
     }
   });
 
-  app.put('/api/rewards/:id', async (req, res) => {
+  app.put('/api/rewards/:id', requireManager, async (req, res) => {
     try {
       const reward = await prisma.reward.update({
         where: { id: req.params.id },
@@ -412,7 +433,7 @@ export function createApp() {
     }
   });
 
-  app.delete('/api/rewards/:id', async (req, res) => {
+  app.delete('/api/rewards/:id', requireManager, async (req, res) => {
     try {
       await prisma.reward.delete({ where: { id: req.params.id } });
       res.json({ success: true });
@@ -422,7 +443,7 @@ export function createApp() {
   });
 
   // Analytics API
-  app.get('/api/analytics/sales', async (req, res) => {
+  app.get('/api/analytics/sales', requireManager, async (req, res) => {
     try {
       const paidOrders = await prisma.order.findMany({
         where: { status: 'paid' },
@@ -446,7 +467,7 @@ export function createApp() {
   });
 
   // User Points Adjust
-  app.put('/api/users/:telegramUserId/points', async (req, res) => {
+  app.put('/api/users/:telegramUserId/points', requireManager, async (req, res) => {
     try {
       const { points } = req.body;
       const user = await prisma.user.update({

@@ -6,16 +6,19 @@ import { ManagerDashboard } from './components/ManagerDashboard';
 const StaffLogin = ({ onLogin }: { onLogin: () => void }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
-  
-  const expectedPin = import.meta.env.VITE_STAFF_PIN || '1234';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === expectedPin) {
-      onLogin();
-    } else {
+    try {
+      const res = await fetch('http://localhost:4000/api/auth/staff-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, role: 'staff' }),
+      });
+      if (res.ok) onLogin();
+      else { setError(true); setPin(''); }
+    } catch {
       setError(true);
-      setPin('');
     }
   };
 
@@ -46,19 +49,22 @@ const StaffLogin = ({ onLogin }: { onLogin: () => void }) => {
   );
 };
 
-const ManagerLogin = ({ onLogin }: { onLogin: () => void }) => {
+const ManagerLogin = ({ onLogin }: { onLogin: (pin: string) => void }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
-  
-  const expectedPin = import.meta.env.VITE_MANAGER_PIN || '9999';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === expectedPin) {
-      onLogin();
-    } else {
+    try {
+      const res = await fetch('http://localhost:4000/api/auth/staff-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, role: 'manager' }),
+      });
+      if (res.ok) onLogin(pin);
+      else { setError(true); setPin(''); }
+    } catch {
       setError(true);
-      setPin('');
     }
   };
 
@@ -141,7 +147,7 @@ type Order = {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'manager'>('orders');
-  const [isManagerAuthenticated, setIsManagerAuthenticated] = useState(false);
+  const [managerPin, setManagerPin] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<any[]>([]);
@@ -274,7 +280,7 @@ function App() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'manager' ? (
-          isManagerAuthenticated ? <ManagerDashboard /> : <ManagerLogin onLogin={() => setIsManagerAuthenticated(true)} />
+          managerPin ? <ManagerDashboard managerPin={managerPin} /> : <ManagerLogin onLogin={setManagerPin} />
         ) : activeTab === 'menu' ? (
           <MenuManagement />
         ) : (

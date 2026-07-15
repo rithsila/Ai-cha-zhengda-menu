@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, Users, Plus, Save } from 'lucide-react';
 
-export function ManagerDashboard() {
+export function ManagerDashboard({ managerPin }: { managerPin: string }) {
   const [activeTab, setActiveTab] = useState<'analytics' | 'loyalty'>('analytics');
-  
+
   const [analytics, setAnalytics] = useState<any>(null);
   const [rewards, setRewards] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -13,24 +13,23 @@ export function ManagerDashboard() {
   const [foundUser, setFoundUser] = useState<any>(null);
   const [pointsAdjust, setPointsAdjust] = useState<number>(0);
 
-  const fetchDashboardData = async () => {
-    try {
-      const [analyticsRes, rewardsRes] = await Promise.all([
-        fetch('http://localhost:4000/api/analytics/sales'),
-        fetch('http://localhost:4000/api/rewards')
-      ]);
-      if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
-      if (rewardsRes.ok) setRewards(await rewardsRes.json());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [analyticsRes, rewardsRes] = await Promise.all([
+          fetch('http://localhost:4000/api/analytics/sales', { headers: { 'x-manager-pin': managerPin } }),
+          fetch('http://localhost:4000/api/rewards')
+        ]);
+        if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
+        if (rewardsRes.ok) setRewards(await rewardsRes.json());
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchDashboardData();
-  }, []);
+  }, [managerPin]);
 
   const handleSearchUser = async () => {
     // We would need an API to search by phone or ID. For simplicity we assume ID search is enough for now or we build a small fetch logic here.
@@ -53,7 +52,7 @@ export function ManagerDashboard() {
     try {
       await fetch(`http://localhost:4000/api/users/${foundUser.telegramUserId}/points`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-manager-pin': managerPin },
         body: JSON.stringify({ points: pointsAdjust })
       });
       alert('Points updated!');
