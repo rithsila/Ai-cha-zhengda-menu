@@ -69,3 +69,21 @@ The bottom dock navigation bar will be updated from 2 tabs to 3 tabs:
 - **Mechanism:** Telegram Login Widget.
 - **UI Flow:** If the Mini App detects it is running outside of the Telegram environment (no `initData`), it presents a "Log in with Telegram" button on the landing page.
 - **Data:** This uses Telegram's official web authentication flow. Once authorized, it passes the user's Telegram ID back to our app, seamlessly logging them into their existing account, retaining their verified phone number, cart, and order history.
+
+## 7. Loyalty Program & Rewards
+
+**Goal:** Encourage repeat customers by allowing them to earn points, see available rewards, and flexibly apply points as discounts.
+
+- **Reward Catalog:** The 'Account' tab will feature a "Reward Catalog" section showing what can be redeemed (e.g., "Free Milk Tea - 500 pts").
+- **Flexible Checkout Discount:** During checkout, users can see their total points and use a slider or input field to choose exactly how many points they want to apply as a cash discount on their current order.
+- **Earning Points:** Points are automatically credited to the user's account upon successful order payment.
+
+## 8. Manager Mode (Staff App Expansion)
+
+**Goal:** Provide administrative controls without requiring a separate third web application.
+
+- **Access:** A secure "Manager Mode" toggle inside the `apps/staff` dashboard, protected by a dedicated Manager PIN.
+- **Features:**
+  - **Menu Management:** Toggle menu items or specific modifiers as "Sold Out".
+  - **Loyalty Configuration:** Adjust the point-to-dollar conversion rate and define items in the Reward Catalog.
+  - **Analytics & Reporting:** A newly designed reporting view showing daily sales summaries, order volume, and revenue metrics with clean charts.
