@@ -2,6 +2,49 @@ import { useState, useEffect, useCallback } from 'react';
 import { Clock, CheckCircle2, Package, RefreshCw, LayoutDashboard, ListPlus, MapPin, Store } from 'lucide-react';
 import { MenuManagement } from './components/MenuManagement';
 
+const StaffLogin = ({ onLogin }: { onLogin: () => void }) => {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState(false);
+  
+  const expectedPin = import.meta.env.VITE_STAFF_PIN || '1234';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin === expectedPin) {
+      onLogin();
+    } else {
+      setError(true);
+      setPin('');
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded-xl shadow-md w-80 text-center">
+        <h2 className="text-2xl font-bold mb-6 text-gray-800">Staff Access</h2>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="password"
+            maxLength={6}
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            className="w-full text-center text-3xl tracking-widest p-4 border-2 rounded-lg mb-4 bg-gray-50 focus:border-blue-500 focus:outline-none"
+            placeholder="****"
+            autoFocus
+          />
+          {error && <p className="text-red-500 mb-4 text-sm">Incorrect PIN</p>}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition"
+          >
+            Unlock
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 type OrderItem = {
   id: string;
   quantity: number;
@@ -48,6 +91,7 @@ type Order = {
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<'orders' | 'menu'>('orders');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,6 +158,10 @@ function App() {
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
+
+  if (!isAuthenticated) {
+    return <StaffLogin onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
