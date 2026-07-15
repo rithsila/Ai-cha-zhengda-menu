@@ -12,12 +12,18 @@ beforeAll(async () => {
 });
 
 describe('GET /api/users/:id (find-only)', () => {
+  it('returns 401 without manager pin', async () => {
+    const res = await request(app).get(`/api/users/${uid}`);
+    expect(res.status).toBe(401);
+  });
   it('returns 404 for unknown user', async () => {
-    const res = await request(app).get(`/api/users/no-such-${randomUUID()}`);
+    const res = await request(app)
+      .get(`/api/users/no-such-${randomUUID()}`)
+      .set('x-manager-pin', '9999');
     expect(res.status).toBe(404);
   });
   it('returns an existing user', async () => {
-    const res = await request(app).get(`/api/users/${uid}`);
+    const res = await request(app).get(`/api/users/${uid}`).set('x-manager-pin', '9999');
     expect(res.status).toBe(200);
     expect(res.body.loyaltyPoints).toBe(50);
   });

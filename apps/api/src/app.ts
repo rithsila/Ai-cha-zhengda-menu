@@ -466,8 +466,8 @@ export function createApp() {
     }
   });
 
-  // Find-only user lookup (no auth required)
-  app.get('/api/users/:telegramUserId', async (req, res) => {
+  // Find-only user lookup (manager only — exposes PII)
+  app.get('/api/users/:telegramUserId', requireManager, async (req, res) => {
     try {
       const user = await prisma.user.findUnique({
         where: { telegramUserId: req.params.telegramUserId }

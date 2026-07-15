@@ -34,7 +34,9 @@ export function ManagerDashboard({ managerPin }: { managerPin: string }) {
   const handleSearchUser = async () => {
     // We would need an API to search by phone or ID. For simplicity we assume ID search is enough for now or we build a small fetch logic here.
     try {
-      const res = await fetch(`http://localhost:4000/api/users/${userSearch}`);
+      const res = await fetch(`http://localhost:4000/api/users/${userSearch}`, {
+        headers: { 'x-manager-pin': managerPin }
+      });
       if (res.ok) {
         const data = await res.json();
         setFoundUser(data);
