@@ -53,3 +53,19 @@ The bottom dock navigation bar will be updated from 2 tabs to 3 tabs:
 - **Verification:** 
   - The backend will implement a secure webhook endpoint to receive server-to-server payment confirmations from ABA PayWay.
   - Upon receiving the webhook, the backend will automatically update the order status to "Paid" and alert the staff dashboard.
+
+## 5. Staff Authentication (Dashboard)
+
+**Goal:** Secure the staff tablet dashboard from unauthorized access while maintaining speed for busy point-of-sale environments.
+
+- **Mechanism:** A shared, store-wide 4-digit or 6-digit PIN code.
+- **UI Flow:** When opening `apps/staff`, the user is presented with a numpad lock screen. Entering the correct PIN grants access to the active orders dashboard. 
+- **Session:** The session persists locally but may require re-entry after a period of inactivity (e.g., end of shift) to maintain security.
+
+## 6. External Web Browser Support
+
+**Goal:** Allow users who click the menu link outside of Telegram (e.g., in Safari or Chrome) to still access their account and place orders seamlessly.
+
+- **Mechanism:** Telegram Login Widget.
+- **UI Flow:** If the Mini App detects it is running outside of the Telegram environment (no `initData`), it presents a "Log in with Telegram" button on the landing page.
+- **Data:** This uses Telegram's official web authentication flow. Once authorized, it passes the user's Telegram ID back to our app, seamlessly logging them into their existing account, retaining their verified phone number, cart, and order history.
