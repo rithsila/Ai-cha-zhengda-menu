@@ -57,8 +57,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
   const deliveryFee = orderType === 'delivery' ? 1.00 : 0;
   const maxDiscountFromPoints = userProfile ? userProfile.loyaltyPoints / 100 : 0;
-  const discountApplied = usePoints ? Math.min(maxDiscountFromPoints, total) : 0;
-  const finalTotal = total - discountApplied + deliveryFee;
+  const discountApplied = usePoints ? Math.min(maxDiscountFromPoints, total + deliveryFee) : 0;
+  const finalTotal = total + deliveryFee - discountApplied;
 
   const handleNext = () => {
     if (orderType === 'pickup' && !branchId) {
@@ -256,7 +256,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         {userProfile.loyaltyPoints} Points Available
                       </div>
                       <div className="text-xs text-brand-primary/80 mt-1">
-                        Use {Math.min(userProfile.loyaltyPoints, Math.round(total * 100))} points for {formatCurrency(Math.min(maxDiscountFromPoints, total))} off
+                        Use {Math.min(userProfile.loyaltyPoints, Math.round((total + deliveryFee) * 100))} points for {formatCurrency(Math.min(maxDiscountFromPoints, total + deliveryFee))} off
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer min-h-[44px] px-2">
