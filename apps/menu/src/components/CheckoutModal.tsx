@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
-import { CaretRight, MapPin, Storefront, Coins } from '@phosphor-icons/react';
+import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-icons/react';
 import twa from '@twa-dev/sdk';
 const WebApp = (twa as any)?.WebApp || twa || {};
 
@@ -121,23 +121,39 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-          onClick={onClose}
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          exit={{ y: '100%' }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="fixed inset-0 z-50 bg-tg-bg flex flex-col overflow-hidden"
         >
-          <motion.div
-            initial={{ scale: 0.9, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 20 }}
-            className="bg-tg-bg w-full max-w-sm rounded-3xl p-6 flex flex-col gap-6"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="text-center">
-              <h2 className="text-2xl font-bold">{step === 1 ? t('Order Details', 'Order Details') : t('checkout')}</h2>
-              {step === 2 && <p className="text-tg-hint mt-1">{t('total')}: {formatCurrency(finalTotal)}</p>}
+          {/* Sticky top navigation header */}
+          <div className="sticky top-0 bg-tg-bg/95 backdrop-blur-md border-b border-tg-hint/10 px-4 py-3 flex items-center justify-between z-10">
+            <button
+              onClick={step === 2 ? () => setStep(1) : onClose}
+              className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-tg-hint/10 text-tg-text transition-colors"
+              aria-label="Back"
+            >
+              {step === 2 ? <CaretLeft size={24} /> : <X size={24} />}
+            </button>
+
+            <h2 className="text-lg font-bold text-tg-text">
+              {t('checkout', 'Checkout')}
+            </h2>
+
+            <div className="text-sm font-semibold text-tg-hint min-w-[44px] text-right">
+              {step}/2
             </div>
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6 max-w-md mx-auto w-full pb-24">
+            {step === 2 && (
+              <div className="text-center bg-tg-secondary-bg/50 p-4 rounded-2xl border border-tg-hint/5">
+                <p className="text-tg-hint text-sm">{t('total', 'Total')}</p>
+                <p className="text-3xl font-extrabold text-tg-text mt-1">{formatCurrency(finalTotal)}</p>
+              </div>
+            )}
 
             {error && (
               <div className="bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium text-center">
@@ -268,7 +284,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                 </div>
               </div>
             )}
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
