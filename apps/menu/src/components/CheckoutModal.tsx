@@ -149,6 +149,28 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
           {/* Content area */}
           <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6 max-w-md mx-auto w-full pb-24">
+            {/* Order Summary */}
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">
+                {t('orderSummary', 'Order Summary')}
+              </h3>
+              <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3">
+                {cart.map(item => (
+                  <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
+                    <div className="flex-1">
+                      <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
+                      {Object.keys(item.selectedModifiers).length > 0 && (
+                        <div className="text-xs text-tg-hint mt-1">
+                          {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                    <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {step === 2 && (
               <div className="text-center bg-tg-secondary-bg/50 p-4 rounded-2xl border border-tg-hint/5">
                 <p className="text-tg-hint text-sm">{t('total', 'Total')}</p>
