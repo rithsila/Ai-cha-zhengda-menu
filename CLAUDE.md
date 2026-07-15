@@ -13,7 +13,7 @@ npm workspaces (`apps/*`). Two apps exist:
 - **`apps/menu`** — Customer-facing Telegram Mini App. React 19 + Vite + Tailwind v4 + `@twa-dev/sdk`.
 - **`apps/api`** — Backend. Express 5 + Prisma + SQLite + Telegraf (Telegram bot).
 
-> ⚠️ The README describes an `apps/staff` tablet dashboard, but **it does not exist yet**. Staff features currently live only as API endpoints (`GET /api/orders`, `PUT /api/orders/:id/status`) with no UI.
+- **`apps/staff`** — Staff tablet dashboard (React + Vite, dev port 5174). Live orders (5s poll, status lifecycle pending → preparing → ready → completed) and Menu Management (sold-out toggles).
 
 ## Commands
 
@@ -26,20 +26,20 @@ npm run build    # tsc -b && vite build
 npm run lint     # oxlint (NOT eslint)
 ```
 
-**API (`apps/api`):** ⚠️ Has **no** `dev`/`build`/`start` npm script (only a placeholder `test` that exits 1). Run the server directly:
+**API (`apps/api`):**
 ```bash
-cd apps/api
-npx ts-node-dev --respawn src/index.ts   # serves on http://localhost:4000
+npm run dev      # tsx watch src/index.ts — serves on http://localhost:4000
 ```
+⚠️ `ts-node` is broken in this repo (installed `typescript@^7` is incompatible) — use `tsx` for any script execution.
 
 **Database (`apps/api`, Prisma + SQLite):**
 ```bash
 npx prisma generate
 npx prisma db push          # sync schema to dev.db
-npx ts-node src/seed.ts     # seed menu data
+npx tsx src/seed.ts         # seed menu data (wipes orders + catalog, keeps User rows)
 ```
 
-**Root** `npm run dev` / `build` / `start` fan out to workspaces with `--if-present`. Because the API defines none of those scripts, root `npm run dev` effectively **only starts the menu app** — start the API separately.
+**Root** `npm run dev` / `build` / `start` fan out to workspaces with `--if-present`.
 
 ## Environment
 
@@ -52,7 +52,7 @@ WEBAPP_URL="https://..."     # public URL where apps/menu is hosted (for the bot
 
 ## Architecture notes (the non-obvious parts)
 
-- **The menu is served from static local data, not the API.** `apps/menu/src/App.tsx` reads the catalog from `src/data/catalog.ts` (hardcoded `CATALOG` array). The API's `GET /api/catalog` (Prisma-backed) exists but the frontend does **not** call it. Menu changes go in `catalog.ts`; DB seed data goes in `apps/api/src/seed.ts`. Keep both in mind — they can drift.
+- **The menu is served from static local data; the DB catalog must mirror it.** `apps/menu/src/App.tsx` renders from `src/data/catalog.ts` (hardcoded `CATALOG`) and only uses `GET /api/catalog` for sold-out overrides, keyed by item id. `apps/api/src/catalog-data.ts` is a copy of `catalog.ts` (see its keep-in-sync header) consumed by `seed.ts`, which seeds `MenuItem` rows with the **same ids** (`a1`…, `z1`…) — `OrderItem.menuItemId` is an FK to those ids, so checkout breaks if they drift. Any menu change must touch `catalog.ts` + `catalog-data.ts` and be followed by a reseed.
 - **The only frontend→API calls are at checkout.** `apps/menu/src/components/CheckoutModal.tsx` POSTs to `/api/payment/khqr` and `/api/orders`. The API base URL is **hardcoded** to `http://localhost:4000` there (no env/config), so it must be changed for any non-local deploy.
 - **KHQR payment is a mock.** `POST /api/payment/khqr` returns a fake QR string; there is no real payment verification. Order totals are trusted from the client (`index.ts` notes this as a known gap).
 - **Telegram integration** goes through `@twa-dev/sdk` (imported defensively as `WebApp` in `App.tsx`/`main.tsx`). The app drives the Telegram `MainButton` for the cart and uses `HapticFeedback`; it falls back to an in-page floating cart button when the SDK is unavailable (e.g. plain browser).
