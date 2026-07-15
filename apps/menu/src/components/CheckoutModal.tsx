@@ -6,8 +6,45 @@ import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
 import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-icons/react';
 import twa from '@twa-dev/sdk';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+
 const WebApp = (twa as any)?.WebApp || twa || {};
 
+const customIcon = new L.Icon({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+function LocationMarker({ position, setPosition }: any) {
+  const map = useMapEvents({
+    click(e) {
+      setPosition(e.latlng);
+    },
+  });
+
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, map.getZoom());
+    }
+  }, [position, map]);
+
+  return position === null ? null : (
+    <Marker 
+      position={position} 
+      icon={customIcon} 
+      draggable={true} 
+      eventHandlers={{
+        dragend: (e) => {
+          setPosition(e.target.getLatLng());
+        }
+      }} 
+    />
+  );
+}
 interface CheckoutModalProps {
   isOpen: boolean;
   total: number;
@@ -24,6 +61,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
+  const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
+  const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -41,6 +81,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setMethod('khqr');
       setOrderType('pickup');
       setDeliveryAddress('');
+      setDeliveryLat(null);
+      setDeliveryLng(null);
       setUsePoints(false);
       setBranchId('');
       return;
@@ -114,6 +156,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           branchId: orderType === 'pickup' ? branchId : null,
           orderType,
           deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
+          deliveryLat: orderType === 'delivery' ? deliveryLat : null,
+          deliveryLng: orderType === 'delivery' ? deliveryLng : null,
           usePoints
         }),
       });
@@ -248,16 +292,64 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    <h3 id="delivery-address-label" className="font-semibold text-sm">{t('deliveryAddress', 'Delivery Address')}</h3>
-                    <textarea 
-                      value={deliveryAddress}
-                      onChange={e => setDeliveryAddress(e.target.value)}
-                      placeholder={t('enterFullAddress', 'Enter your full address...')}
-                      aria-labelledby="delivery-address-label"
-                      className="w-full bg-tg-secondary-bg border border-tg-hint/15 rounded-2xl p-4 text-sm focus:outline-none focus:border-brand-primary min-h-[88px] text-tg-text"
-                      rows={3}
-                    />
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <h3 id="delivery-address-label" className="font-semibold text-sm">{t('deliveryAddress', 'Delivery Address')}</h3>
+                      </div>
+                      <textarea 
+                        value={deliveryAddress}
+                        onChange={e => setDeliveryAddress(e.target.value)}
+                        placeholder={t('enterFullAddress', 'Enter your full address...')}
+                        aria-labelledby="delivery-address-label"
+                        className="w-full bg-tg-secondary-bg border border-tg-hint/15 rounded-2xl p-4 text-sm focus:outline-none focus:border-brand-primary min-h-[88px] text-tg-text"
+                        rows={3}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <h3 className="font-semibold text-sm">Pin Location</h3>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setIsLocating(true);
+                            navigator.geolocation.getCurrentPosition(
+                              (pos) => {
+                                setDeliveryLat(pos.coords.latitude);
+                                setDeliveryLng(pos.coords.longitude);
+                                setIsLocating(false);
+                              },
+                              (err) => {
+                                console.error(err);
+                                setIsLocating(false);
+                                alert("Failed to get location.");
+                              }
+                            );
+                          }}
+                          className="text-brand-primary text-xs font-bold bg-brand-primary/10 px-3 py-1 rounded-full"
+                          disabled={isLocating}
+                        >
+                          {isLocating ? 'Locating...' : 'Use Current Location'}
+                        </button>
+                      </div>
+                      <div className="h-[200px] w-full rounded-2xl overflow-hidden border border-tg-hint/15 relative z-0">
+                        <MapContainer 
+                          center={deliveryLat && deliveryLng ? [deliveryLat, deliveryLng] : [11.5564, 104.9282]}
+                          zoom={13} 
+                          style={{ height: '100%', width: '100%' }}
+                        >
+                          <TileLayer
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                          />
+                          <LocationMarker 
+                            position={deliveryLat && deliveryLng ? {lat: deliveryLat, lng: deliveryLng} : null}
+                            setPosition={(pos: any) => { setDeliveryLat(pos.lat); setDeliveryLng(pos.lng); }}
+                          />
+                        </MapContainer>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
