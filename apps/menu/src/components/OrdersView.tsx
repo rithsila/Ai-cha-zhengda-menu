@@ -55,10 +55,10 @@ export function OrdersView({ onReorder }: OrdersViewProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'preparing': return 'bg-blue-100 text-blue-800';
-      case 'ready': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'pending': return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300';
+      case 'preparing': return 'bg-blue-500/15 text-blue-700 dark:text-blue-300';
+      case 'ready': return 'bg-green-500/15 text-green-700 dark:text-green-300';
+      default: return 'bg-tg-hint/15 text-tg-hint';
     }
   };
 

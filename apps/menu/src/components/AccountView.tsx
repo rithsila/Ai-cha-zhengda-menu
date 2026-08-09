@@ -39,7 +39,7 @@ export function AccountView() {
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto">
       {/* Profile Card */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm border border-tg-hint/10 flex items-center gap-4">
+      <div className="bg-tg-secondary-bg rounded-2xl p-5 shadow-sm border border-tg-hint/10 flex items-center gap-4">
         <div className="w-14 h-14 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary">
           <Phone size={28} weight="fill" />
         </div>
@@ -77,12 +77,12 @@ export function AccountView() {
         ) : (
           <div className="grid gap-3">
             {rewards.map(reward => (
-              <div key={reward.id} className="bg-white rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-4 items-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-xl flex-shrink-0 overflow-hidden">
+              <div key={reward.id} className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-4 items-center">
+                <div className="w-16 h-16 bg-tg-hint/10 rounded-xl flex-shrink-0 overflow-hidden">
                   {reward.image ? (
                     <img src={reward.image} alt={reward.name} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
+                    <div className="w-full h-full flex items-center justify-center text-tg-hint/50">
                       <Gift size={24} />
                     </div>
                   )}

@@ -35,7 +35,7 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="bg-tg-bg/75 backdrop-blur-lg backdrop-brightness-200 w-full rounded-t-3xl max-h-[85vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
+            className="bg-tg-bg/75 backdrop-blur-lg backdrop-brightness-200 w-full rounded-t-3xl max-h-[85vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
             onClick={e => e.stopPropagation()}
           >
             <div className="p-4 border-b border-tg-hint/20 flex justify-between items-center sticky top-0 bg-tg-bg/90 backdrop-blur-md z-10">

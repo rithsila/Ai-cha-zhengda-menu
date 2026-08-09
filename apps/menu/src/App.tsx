@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise, User } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
+import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
@@ -37,10 +38,10 @@ const WebLogin = () => {
   const botName = import.meta.env.VITE_BOT_NAME || 'YourBotUsername';
 
   return (
-    <div className="flex flex-col h-screen w-screen items-center justify-center bg-gray-50 p-6 text-center">
-      <div className="bg-white p-8 rounded-2xl shadow-sm max-w-sm w-full">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome</h1>
-        <p className="text-gray-500 mb-8">Please log in with Telegram to access the menu from your browser.</p>
+    <div className="flex flex-col h-screen w-screen items-center justify-center bg-tg-bg p-6 text-center">
+      <div className="bg-tg-secondary-bg p-8 rounded-2xl shadow-sm max-w-sm w-full">
+        <h1 className="text-2xl font-bold text-tg-text mb-2">Welcome</h1>
+        <p className="text-tg-hint mb-8">Please log in with Telegram to access the menu from your browser.</p>
         
         <div 
           id="telegram-login-widget" 
@@ -58,7 +59,7 @@ const WebLogin = () => {
           }}
         ></div>
         
-        <p className="text-xs text-gray-400 mt-6">
+        <p className="text-xs text-tg-hint mt-6">
           Or open this link directly inside the Telegram app.
         </p>
       </div>
@@ -68,6 +69,7 @@ const WebLogin = () => {
 
 export default function App() {
   const { t, i18n } = useTranslation();
+  useTelegramTheme();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const [activeBrand, setActiveBrand] = useState<Brand>('ai-cha');
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -309,8 +311,8 @@ export default function App() {
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-6 shadow-sm overflow-hidden"
         style={{ backgroundImage: 'url(/banner.png)' }}
       >
-        <div className="absolute inset-0 bg-black/40 z-0 pointer-events-none"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-black/40 dark:bg-black/55 z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/75 to-transparent z-0 pointer-events-none"></div>
         
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
@@ -347,7 +349,7 @@ export default function App() {
                   exit={{ opacity: 0, y: -10 }}
                   className="mb-2 relative"
                 >
-                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-400">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-tg-hint">
                     <MagnifyingGlass size={20} />
                   </div>
                   <input 
@@ -356,12 +358,12 @@ export default function App() {
                     placeholder={t('searchMenu', 'Search menu...')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-white/95 backdrop-blur-md text-gray-900 pl-12 pr-10 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition-shadow shadow-md"
+                    className="w-full bg-tg-bg/95 backdrop-blur-md text-tg-text pl-12 pr-10 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-primary/50 transition-shadow shadow-md"
                   />
                   {searchQuery && (
                     <button 
                       onClick={() => setSearchQuery('')}
-                      className="absolute inset-y-0 right-4 flex items-center text-gray-400 hover:text-gray-900"
+                      className="absolute inset-y-0 right-4 flex items-center text-tg-hint hover:text-tg-text"
                     >
                       <X size={20} weight="bold" />
                     </button>
@@ -457,7 +459,7 @@ export default function App() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] bg-white/30 backdrop-blur-2xl border border-white/50 shadow-[0_8px_32px_rgba(0,0,0,0.1)] rounded-full py-1.5 px-6 flex justify-center gap-8 z-20 supports-[backdrop-filter]:bg-white/20">
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] bg-tg-bg/30 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] rounded-full py-1.5 px-6 flex justify-center gap-8 z-20 supports-[backdrop-filter]:bg-tg-bg/20">
         <button 
           onClick={() => setActiveTab('menu')}
           className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'menu' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
@@ -490,7 +492,7 @@ export default function App() {
         >
           <button 
             onClick={() => setIsCartOpen(true)}
-            className="w-full bg-tg-primary/80 backdrop-blur-lg backdrop-brightness-150 text-tg-primary-text py-4 rounded-2xl font-bold flex justify-between items-center px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
+            className="w-full bg-tg-primary/80 backdrop-blur-lg backdrop-brightness-150 text-tg-primary-text py-4 rounded-2xl font-bold flex justify-between items-center px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
           >
             <div className="flex items-center gap-2">
               <ShoppingCart size={20} weight="fill" />

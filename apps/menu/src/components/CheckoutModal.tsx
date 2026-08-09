@@ -431,7 +431,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     </div>
                     <label className="inline-flex items-center cursor-pointer min-h-[44px] px-2">
                       <input type="checkbox" className="sr-only peer" checked={usePoints} onChange={() => setUsePoints(!usePoints)} aria-label="Use loyalty points" />
-                      <div className="relative w-11 h-6 bg-tg-hint/30 border border-tg-hint peer-focus:outline-none rounded-full peer peer-checked:bg-brand-primary peer-checked:border-brand-primary peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                      <div className="relative w-11 h-6 bg-tg-hint/30 border border-tg-hint peer-focus:outline-none rounded-full peer peer-checked:bg-brand-primary peer-checked:border-brand-primary peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-tg-hint/30 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                     </label>
                   </div>
                 )}
