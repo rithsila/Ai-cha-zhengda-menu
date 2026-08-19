@@ -53,8 +53,18 @@ WEBAPP_URL="https://..."     # public URL where apps/menu is hosted (for the bot
 ## Architecture notes (the non-obvious parts)
 
 - **The menu is served from static local data; the DB catalog must mirror it.** `apps/menu/src/App.tsx` renders from `src/data/catalog.ts` (hardcoded `CATALOG`) and only uses `GET /api/catalog` for sold-out overrides, keyed by item id. `apps/api/src/catalog-data.ts` is a copy of `catalog.ts` (see its keep-in-sync header) consumed by `seed.ts`, which seeds `MenuItem` rows with the **same ids** (`a1`…, `z1`…) — `OrderItem.menuItemId` is an FK to those ids, so checkout breaks if they drift. Any menu change must touch `catalog.ts` + `catalog-data.ts` and be followed by a reseed.
-- **The only frontend→API calls are at checkout.** `apps/menu/src/components/CheckoutModal.tsx` POSTs to `/api/payment/khqr` and `/api/orders`. The API base URL is **hardcoded** to `http://localhost:4000` there (no env/config), so it must be changed for any non-local deploy.
-- **KHQR payment is a mock.** `POST /api/payment/khqr` returns a fake QR string; there is no real payment verification. Order totals are trusted from the client (`index.ts` notes this as a known gap).
+- **The API base URL comes from `apps/menu/src/utils/api.ts`** (`API_BASE`, from `VITE_API_URL`, defaulting to `http://localhost:4000`). `CheckoutModal.tsx` uses it for `/api/orders`, `/api/payment/aba/create` and `/api/payment/aba/status/:orderId`. Other components (e.g. `OrdersView.tsx`) still hardcode `http://localhost:4000` and need the same treatment before a deploy.
+- **ABA PayWay is real, not a mock.** Three routes in `apps/api/src/app.ts`:
+  `POST /api/payment/aba/create`, `GET /api/payment/aba/status/:orderId`, and
+  `POST /api/payment/aba/webhook`. All three return **503** when `ABA_MERCHANT_ID` /
+  `ABA_API_KEY` are unset — the server never substitutes fake credentials, because that
+  turns a config mistake into an unreadable "wrong hash" error. Two rules that are easy to
+  break: the purchase request must send `payment_option=abapay_khqr` or ABA returns no QR
+  data at all, and the webhook is **strict** — no secret means 503, a bad signature means
+  401, and even a valid webhook is re-confirmed with `checkStatus` and an amount check
+  before an order is marked paid. The checkout screen polls the **status** route, not the
+  order row, because ABA's webhook cannot reach `localhost`. See
+  `packages/aba-payway-sdk-unofficial/docs/ABA_KHQR_INTEGRATION.md`.
 - **Telegram integration** goes through `@twa-dev/sdk` (imported defensively as `WebApp` in `App.tsx`/`main.tsx`). The app drives the Telegram `MainButton` for the cart and uses `HapticFeedback`; it falls back to an in-page floating cart button when the SDK is unavailable (e.g. plain browser).
 - **Theming = Telegram sync.** `apps/menu/src/index.css` uses Tailwind v4 `@theme` to map `--color-tg-*` tokens onto Telegram's `--tg-theme-*` CSS variables, so colors follow the user's Telegram theme. Use the `tg-*` (e.g. `bg-tg-bg`, `text-tg-hint`) and `brand-*` utility classes rather than hardcoding colors.
 - **i18n** (`src/i18n/config.ts`) has three languages inline: `en`, `km` (Khmer), `zh`. The header language button cycles through them.

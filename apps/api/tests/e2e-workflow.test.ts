@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
 import crypto from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { enableAba, postWebhook, stubAbaFetch, approvedStatus } from './helpers/aba';
 
 const app = createApp();
 const BOT_TOKEN = 'test-bot-token-e2e';
@@ -228,12 +229,13 @@ describe('End-to-End System & Workflow Validation', () => {
 
     const beforePoints = (await prisma.user.findUnique({ where: { telegramUserId: customerTelegramId } }))!.loyaltyPoints;
 
-    // ABA webhook fires
-    const webhookRes = await request(app).post('/api/payment/aba/webhook').send({
-      tran_id: tranId,
-      status: 'APPROVED',
-    });
+    // ABA webhook fires. It must be signed, and the server confirms the amount
+    // with ABA before it will mark anything paid.
+    enableAba();
+    stubAbaFetch({ status: approvedStatus(order.totalAmount) });
+    const webhookRes = await postWebhook(app, { tran_id: tranId, status: 'APPROVED' });
     expect(webhookRes.status).toBe(200);
+    vi.restoreAllMocks();
 
     const paidOrder = await prisma.order.findUnique({ where: { id: order.id } });
     expect(paidOrder?.status).toBe('paid');

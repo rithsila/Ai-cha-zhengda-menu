@@ -68,6 +68,7 @@ model Order {
   paymentMethod String      // "khqr" | "cash"
   status         String      @default("pending") // "pending" | "paid" | "preparing" | "ready"
   transactionId  String?     @unique
+  paymentExpiresAt DateTime? // KHQR is valid ~15 minutes; null for cash orders
   createdAt      DateTime    @default(now())
   pickupCode     String?
   telegramUserId String?

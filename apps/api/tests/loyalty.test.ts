@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { enableAba, postWebhook, stubAbaFetch, approvedStatus } from './helpers/aba';
 
 const app = createApp();
 const uid = `test-${randomUUID()}`;
@@ -17,7 +18,7 @@ const orderBody = (pointsToUse: number) => ({
 });
 
 beforeAll(async () => {
-  delete process.env.ABA_WEBHOOK_SECRET; // webhook signature check skipped in tests
+  enableAba(); // ABA routes refuse to run without credentials
   // Reset rate config so a previous run of config.test.ts can't change this suite's math
   await prisma.systemConfig.deleteMany({
     where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
@@ -59,13 +60,18 @@ describe('settlement on completion (cash path)', () => {
 });
 
 describe('settlement on webhook (ABA path)', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
   it('marks paid and settles points', async () => {
     const created = await request(app).post('/api/orders').send(orderBody(0));
     const tranId = `t-${randomUUID()}`;
     await prisma.order.update({ where: { id: created.body.id }, data: { transactionId: tranId } });
     const before = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
 
-    const res = await request(app).post('/api/payment/aba/webhook').send({ tran_id: tranId, status: 'APPROVED' });
+    // The webhook now needs a real signature, and the server double-checks the
+    // payment with ABA before settling anything.
+    stubAbaFetch({ status: approvedStatus(created.body.totalAmount) });
+    const res = await postWebhook(app, { tran_id: tranId, status: 'APPROVED' });
     expect(res.status).toBe(200);
 
     const order = await prisma.order.findUnique({ where: { id: created.body.id } });

@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
-import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
+import { ABAPayWay, generateKHQR, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
 import { settleOrderPoints, refundOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
 import { issueToken, requireStaff, requireManager, staffPin, managerPin } from './auth';
@@ -69,13 +69,24 @@ export function createApp() {
     res.json({ ok: true, token, role, expiresAt });
   });
 
-  // Initialize ABA PayWay client
-  const aba = new ABAPayWay({
-    merchantId: process.env.ABA_MERCHANT_ID || 'rithsila_sandbox', // mock sandbox
-    apiKey: process.env.ABA_API_KEY || 'sandbox_api_key_mock',
-    baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
-    webhookSecret: process.env.ABA_WEBHOOK_SECRET || 'sandbox_secret_mock',
-  });
+  // ABA PayWay client. Built per call, not once at startup, so the server picks
+  // up credentials without a restart and tests can vary the environment.
+  // Returns null when unconfigured -- never fall back to fake credentials, which
+  // only turns a missing-config problem into an unreadable "wrong hash" error.
+  function getAbaClient(): ABAPayWay | null {
+    const merchantId = process.env.ABA_MERCHANT_ID || '';
+    const apiKey = process.env.ABA_API_KEY || '';
+    if (!merchantId || !apiKey) return null;
+    return new ABAPayWay({
+      merchantId,
+      apiKey,
+      baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
+      webhookSecret: process.env.ABA_WEBHOOK_SECRET || '',
+    });
+  }
+
+  const ABA_NOT_CONFIGURED =
+    'ABA PayWay is not configured. Set ABA_MERCHANT_ID and ABA_API_KEY in apps/api/.env.';
 
   app.get('/', (req, res) => {
     res.json({ status: 'ok', message: 'Ai-Cha & Zhengda API is running' });
@@ -351,51 +362,139 @@ export function createApp() {
     }
   });
 
+  // ---------------------------------------------------------------------------
   // ABA PayWay Integration
+  //
+  // Three routes:
+  //   POST /api/payment/aba/create        -> start a payment, return QR + links
+  //   POST /api/payment/aba/webhook       -> ABA tells us a payment landed
+  //   GET  /api/payment/aba/status/:id    -> we ask ABA whether it landed
+  //
+  // The status route exists because webhooks cannot reach a laptop on
+  // localhost. It is the only thing that makes the flow testable in dev.
+  // ---------------------------------------------------------------------------
+
+  const AMOUNT_TOLERANCE = 0.01; // one cent, for float comparison
+
+  /**
+   * Confirm a transaction with ABA and, only if it really is approved for the
+   * right amount, mark the order paid and settle its loyalty points.
+   *
+   * Never trusts a caller-supplied status: both the webhook and the status
+   * route go back to ABA. Idempotent, because ABA retries webhooks.
+   */
+  async function confirmAbaPayment(aba: ABAPayWay, orderId: string, transactionId: string) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return { ok: false as const, code: 404, body: { error: 'Order not found' } };
+    if (order.status === 'paid') {
+      return { ok: true as const, status: 'APPROVED', orderStatus: order.status, order };
+    }
+    // A cancelled order has already had its reserved points handed back, so a
+    // late payment must not quietly revive it. Do not test pointsSettled here:
+    // refundOrderPoints sets that flag too, and treating it as "already paid"
+    // would report a cancelled order as APPROVED.
+    if (order.status === 'cancelled') {
+      return { ok: false as const, code: 409, body: { error: 'This order was cancelled' } };
+    }
+
+    const result = await aba.checkStatus(transactionId);
+    if (!result.success) {
+      return { ok: false as const, code: 502, body: { error: result.error || 'Could not reach ABA PayWay' } };
+    }
+    if (result.status !== 'APPROVED') {
+      return { ok: true as const, status: result.status, orderStatus: order.status, order };
+    }
+
+    // ABA says approved -- but for how much? A short payment must not settle
+    // the order.
+    if (result.amount != null && Math.abs(result.amount - order.totalAmount) > AMOUNT_TOLERANCE) {
+      console.error(
+        `ABA amount mismatch on order ${order.id}: paid ${result.amount}, expected ${order.totalAmount}`
+      );
+      return {
+        ok: false as const,
+        code: 400,
+        body: { error: 'Paid amount does not match the order total' },
+      };
+    }
+
+    const updated = await prisma.order.update({ where: { id: order.id }, data: { status: 'paid' } });
+    await settleOrderPoints(prisma, order.id);
+    return { ok: true as const, status: 'APPROVED', orderStatus: updated.status, order: updated };
+  }
+
   app.post('/api/payment/aba/create', async (req, res) => {
     try {
-      const { orderId } = req.body;
-      const order = await prisma.order.findUnique({ where: { id: orderId } });
-      if (!order) return res.status(404).json({ error: 'Order not found' });
+      const aba = getAbaClient();
+      if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
 
-      const transactionId = generateTransactionId();
-
-      // Update order with transactionId
-      await prisma.order.update({
+      const { orderId } = req.body || {};
+      const order = await prisma.order.findUnique({
         where: { id: orderId },
-        data: { transactionId }
+        include: { items: { include: { menuItem: true } } },
+      });
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      if (order.status === 'paid') {
+        return res.status(409).json({ error: 'This order is already paid' });
+      }
+      if (order.totalAmount <= 0) {
+        return res.status(409).json({ error: 'Order total must be greater than zero' });
+      }
+
+      // Reuse the transaction id if one exists, so refreshing the checkout page
+      // does not leave an orphaned transaction behind at ABA.
+      const transactionId = order.transactionId || generateTransactionId();
+      const expiresAt = getQRExpiration();
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { transactionId, paymentExpiresAt: expiresAt },
       });
 
       const purchase = await aba.createPurchase({
         transactionId,
         amount: order.totalAmount,
-        currency: "USD",
-        items: `Order ${order.pickupCode}`,
-        firstName: "Ai Cha",
-        lastName: "Customer",
-        email: "customer@aichamenu.com",
-        returnUrl: process.env.WEBAPP_URL || "https://t.me/your_bot/menu",
-        cancelUrl: process.env.WEBAPP_URL || "https://t.me/your_bot/menu",
+        currency: 'USD',
+        // ABA wants a real item list; the SDK base64-encodes it as JSON.
+        items: order.items.map((line) => ({
+          name: line.menuItem?.name ?? 'Item',
+          quantity: line.quantity,
+          price: line.price,
+        })),
+        // Without this ABA returns no qr_string and no deeplink, and the
+        // customer is shown an empty QR box.
+        paymentOption: 'abapay_khqr',
+        firstName: 'Ai-Cha',
+        lastName: 'Customer',
+        returnUrl: process.env.ABA_WEBHOOK_URL || '',
+        cancelUrl: process.env.WEBAPP_URL || '',
+        continueSuccessUrl: process.env.WEBAPP_URL || '',
+        returnParams: order.id,
       });
 
-      if (purchase.success) {
-        const khqrSvg = await generateKHQR({
-          emvData: purchase.qrString ?? "",
-          amount: order.totalAmount,
-          currency: "USD",
-          merchantName: "Ai Cha Zhengda",
-          headerColor: "#d42b2b",
-        });
-
-        res.json({
-          checkoutUrl: purchase.checkoutUrl,
-          qrString: purchase.qrString,
-          khqrSvg,
-          transactionId
-        });
-      } else {
-        res.status(400).json({ error: 'Failed to create ABA purchase' });
+      if (!purchase.success) {
+        // Pass ABA's own message through -- "wrong hash" and "invalid merchant"
+        // are the two failures you actually hit, and hiding them wastes hours.
+        console.error(`ABA createPurchase failed for order ${order.id}: ${purchase.error}`);
+        return res.status(502).json({ error: purchase.error || 'Failed to create ABA purchase' });
       }
+
+      const khqrSvg = await generateKHQR({
+        emvData: purchase.qrString ?? '',
+        amount: order.totalAmount,
+        currency: 'USD',
+        merchantName: 'Ai-Cha & Zhengda',
+        headerColor: '#d42b2b',
+      });
+
+      res.json({
+        checkoutUrl: purchase.checkoutUrl,
+        abapayDeeplink: purchase.abapayDeeplink,
+        qrString: purchase.qrString,
+        khqrSvg,
+        transactionId,
+        expiresAt: expiresAt.toISOString(),
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to generate ABA payment' });
@@ -404,56 +503,80 @@ export function createApp() {
 
   app.post('/api/payment/aba/webhook', async (req: any, res) => {
     try {
-      const rawBody = req.rawBody?.toString('utf-8');
-      const signatureHeader = req.headers['x-payway-signature'] || '';
+      const aba = getAbaClient();
+      if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
 
-      // In dev mode without real webhook secret, we might bypass verify for testing
-      // but we use the SDK to verify if available
-      if (process.env.ABA_WEBHOOK_SECRET) {
-        const isValid = await aba.verifyWebhook(
-          rawBody,
-          signatureHeader as string,
-          process.env.ABA_WEBHOOK_SECRET
-        );
-        if (!isValid) return res.status(401).json({ error: 'Invalid signature' });
-      }
-
-      // Usually ABA sends tran_id and status in a base64 encoded 'response' field
-      // For simplicity, assuming body has tran_id directly or we parse response
-      let tran_id;
-      let status;
-
-      if (req.body.response) {
-        const decoded = Buffer.from(req.body.response, 'base64').toString('utf-8');
-        const parsed = JSON.parse(decoded);
-        tran_id = parsed.tran_id;
-        status = parsed.status;
-      } else {
-        tran_id = req.body.tran_id;
-        status = req.body.status;
-      }
-
-      if (status === 'APPROVED' || status === '0') {
-        const order = await prisma.order.findUnique({
-          where: { transactionId: tran_id }
+      // No secret means no way to tell ABA apart from anyone else on the
+      // internet, so refuse rather than trust the payload.
+      const secret = process.env.ABA_WEBHOOK_SECRET || '';
+      if (!secret) {
+        return res.status(503).json({
+          error: 'ABA_WEBHOOK_SECRET is not set, so webhooks cannot be verified and are rejected.',
         });
-
-        if (order) {
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { status: 'paid' }
-          });
-
-          await settleOrderPoints(prisma, order.id);
-
-          // Notify user if possible
-        }
       }
 
-      res.json({ message: 'Webhook processed' });
+      const rawBody = req.rawBody?.toString('utf-8') ?? '';
+      const signature = String(req.headers['x-payway-signature'] || '');
+      const isValid = await aba.verifyWebhook(rawBody, signature, secret);
+      if (!isValid) return res.status(401).json({ error: 'Invalid signature' });
+
+      // ABA sends either a base64 'response' blob or flat fields.
+      let tranId: string | undefined;
+      if (req.body?.response) {
+        const decoded = Buffer.from(req.body.response, 'base64').toString('utf-8');
+        tranId = JSON.parse(decoded)?.tran_id;
+      } else {
+        tranId = req.body?.tran_id;
+      }
+      if (!tranId) return res.status(400).json({ error: 'Missing tran_id' });
+
+      const order = await prisma.order.findUnique({ where: { transactionId: tranId } });
+      if (!order) return res.status(404).json({ error: 'Order not found for that transaction' });
+
+      const result = await confirmAbaPayment(aba, order.id, tranId);
+      if (!result.ok) return res.status(result.code).json(result.body);
+
+      res.json({ message: 'Webhook processed', status: result.status, orderStatus: result.orderStatus });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  });
+
+  app.get('/api/payment/aba/status/:orderId', async (req, res) => {
+    try {
+      const aba = getAbaClient();
+      if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
+
+      const order = await prisma.order.findUnique({ where: { id: req.params.orderId } });
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+
+      const base = {
+        orderStatus: order.status,
+        pickupCode: order.pickupCode,
+        expiresAt: order.paymentExpiresAt?.toISOString() ?? null,
+      };
+
+      if (order.status === 'paid') return res.json({ status: 'APPROVED', ...base });
+      if (!order.transactionId) {
+        return res.status(409).json({ error: 'No ABA payment has been started for this order' });
+      }
+      if (order.paymentExpiresAt && order.paymentExpiresAt.getTime() < Date.now()) {
+        return res.json({ status: 'EXPIRED', ...base });
+      }
+
+      const result = await confirmAbaPayment(aba, order.id, order.transactionId);
+      if (!result.ok) return res.status(result.code).json(result.body);
+
+      res.json({
+        status: result.status,
+        orderStatus: result.orderStatus,
+        pickupCode: result.order.pickupCode,
+        expiresAt: result.order.paymentExpiresAt?.toISOString() ?? null,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to check payment status' });
     }
   });
 
