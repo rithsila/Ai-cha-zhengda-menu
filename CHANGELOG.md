@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Fixed
+- Staff and Manager PINs are now checked by the server; admin API routes require the manager PIN.
+- Loyalty points now move only when an order is paid (ABA webhook) or completed (cash) — never for abandoned orders.
+- Order totals are calculated on the server from the real menu prices; client prices are ignored.
+- Account tab loads correctly (was calling a missing endpoint).
+- Telegram Login Widget now works: the server verifies the login and signs the user in for browser use.
+- Manager reward catalog: add and activate/deactivate rewards actually work.
+- Loyalty point rates are configurable by managers (points per $1 discount, points earned per $1).
+- Checkout lets customers choose exactly how many points to spend.
+
 ## [1.0.0] - 2026-07-15
 ### Added
 - **Phase 4 — Loyalty, Manager Mode & Integrations**
