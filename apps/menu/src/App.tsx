@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
+import { getTelegramUserId } from './utils/telegramUser';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -154,7 +155,7 @@ export default function App() {
     }
     if (activeCategory === 'All') return brandItems;
     return brandItems.filter(i => i.category === activeCategory);
-  }, [brandItems, activeCategory, searchQuery, favorites]);
+  }, [brandItems, activeCategory, searchQuery, favorites, catalogOverrides]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
 
@@ -283,7 +284,7 @@ export default function App() {
 
   const isTelegramWebApp = typeof window !== 'undefined' && !!(window as any).Telegram?.WebApp?.initData;
   
-  if (!isTelegramWebApp && import.meta.env.PROD) {
+  if (!isTelegramWebApp && !getTelegramUserId() && import.meta.env.PROD) {
     return <WebLogin />;
   }
 

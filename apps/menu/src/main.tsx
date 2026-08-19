@@ -6,9 +6,11 @@ import './i18n/config';
 import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { captureWebLoginFromHash } from './utils/telegramUser'
 
 // Initialize Telegram Web App SDK
 WebApp?.ready?.();
+captureWebLoginFromHash();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

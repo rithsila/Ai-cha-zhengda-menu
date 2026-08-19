@@ -8,6 +8,7 @@ import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-i
 import twa from '@twa-dev/sdk';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import { getTelegramUserId } from '../utils/telegramUser';
 
 const WebApp = (twa as any)?.WebApp || twa || {};
 
@@ -112,7 +113,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       try {
         const [branchRes, userRes, cfgRes] = await Promise.all([
           fetch('http://localhost:4000/api/branches'),
-          fetch(`http://localhost:4000/api/user/${WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id'}`),
+          fetch(`http://localhost:4000/api/user/${getTelegramUserId() || 'test-user-id'}`),
           fetch('http://localhost:4000/api/config')
         ]);
         if (branchRes.ok) {
@@ -165,7 +166,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         body: JSON.stringify({
           items: cart,
           paymentMethod: method,
-          telegramUserId: WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id',
+          telegramUserId: getTelegramUserId() || 'test-user-id',
           branchId: orderType === 'pickup' ? branchId : null,
           orderType,
           deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,

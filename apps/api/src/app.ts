@@ -4,6 +4,7 @@ import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
 import { settleOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
+import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
 
 export const prisma = new PrismaClient();
 
@@ -27,6 +28,45 @@ export function createApp() {
     }
     next();
   };
+
+  app.get('/api/auth/telegram/callback', async (req, res) => {
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) return res.status(503).json({ error: 'Telegram login is not configured on this server' });
+
+      const params: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.query)) {
+        if (typeof v === 'string') params[k] = v;
+      }
+      if (!verifyTelegramLogin(params, token)) {
+        return res.status(401).json({ error: 'Invalid Telegram login data' });
+      }
+      if (!isLoginFresh(params.auth_date)) {
+        return res.status(401).json({ error: 'Login expired, please try again' });
+      }
+
+      const user = await prisma.user.upsert({
+        where: { telegramUserId: params.id },
+        update: {
+          username: params.username || undefined,
+          firstName: params.first_name || undefined,
+          lastName: params.last_name || undefined,
+        },
+        create: {
+          telegramUserId: params.id,
+          username: params.username || null,
+          firstName: params.first_name || null,
+          lastName: params.last_name || null,
+        },
+      });
+
+      const target = process.env.WEBAPP_URL || 'http://localhost:5173';
+      res.redirect(`${target}#tg_id=${encodeURIComponent(user.telegramUserId)}`);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
 
   app.post('/api/auth/staff-login', (req, res) => {
     const { pin, role } = req.body || {};

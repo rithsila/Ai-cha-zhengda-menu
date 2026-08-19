@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Phone, Gift, Coin } from '@phosphor-icons/react';
-import twa from '@twa-dev/sdk';
-const WebApp = (twa as any)?.WebApp || twa || {};
+import { getTelegramUserId } from '../utils/telegramUser';
 
 export function AccountView() {
   const [profile, setProfile] = useState<any>(null);
@@ -11,7 +10,7 @@ export function AccountView() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const userId = WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id';
+        const userId = getTelegramUserId() || 'test-user-id';
         const [userRes, rewardsRes] = await Promise.all([
           fetch(`http://localhost:4000/api/user/${userId}`),
           fetch('http://localhost:4000/api/rewards')

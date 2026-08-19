@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Package, RefreshCw, ShoppingCart } from 'lucide-react';
-import twa from '@twa-dev/sdk';
-const WebApp = (twa as any)?.WebApp || twa || {};
 import { formatCurrency } from '../utils/format';
 import type { CartItem, MenuItem } from '../types';
+import { getTelegramUserId } from '../utils/telegramUser';
 
 interface OrderItem {
   id: string;
@@ -34,7 +33,7 @@ export function OrdersView({ onReorder }: OrdersViewProps) {
 
   const fetchOrders = async () => {
     try {
-      const telegramUserId = WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id';
+      const telegramUserId = getTelegramUserId() || 'test-user-id';
       const res = await fetch(`http://localhost:4000/api/orders/user/${telegramUserId}`);
       if (res.ok) {
         const data = await res.json();
