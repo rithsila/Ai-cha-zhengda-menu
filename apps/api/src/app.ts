@@ -431,7 +431,8 @@ export function createApp() {
 
   app.get('/api/rewards', async (req, res) => {
     try {
-      const rewards = await prisma.reward.findMany({ where: { isActive: true } });
+      const where = req.query.includeInactive === '1' ? {} : { isActive: true };
+      const rewards = await prisma.reward.findMany({ where, orderBy: { pointsCost: 'asc' } });
       res.json(rewards);
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch rewards' });
@@ -440,7 +441,13 @@ export function createApp() {
 
   app.post('/api/rewards', requireManager, async (req, res) => {
     try {
-      const reward = await prisma.reward.create({ data: req.body });
+      const { name, description, pointsCost, image } = req.body || {};
+      if (typeof name !== 'string' || !name.trim() || !Number.isInteger(pointsCost) || pointsCost <= 0) {
+        return res.status(400).json({ error: 'name (text) and pointsCost (whole number above 0) are required' });
+      }
+      const reward = await prisma.reward.create({
+        data: { name: name.trim(), description: description || null, pointsCost, image: image || null }
+      });
       res.json(reward);
     } catch (err) {
       res.status(500).json({ error: 'Failed to create reward' });

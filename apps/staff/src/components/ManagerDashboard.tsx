@@ -72,14 +72,14 @@ export function ManagerDashboard({
   const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState<RecentAdjustment[]>([]);
 
-  // Rewards: add + remove
+  // Rewards: add + toggle
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newDescription, setNewDescription] = useState('');
   const [newCost, setNewCost] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
-  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Loyalty rates
   const [rates, setRates] = useState({ pointsPerDollar: '100', earnPointsPerDollar: '10' });
@@ -93,7 +93,7 @@ export function ManagerDashboard({
       apiFetch<AnalyticsData>('/api/analytics/sales', {
         headers: { 'x-manager-pin': managerPin },
       }),
-      apiFetch<Reward[]>('/api/rewards'),
+      apiFetch<Reward[]>('/api/rewards?includeInactive=1'),
       apiFetch<{ key: string; value: string }[]>('/api/config'),
     ]);
     if (analyticsResult.status === 'fulfilled') {
@@ -232,11 +232,17 @@ export function ManagerDashboard({
           'Content-Type': 'application/json',
           'x-manager-pin': managerPin,
         },
-        body: JSON.stringify({ name, pointsCost: cost, isActive: true }),
+        body: JSON.stringify({
+          name,
+          description: newDescription.trim() || undefined,
+          pointsCost: cost,
+          isActive: true,
+        }),
       });
       setRewards((prev) => [created, ...prev]);
       toast({ title: 'Reward added', variant: 'success' });
       setNewName('');
+      setNewDescription('');
       setNewCost('');
       setAddOpen(false);
     } catch (err) {
@@ -251,29 +257,34 @@ export function ManagerDashboard({
     }
   };
 
-  const handleRemoveReward = async (id: string) => {
-    setRemovingId(id);
+  const handleToggleReward = async (reward: Reward) => {
+    setTogglingId(reward.id);
+    const nextActive = !reward.isActive;
     try {
-      await apiFetch(`/api/rewards/${id}`, {
+      const updated = await apiFetch<Reward>(`/api/rewards/${reward.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'x-manager-pin': managerPin,
         },
-        body: JSON.stringify({ isActive: false }),
+        body: JSON.stringify({ isActive: nextActive }),
       });
-      setRewards((prev) => prev.filter((r) => r.id !== id));
-      setRemoveConfirmId(null);
-      toast({ title: 'Reward removed', variant: 'success' });
+      setRewards((prev) =>
+        prev.map((r) => (r.id === reward.id ? updated : r)),
+      );
+      toast({
+        title: nextActive ? 'Reward activated' : 'Reward deactivated',
+        variant: 'success',
+      });
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
       toast({
-        title: "Couldn't remove reward",
+        title: `Couldn't ${nextActive ? 'activate' : 'deactivate'} reward`,
         description: status === 401 ? 'Manager PIN rejected.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
-      setRemovingId(null);
+      setTogglingId(null);
     }
   };
 
@@ -637,54 +648,78 @@ export function ManagerDashboard({
             {addOpen && (
               <form
                 onSubmit={handleAddReward}
-                className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface-sunken/50 p-3"
+                className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-surface-sunken/50 p-3"
               >
-                <div className="min-w-40 flex-1">
+                <div className="flex flex-wrap gap-2">
+                  <div className="min-w-40 flex-1">
+                    <label
+                      htmlFor="reward-name"
+                      className="mb-1 block text-sm font-medium text-ink"
+                    >
+                      Name
+                    </label>
+                    <input
+                      id="reward-name"
+                      type="text"
+                      placeholder="e.g. Free Milk Tea"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+                    />
+                  </div>
+                  <div className="w-32">
+                    <label
+                      htmlFor="reward-cost"
+                      className="mb-1 block text-sm font-medium text-ink"
+                    >
+                      Points cost
+                    </label>
+                    <input
+                      id="reward-cost"
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="100"
+                      value={newCost}
+                      onChange={(e) => setNewCost(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+                    />
+                  </div>
+                </div>
+                <div>
                   <label
-                    htmlFor="reward-name"
+                    htmlFor="reward-description"
                     className="mb-1 block text-sm font-medium text-ink"
                   >
-                    Name
+                    Description <span className="text-xs text-ink-faint">(optional)</span>
                   </label>
                   <input
-                    id="reward-name"
+                    id="reward-description"
                     type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Medium size, any sugar/ice level"
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
                     className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
                   />
                 </div>
-                <div className="w-28">
-                  <label
-                    htmlFor="reward-cost"
-                    className="mb-1 block text-sm font-medium text-ink"
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="submit" variant="primary" loading={adding}>
+                    Save reward
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setAddOpen(false);
+                      setAddError(null);
+                    }}
                   >
-                    Points cost
-                  </label>
-                  <input
-                    id="reward-cost"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={newCost}
-                    onChange={(e) => setNewCost(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
-                  />
+                    Cancel
+                  </Button>
+                  {addError && (
+                    <p className="text-sm font-medium text-danger">{addError}</p>
+                  )}
                 </div>
-                <Button type="submit" variant="primary" loading={adding}>
-                  Add
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    setAddOpen(false);
-                    setAddError(null);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <p className="w-full text-sm font-medium text-danger">{addError ?? ''}</p>
               </form>
             )}
 
@@ -711,42 +746,43 @@ export function ManagerDashboard({
                     className="flex items-center justify-between gap-3 py-3"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium text-ink">{reward.name}</p>
-                      <p className="text-sm tabular-nums text-ink-soft">
+                      <p
+                        className={`font-medium ${
+                          reward.isActive ? 'text-ink' : 'text-ink-faint'
+                        }`}
+                      >
+                        {reward.name}
+                        {!reward.isActive && (
+                          <span className="ml-1.5 text-xs font-normal text-ink-faint">
+                            (inactive)
+                          </span>
+                        )}
+                      </p>
+                      {reward.description && (
+                        <p
+                          className={`truncate text-xs ${
+                            reward.isActive ? 'text-ink-soft' : 'text-ink-faint'
+                          }`}
+                        >
+                          {reward.description}
+                        </p>
+                      )}
+                      <p
+                        className={`text-sm tabular-nums ${
+                          reward.isActive ? 'text-ink-soft' : 'text-ink-faint'
+                        }`}
+                      >
                         {reward.pointsCost} pts
                       </p>
                     </div>
-                    {removeConfirmId === reward.id ? (
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-ink-soft">
-                          Remove this reward?
-                        </span>
-                        <Button
-                          variant="danger"
-                          size="md"
-                          loading={removingId === reward.id}
-                          onClick={() => handleRemoveReward(reward.id)}
-                        >
-                          Yes, remove
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="md"
-                          onClick={() => setRemoveConfirmId(null)}
-                        >
-                          Cancel
-                        </Button>
-                      </span>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="md"
-                        className="text-danger"
-                        onClick={() => setRemoveConfirmId(reward.id)}
-                      >
-                        Remove
-                      </Button>
-                    )}
+                    <Button
+                      variant={reward.isActive ? 'secondary' : 'success'}
+                      size="md"
+                      loading={togglingId === reward.id}
+                      onClick={() => handleToggleReward(reward)}
+                    >
+                      {reward.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
                   </li>
                 ))}
               </ul>
