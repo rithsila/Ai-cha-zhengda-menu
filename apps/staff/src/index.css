@@ -1,15 +1,202 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand-primary: #FF3B30;
-  --color-tg-bg: var(--tg-theme-bg-color, #ffffff);
-  --color-tg-text: var(--tg-theme-text-color, #000000);
-  --color-tg-hint: var(--tg-theme-hint-color, #999999);
-  --color-tg-secondary-bg: var(--tg-theme-secondary-bg-color, #f4f4f5);
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/*
+ * Staff dashboard design tokens.
+ * Raw switching vars live on :root / [data-theme="dark"]; @theme inline maps them
+ * to Tailwind utilities (bg-surface, text-ink-soft, border-border, ...) that
+ * resolve through the live vars, so toggling data-theme re-themes everything.
+ *
+ * Contrast: every text/surface pair below is verified WCAG AA (OKLCH -> relative
+ * luminance). Weakest shipped pair is 4.63:1 (accent text on surface-sunken, light).
+ * Neutrals carry a subtle matcha tint (chroma 0.003-0.012, hue ~145) — never cream,
+ * never sterile blue-gray. Accent = matcha green; Zhengda red is reserved for the
+ * Zhengda brand tag. Status colors are semantic (order lifecycle), named by meaning.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --surface-page: oklch(0.965 0.006 145);
+  --surface: oklch(0.985 0.004 145);
+  --surface-raised: oklch(0.995 0.003 145);
+  --surface-sunken: oklch(0.93 0.009 145);
+
+  /* Borders */
+  --border: oklch(0.885 0.01 145);
+  --border-strong: oklch(0.78 0.012 145);
+
+  /* Text (ink-soft 8.1:1, ink-faint 6.2:1 on --surface) */
+  --ink: oklch(0.26 0.012 145);
+  --ink-soft: oklch(0.42 0.015 145);
+  --ink-faint: oklch(0.48 0.015 145);
+
+  /* Accent — matcha green, interactive only */
+  --accent: oklch(0.5 0.14 140);
+  --accent-strong: oklch(0.44 0.13 140);
+  --accent-soft: oklch(0.945 0.03 140);
+  --on-accent: oklch(0.99 0.002 140);
+
+  /* Zhengda brand red (brand tag + destructive-adjacent brand moments) */
+  --zhengda: oklch(0.51 0.2 27);
+  --zhengda-soft: oklch(0.935 0.025 27);
+
+  /* Order lifecycle status roles (strong = text/icon, soft = badge bg; pair >= 4.5:1) */
+  --status-pending: oklch(0.5 0.105 78);
+  --status-pending-soft: oklch(0.94 0.035 85);
+  --status-preparing: oklch(0.48 0.11 255);
+  --status-preparing-soft: oklch(0.93 0.03 255);
+  --status-ready: oklch(0.5 0.115 152);
+  --status-ready-soft: oklch(0.935 0.035 155);
+  --status-completed: oklch(0.47 0.015 145);
+  --status-completed-soft: oklch(0.92 0.01 145);
+
+  /* Feedback */
+  --danger: oklch(0.52 0.19 25);
+  --danger-strong: oklch(0.46 0.18 25);
+  --danger-soft: oklch(0.935 0.025 25);
+  --on-danger: oklch(0.99 0.002 25);
+  --success: oklch(0.5 0.115 152);
+  --success-strong: oklch(0.44 0.11 152);
+  --success-soft: oklch(0.935 0.035 155);
+  --on-success: oklch(0.99 0.002 155);
+
+  /* Focus ring (accent-derived, 4.1:1 on surface-page) */
+  --focus: oklch(0.55 0.15 140);
 }
 
-body {
-  background-color: var(--color-tg-bg);
-  color: var(--color-tg-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --surface-page: oklch(0.2 0.007 145);
+  --surface: oklch(0.235 0.008 145);
+  --surface-raised: oklch(0.275 0.009 145);
+  --surface-sunken: oklch(0.165 0.006 145);
+
+  /* Borders */
+  --border: oklch(0.33 0.01 145);
+  --border-strong: oklch(0.43 0.012 145);
+
+  /* Text (ink-soft 8.6:1, ink-faint 6.5:1 on --surface) */
+  --ink: oklch(0.95 0.005 145);
+  --ink-soft: oklch(0.79 0.008 145);
+  --ink-faint: oklch(0.71 0.009 145);
+
+  /* Accent — brightened for dark bg, dark text on it */
+  --accent: oklch(0.73 0.16 140);
+  --accent-strong: oklch(0.79 0.17 140);
+  --accent-soft: oklch(0.33 0.05 140);
+  --on-accent: oklch(0.2 0.02 140);
+
+  /* Zhengda brand red */
+  --zhengda: oklch(0.7 0.19 27);
+  --zhengda-soft: oklch(0.3 0.055 27);
+
+  /* Status roles — strong colors brightened for dark bg */
+  --status-pending: oklch(0.83 0.14 85);
+  --status-pending-soft: oklch(0.33 0.05 85);
+  --status-preparing: oklch(0.8 0.1 252);
+  --status-preparing-soft: oklch(0.33 0.045 250);
+  --status-ready: oklch(0.8 0.16 155);
+  --status-ready-soft: oklch(0.33 0.05 155);
+  --status-completed: oklch(0.75 0.01 145);
+  --status-completed-soft: oklch(0.3 0.012 145);
+
+  /* Feedback */
+  --danger: oklch(0.71 0.18 27);
+  --danger-strong: oklch(0.76 0.14 27);
+  --danger-soft: oklch(0.31 0.055 27);
+  --on-danger: oklch(0.22 0.03 27);
+  --success: oklch(0.8 0.16 155);
+  --success-strong: oklch(0.85 0.15 155);
+  --success-soft: oklch(0.33 0.05 155);
+  --on-success: oklch(0.2 0.03 155);
+
+  /* Focus ring */
+  --focus: oklch(0.75 0.16 140);
+}
+
+@theme inline {
+  --color-surface-page: var(--surface-page);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+
+  --color-zhengda: var(--zhengda);
+  --color-zhengda-soft: var(--zhengda-soft);
+
+  --color-status-pending: var(--status-pending);
+  --color-status-pending-soft: var(--status-pending-soft);
+  --color-status-preparing: var(--status-preparing);
+  --color-status-preparing-soft: var(--status-preparing-soft);
+  --color-status-ready: var(--status-ready);
+  --color-status-ready-soft: var(--status-ready-soft);
+  --color-status-completed: var(--status-completed);
+  --color-status-completed-soft: var(--status-completed-soft);
+
+  --color-danger: var(--danger);
+  --color-danger-strong: var(--danger-strong);
+  --color-danger-soft: var(--danger-soft);
+  --color-on-danger: var(--on-danger);
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-success-soft: var(--success-soft);
+  --color-on-success: var(--on-success);
+
+  --color-focus: var(--focus);
+
+  /* Floating layers only (popover, toast, raised card). Flat by default. */
+  --shadow-raised:
+    0 1px 2px 0 color-mix(in oklab, var(--ink) 10%, transparent),
+    0 4px 12px -2px color-mix(in oklab, var(--ink) 8%, transparent);
+}
+
+@theme {
+  --font-sans:
+    "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+@layer base {
+  body {
+    background-color: var(--surface-page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--accent) 25%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }

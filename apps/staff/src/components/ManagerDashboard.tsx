@@ -1,181 +1,716 @@
-import { useState, useEffect } from 'react';
-import { BarChart3, Users, Plus, Save } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
+import { BarChart3, CircleAlert, Lock, Plus, Users } from 'lucide-react';
+import { apiFetch } from '../lib/api';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Skeleton,
+  Tabs,
+  useToast,
+} from './ui';
 
-export function ManagerDashboard({ managerPin }: { managerPin: string }) {
+type AnalyticsData = {
+  totalRevenue: number;
+  orderCount: number;
+  byDate: Record<string, number>;
+};
+
+type Reward = {
+  id: string;
+  name: string;
+  description?: string | null;
+  pointsCost: number;
+  image?: string | null;
+  isActive: boolean;
+};
+
+type User = {
+  telegramUserId: string;
+  firstName: string | null;
+  lastName: string | null;
+  loyaltyPoints: number;
+};
+
+type RecentAdjustment = {
+  id: string;
+  name: string;
+  delta: number;
+  time: number;
+};
+
+const REASONS = ['Correction', 'Promotion', 'Compensation', 'Other'];
+
+function displayName(user: User): string {
+  return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
+}
+
+export function ManagerDashboard({
+  managerPin,
+  onLock,
+}: {
+  managerPin: string;
+  onLock: () => void;
+}) {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'analytics' | 'loyalty'>('analytics');
 
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [rewards, setRewards] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState<'pin' | 'network' | null>(null);
+  const [rewardsError, setRewardsError] = useState(false);
 
-  // Loyalty Config states
+  // Loyalty: user lookup + points adjustment
   const [userSearch, setUserSearch] = useState('');
-  const [foundUser, setFoundUser] = useState<any>(null);
-  const [pointsAdjust, setPointsAdjust] = useState<number>(0);
+  const [searching, setSearching] = useState(false);
+  const [foundUser, setFoundUser] = useState<User | null>(null);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [deltaInput, setDeltaInput] = useState('');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [recent, setRecent] = useState<RecentAdjustment[]>([]);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const [analyticsRes, rewardsRes] = await Promise.all([
-          fetch('http://localhost:4000/api/analytics/sales', { headers: { 'x-manager-pin': managerPin } }),
-          fetch('http://localhost:4000/api/rewards')
-        ]);
-        if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
-        if (rewardsRes.ok) setRewards(await rewardsRes.json());
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboardData();
+  // Rewards: add + remove
+  const [addOpen, setAddOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newCost, setNewCost] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setAnalyticsError(null);
+    setRewardsError(false);
+    const [analyticsResult, rewardsResult] = await Promise.allSettled([
+      apiFetch<AnalyticsData>('/api/analytics/sales', {
+        headers: { 'x-manager-pin': managerPin },
+      }),
+      apiFetch<Reward[]>('/api/rewards'),
+    ]);
+    if (analyticsResult.status === 'fulfilled') {
+      setAnalytics(analyticsResult.value);
+    } else {
+      const status = (analyticsResult.reason as Error & { status?: number }).status;
+      setAnalyticsError(status === 401 ? 'pin' : 'network');
+    }
+    if (rewardsResult.status === 'fulfilled') {
+      setRewards(rewardsResult.value);
+    } else {
+      setRewardsError(true);
+    }
+    setLoading(false);
   }, [managerPin]);
 
-  const handleSearchUser = async () => {
-    // We would need an API to search by phone or ID. For simplicity we assume ID search is enough for now or we build a small fetch logic here.
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // ---- Loyalty handlers ----
+  const parsedDelta =
+    deltaInput.trim() === '' || deltaInput.trim() === '-'
+      ? null
+      : Number(deltaInput.trim());
+  const delta = parsedDelta != null && Number.isFinite(parsedDelta) ? parsedDelta : 0;
+  const newBalance = foundUser ? foundUser.loyaltyPoints + delta : 0;
+  const canSave =
+    foundUser != null &&
+    parsedDelta != null &&
+    delta !== 0 &&
+    reason !== '' &&
+    newBalance >= 0 &&
+    !saving;
+
+  const applyQuick = (amount: number) => {
+    const current = parsedDelta ?? 0;
+    setDeltaInput(String(current + amount));
+  };
+
+  const handleSearchUser = async (e: FormEvent) => {
+    e.preventDefault();
+    const id = userSearch.trim();
+    if (!id) return;
+    setSearching(true);
+    setUserError(null);
+    setFoundUser(null);
     try {
-      const res = await fetch(`http://localhost:4000/api/users/${userSearch}`, {
-        headers: { 'x-manager-pin': managerPin }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setFoundUser(data);
-        setPointsAdjust(data.loyaltyPoints);
-      } else {
-        alert('User not found');
-      }
-    } catch (e) {
-      console.error(e);
+      const user = await apiFetch<User>(
+        `/api/users/${encodeURIComponent(id)}`,
+        { headers: { 'x-manager-pin': managerPin } },
+      );
+      setFoundUser(user);
+      setDeltaInput('');
+      setReason('');
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      setUserError(
+        status === 404
+          ? 'No customer found with that ID.'
+          : status === 401
+            ? 'Manager PIN rejected.'
+            : 'Could not search right now.',
+      );
+    } finally {
+      setSearching(false);
     }
   };
 
   const handleSavePoints = async () => {
-    if (!foundUser) return;
+    if (!foundUser || parsedDelta == null || delta === 0 || newBalance < 0) return;
+    setSaving(true);
     try {
-      const res = await fetch(`http://localhost:4000/api/users/${foundUser.telegramUserId}/points`, {
+      await apiFetch(`/api/users/${encodeURIComponent(foundUser.telegramUserId)}/points`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-manager-pin': managerPin },
-        body: JSON.stringify({ points: pointsAdjust })
+        headers: {
+          'Content-Type': 'application/json',
+          'x-manager-pin': managerPin,
+        },
+        body: JSON.stringify({ points: newBalance }),
       });
-      if (res.ok) {
-        alert('Points updated!');
-      } else {
-        alert('Failed to update points. Please check your Manager PIN.');
-      }
-    } catch (e) {
-      console.error(e);
+      const name = displayName(foundUser);
+      const sign = delta > 0 ? '+' : '';
+      toast({
+        title: 'Points updated',
+        description: `${name}: ${foundUser.loyaltyPoints} → ${newBalance} (${sign}${delta})`,
+        variant: 'success',
+      });
+      setRecent((prev) =>
+        [
+          { id: crypto.randomUUID(), name, delta, time: Date.now() },
+          ...prev,
+        ].slice(0, 5),
+      );
+      setFoundUser((prev) => (prev ? { ...prev, loyaltyPoints: newBalance } : prev));
+      setDeltaInput('');
+      setReason('');
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      toast({
+        title: "Couldn't update points",
+        description: status === 401 ? 'Manager PIN rejected — lock and re-enter.' : 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading) return <div className="p-10 text-center animate-pulse">Loading Manager Dashboard...</div>;
+  // ---- Reward handlers ----
+  const handleAddReward = async (e: FormEvent) => {
+    e.preventDefault();
+    const name = newName.trim();
+    const cost = Number(newCost);
+    if (!name) {
+      setAddError('Enter a reward name.');
+      return;
+    }
+    if (!Number.isInteger(cost) || cost < 1) {
+      setAddError('Points cost must be a whole number of 1 or more.');
+      return;
+    }
+    setAdding(true);
+    setAddError(null);
+    try {
+      const created = await apiFetch<Reward>('/api/rewards', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-manager-pin': managerPin,
+        },
+        body: JSON.stringify({ name, pointsCost: cost, isActive: true }),
+      });
+      setRewards((prev) => [created, ...prev]);
+      toast({ title: 'Reward added', variant: 'success' });
+      setNewName('');
+      setNewCost('');
+      setAddOpen(false);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      toast({
+        title: "Couldn't add reward",
+        description: status === 401 ? 'Manager PIN rejected.' : 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemoveReward = async (id: string) => {
+    setRemovingId(id);
+    try {
+      await apiFetch(`/api/rewards/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-manager-pin': managerPin,
+        },
+        body: JSON.stringify({ isActive: false }),
+      });
+      setRewards((prev) => prev.filter((r) => r.id !== id));
+      setRemoveConfirmId(null);
+      toast({ title: 'Reward removed', variant: 'success' });
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      toast({
+        title: "Couldn't remove reward",
+        description: status === 401 ? 'Manager PIN rejected.' : 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const entries = analytics
+    ? Object.entries(analytics.byDate).sort(([a], [b]) => a.localeCompare(b))
+    : [];
+  const max = entries.length > 0 ? Math.max(...entries.map(([, v]) => v)) : 0;
+  const valueLabelEvery = entries.length <= 14 ? 1 : Math.ceil(entries.length / 14);
+  const dateLabelEvery = Math.max(1, Math.ceil(entries.length / 10));
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Sub-nav */}
-      <div className="flex gap-4 border-b border-gray-200 pb-4">
-        <button 
-          onClick={() => setActiveTab('analytics')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-colors ${activeTab === 'analytics' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'}`}
-        >
-          <BarChart3 size={20} /> Analytics
-        </button>
-        <button 
-          onClick={() => setActiveTab('loyalty')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-colors ${activeTab === 'loyalty' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-100'}`}
-        >
-          <Users size={20} /> Loyalty & Rewards
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tabs
+          tabs={[
+            {
+              id: 'analytics',
+              label: 'Analytics',
+              icon: <BarChart3 className="size-4" />,
+            },
+            {
+              id: 'loyalty',
+              label: 'Loyalty & Rewards',
+              icon: <Users className="size-4" />,
+            },
+          ]}
+          active={activeTab}
+          onChange={(id) => setActiveTab(id as 'analytics' | 'loyalty')}
+          ariaLabel="Manager sections"
+        />
+        <Button variant="ghost" size="md" onClick={onLock} aria-label="Lock manager mode">
+          <Lock className="size-4" aria-hidden="true" />
+          Lock
+        </Button>
       </div>
 
-      {activeTab === 'analytics' && analytics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-2">
-            <h3 className="text-gray-500 font-bold uppercase tracking-wider text-xs">Total Revenue (Paid)</h3>
-            <div className="text-4xl font-black text-gray-900">${analytics.totalRevenue.toFixed(2)}</div>
-          </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-2">
-            <h3 className="text-gray-500 font-bold uppercase tracking-wider text-xs">Total Orders</h3>
-            <div className="text-4xl font-black text-gray-900">{analytics.orderCount}</div>
-          </div>
-          <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h3 className="text-gray-800 font-bold mb-4">Daily Sales Volume</h3>
-            <div className="h-64 flex items-end gap-2 border-b border-l border-gray-200 p-4">
-              {Object.entries(analytics.byDate).map(([date, amount]: any) => (
-                <div key={date} className="relative group flex-1 flex flex-col items-center justify-end h-full">
-                  <div 
-                    className="w-full bg-indigo-500 rounded-t-sm transition-all hover:bg-indigo-600" 
-                    style={{ height: `${Math.min((amount / Math.max(...Object.values(analytics.byDate) as number[])) * 100, 100)}%` }}
-                  ></div>
-                  <span className="absolute -bottom-6 text-xs text-gray-400 rotate-45">{date.slice(5)}</span>
-                  <div className="absolute -top-10 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-xs py-1 px-2 rounded-md transition-opacity pointer-events-none">
-                    ${amount.toFixed(2)}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-8 text-center text-sm text-gray-400">Time range: Lifetime</div>
-          </div>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-72 w-full md:col-span-2" />
         </div>
-      )}
+      ) : activeTab === 'analytics' ? (
+        analyticsError ? (
+          <Card padding="lg" className="text-center">
+            <CircleAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
+            <h3 className="mt-2 font-semibold text-ink">
+              {analyticsError === 'pin'
+                ? 'Manager PIN rejected'
+                : "Couldn't load analytics"}
+            </h3>
+            <p className="mt-1 text-sm text-ink-soft">
+              {analyticsError === 'pin'
+                ? 'Lock and re-enter your Manager PIN to view analytics.'
+                : 'Check your connection and try again.'}
+            </p>
+            <Button
+              variant="secondary"
+              className="mt-4"
+              onClick={analyticsError === 'pin' ? onLock : fetchDashboardData}
+            >
+              {analyticsError === 'pin' ? 'Re-enter PIN' : 'Try again'}
+            </Button>
+          </Card>
+        ) : analytics ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Card padding="lg">
+              <p className="text-sm text-ink-soft">Total revenue (paid)</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-ink">
+                ${analytics.totalRevenue.toFixed(2)}
+              </p>
+              <p className="mt-1 text-xs text-ink-faint">All time</p>
+            </Card>
+            <Card padding="lg">
+              <p className="text-sm text-ink-soft">Orders (paid)</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-ink">
+                {analytics.orderCount}
+              </p>
+              <p className="mt-1 text-xs text-ink-faint">All time</p>
+            </Card>
 
-      {activeTab === 'loyalty' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* User Points Adjustment */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2"><Users size={20}/> Adjust User Points</h3>
-            <div className="flex gap-2 mb-4">
-              <input 
-                type="text" 
-                placeholder="Telegram User ID" 
-                value={userSearch}
-                onChange={e => setUserSearch(e.target.value)}
-                className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button onClick={handleSearchUser} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">Search</button>
-            </div>
-            {foundUser && (
-              <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                <div className="font-bold text-indigo-900 mb-2">{foundUser.firstName} {foundUser.lastName}</div>
-                <div className="flex items-center gap-4">
-                  <input 
-                    type="number" 
-                    value={pointsAdjust}
-                    onChange={e => setPointsAdjust(Number(e.target.value))}
-                    className="w-24 bg-white border border-gray-300 rounded-lg px-3 py-2 outline-none font-bold text-center"
-                  />
-                  <span className="text-sm font-bold text-gray-500">Pts</span>
-                  <button onClick={handleSavePoints} className="ml-auto bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-bold text-sm">
-                    <Save size={16} /> Save
-                  </button>
+            <Card padding="lg" className="md:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-semibold text-ink">Daily sales volume</h3>
+                <span className="text-sm text-ink-faint">All time</span>
+              </div>
+
+              {entries.length === 0 ? (
+                <EmptyState
+                  icon={<BarChart3 className="size-10" />}
+                  title="No paid orders yet"
+                  description="Sales will appear here once orders are paid."
+                />
+              ) : (
+                <div>
+                  <div className="flex h-56 items-end gap-1.5" aria-hidden="true">
+                    {entries.map(([date, amount], i) => {
+                      const pct = max > 0 ? Math.min((amount / max) * 100, 90) : 0;
+                      const showValue = i % valueLabelEvery === 0;
+                      return (
+                        <div
+                          key={date}
+                          className="group relative flex h-full flex-1 flex-col justify-end"
+                        >
+                          {showValue && (
+                            <span className="mb-1 shrink-0 text-center text-[11px] font-medium tabular-nums text-ink-soft">
+                              ${amount.toFixed(0)}
+                            </span>
+                          )}
+                          <div
+                            className="w-full rounded-t-sm bg-accent transition-colors group-hover:bg-accent-strong"
+                            style={{
+                              height: `${pct}%`,
+                              minHeight: amount > 0 ? '4px' : undefined,
+                            }}
+                          />
+                          <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-surface-raised px-2 py-1 text-xs text-ink opacity-0 shadow-raised transition-opacity group-hover:opacity-100">
+                            ${amount.toFixed(2)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex gap-1.5">
+                    {entries.map(([date], i) => (
+                      <div key={date} className="flex-1 text-center">
+                        {i % dateLabelEvery === 0 && (
+                          <span className="text-[11px] tabular-nums text-ink-faint">
+                            {date.slice(5)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <table className="sr-only">
+                    <caption>Daily sales</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.map(([date, amount]) => (
+                        <tr key={date}>
+                          <td>{date}</td>
+                          <td>${amount.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+              )}
+            </Card>
+          </div>
+        ) : null
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Points adjustment */}
+          <Card padding="lg">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-ink">
+              <Users className="size-5" aria-hidden="true" />
+              Adjust user points
+            </h3>
+
+            <form onSubmit={handleSearchUser} className="mt-4 flex gap-2">
+              <label className="sr-only" htmlFor="user-id-search">
+                Telegram user ID
+              </label>
+              <input
+                id="user-id-search"
+                type="text"
+                inputMode="numeric"
+                placeholder="Telegram user ID"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="h-11 flex-1 rounded-xl border border-border bg-surface px-4 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
+              />
+              <Button type="submit" variant="secondary" loading={searching}>
+                Search
+              </Button>
+            </form>
+
+            <p aria-live="polite" className="mt-2 min-h-5 text-sm font-medium text-danger">
+              {userError ?? ''}
+            </p>
+
+            {foundUser && (
+              <div className="mt-3 rounded-xl bg-accent-soft/60 p-4">
+                <p className="font-semibold text-ink">{displayName(foundUser)}</p>
+                <p className="mt-1 text-sm text-ink-soft">
+                  Current balance:{' '}
+                  <span className="font-bold tabular-nums text-ink">
+                    {foundUser.loyaltyPoints}
+                  </span>{' '}
+                  pts
+                </p>
+
+                <label
+                  htmlFor="delta-input"
+                  className="mt-4 block text-sm font-medium text-ink"
+                >
+                  Adjustment (points, +/-)
+                </label>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    id="delta-input"
+                    type="number"
+                    step="1"
+                    value={deltaInput}
+                    onChange={(e) => setDeltaInput(e.target.value)}
+                    className="h-11 w-28 rounded-xl border border-border bg-surface px-3 text-center font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
+                    aria-describedby="delta-preview"
+                  />
+                  {[10, 50, 100, -50].map((amount) => (
+                    <Button
+                      key={amount}
+                      variant="secondary"
+                      size="md"
+                      onClick={() => applyQuick(amount)}
+                    >
+                      {amount > 0 ? `+${amount}` : amount}
+                    </Button>
+                  ))}
+                </div>
+
+                <label
+                  htmlFor="reason-select"
+                  className="mt-4 block text-sm font-medium text-ink"
+                >
+                  Reason
+                </label>
+                <select
+                  id="reason-select"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+                >
+                  <option value="">Choose a reason…</option>
+                  {REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+
+                <p
+                  id="delta-preview"
+                  aria-live="polite"
+                  className="mt-3 text-sm tabular-nums"
+                >
+                  {delta !== 0 && foundUser ? (
+                    newBalance < 0 ? (
+                      <span className="font-medium text-danger">
+                        Would take the balance below zero
+                      </span>
+                    ) : (
+                      <span className="text-ink-soft">
+                        {foundUser.loyaltyPoints} → {newBalance} ({delta > 0 ? '+' : ''}
+                        {delta})
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-ink-faint">
+                      Enter an adjustment to preview the new balance.
+                    </span>
+                  )}
+                </p>
+
+                <Button
+                  variant="success"
+                  className="mt-4"
+                  disabled={!canSave}
+                  loading={saving}
+                  onClick={handleSavePoints}
+                >
+                  Save adjustment
+                </Button>
               </div>
             )}
-          </div>
 
-          {/* Reward Catalog */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Reward Catalog</h3>
-              <button className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1 transition-colors">
-                <Plus size={16} /> Add Reward
-              </button>
+            {recent.length > 0 && (
+              <div className="mt-5">
+                <h4 className="text-sm font-semibold text-ink">
+                  Adjusted this session
+                </h4>
+                <ul className="mt-2 divide-y divide-border">
+                  {recent.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 truncate text-ink-soft">
+                        <span className="tabular-nums text-ink-faint">
+                          {new Date(r.time).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>{' '}
+                        {r.name}
+                      </span>
+                      <span
+                        className={`font-semibold tabular-nums ${
+                          r.delta > 0 ? 'text-success' : 'text-danger'
+                        }`}
+                      >
+                        {r.delta > 0 ? '+' : ''}
+                        {r.delta}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Card>
+
+          {/* Reward catalog */}
+          <Card padding="lg">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-ink">Reward catalog</h3>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setAddOpen((v) => !v)}
+                aria-expanded={addOpen}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                Add reward
+              </Button>
             </div>
-            <div className="flex flex-col gap-3">
-              {rewards.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">No rewards configured.</div>
-              ) : (
-                rewards.map(reward => (
-                  <div key={reward.id} className="flex justify-between items-center p-3 border border-gray-100 rounded-xl bg-gray-50">
-                    <div>
-                      <div className="font-bold text-gray-800">{reward.name}</div>
-                      <div className="text-xs text-gray-500 font-bold">{reward.pointsCost} pts</div>
+
+            {addOpen && (
+              <form
+                onSubmit={handleAddReward}
+                className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface-sunken/50 p-3"
+              >
+                <div className="min-w-40 flex-1">
+                  <label
+                    htmlFor="reward-name"
+                    className="mb-1 block text-sm font-medium text-ink"
+                  >
+                    Name
+                  </label>
+                  <input
+                    id="reward-name"
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+                  />
+                </div>
+                <div className="w-28">
+                  <label
+                    htmlFor="reward-cost"
+                    className="mb-1 block text-sm font-medium text-ink"
+                  >
+                    Points cost
+                  </label>
+                  <input
+                    id="reward-cost"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={newCost}
+                    onChange={(e) => setNewCost(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
+                  />
+                </div>
+                <Button type="submit" variant="primary" loading={adding}>
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setAddOpen(false);
+                    setAddError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <p className="w-full text-sm font-medium text-danger">{addError ?? ''}</p>
+              </form>
+            )}
+
+            {rewardsError ? (
+              <p className="mt-4 text-sm text-danger">
+                Couldn't load rewards.{' '}
+                <button
+                  type="button"
+                  onClick={fetchDashboardData}
+                  className="font-semibold text-accent hover:text-accent-strong"
+                >
+                  Try again
+                </button>
+              </p>
+            ) : rewards.length === 0 ? (
+              <p className="mt-6 text-center text-sm text-ink-faint">
+                No rewards yet — add the first one.
+              </p>
+            ) : (
+              <ul className="mt-4 divide-y divide-border">
+                {rewards.map((reward) => (
+                  <li
+                    key={reward.id}
+                    className="flex items-center justify-between gap-3 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink">{reward.name}</p>
+                      <p className="text-sm tabular-nums text-ink-soft">
+                        {reward.pointsCost} pts
+                      </p>
                     </div>
-                    <button className="text-red-500 font-bold text-xs hover:underline">Remove</button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+                    {removeConfirmId === reward.id ? (
+                      <span className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-ink-soft">
+                          Remove this reward?
+                        </span>
+                        <Button
+                          variant="danger"
+                          size="md"
+                          loading={removingId === reward.id}
+                          onClick={() => handleRemoveReward(reward.id)}
+                        >
+                          Yes, remove
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="md"
+                          onClick={() => setRemoveConfirmId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        className="text-danger"
+                        onClick={() => setRemoveConfirmId(reward.id)}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
       )}
     </div>

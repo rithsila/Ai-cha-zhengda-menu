@@ -1,5 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Package, ToggleLeft, ToggleRight, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CircleAlert, Search } from 'lucide-react';
+import { apiFetch } from '../lib/api';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Skeleton,
+  Switch,
+  Tabs,
+  useToast,
+} from './ui';
 
 type MenuItem = {
   id: string;
@@ -9,20 +20,33 @@ type MenuItem = {
   isSoldOut: boolean;
 };
 
+type AvailabilityFilter = 'all' | 'available' | 'soldout';
+type BrandFilter = 'all' | 'ai-cha' | 'zhengda';
+
+const BRANDS: Array<{ id: BrandFilter; label: string }> = [
+  { id: 'all', label: 'All brands' },
+  { id: 'ai-cha', label: 'Ai-Cha' },
+  { id: 'zhengda', label: 'Zhengda' },
+];
+
 export function MenuManagement() {
+  const { toast } = useToast();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
+  const [availability, setAvailability] = useState<AvailabilityFilter>('all');
+  const [brand, setBrand] = useState<BrandFilter>('all');
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
   const fetchCatalog = async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
-      const res = await fetch('http://localhost:4000/api/catalog');
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch catalog:', error);
+      const data = await apiFetch<MenuItem[]>('/api/catalog');
+      setItems(data);
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -32,97 +56,222 @@ export function MenuManagement() {
     fetchCatalog();
   }, []);
 
-  const toggleSoldOut = async (id: string, currentStatus: boolean) => {
+  const toggleSoldOut = async (id: string, nextSoldOut: boolean) => {
+    setPendingIds((prev) => new Set(prev).add(id));
+    const previous = items.find((i) => i.id === id);
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, isSoldOut: nextSoldOut } : i)),
+    );
     try {
-      // Optimistic update
-      setItems(items.map(item => item.id === id ? { ...item, isSoldOut: !currentStatus } : item));
-      
-      const res = await fetch(`http://localhost:4000/api/catalog/${id}/sold-out`, {
+      await apiFetch(`/api/catalog/${id}/sold-out`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isSoldOut: !currentStatus })
+        body: JSON.stringify({ isSoldOut: nextSoldOut }),
       });
-      
-      if (!res.ok) {
-        // Revert on failure
-        setItems(items.map(item => item.id === id ? { ...item, isSoldOut: currentStatus } : item));
+    } catch {
+      // Revert on failure
+      if (previous) {
+        setItems((prev) => prev.map((i) => (i.id === id ? previous : i)));
       }
-    } catch (error) {
-      console.error('Failed to toggle sold out status', error);
-      setItems(items.map(item => item.id === id ? { ...item, isSoldOut: currentStatus } : item));
+      toast({
+        title: `Couldn't update ${previous?.name ?? 'item'}`,
+        description: 'The menu was not changed.',
+        variant: 'error',
+        action: {
+          label: 'Retry',
+          onClick: () => toggleSoldOut(id, nextSoldOut),
+        },
+      });
+    } finally {
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
-  const filteredItems = items.filter(item => 
-    item.name.toLowerCase().includes(search.toLowerCase()) || 
-    item.category.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = items.filter((item) => {
+    const q = search.toLowerCase();
+    const matchesSearch =
+      q === '' ||
+      item.name.toLowerCase().includes(q) ||
+      item.category.toLowerCase().includes(q) ||
+      item.brand.toLowerCase().includes(q);
+    const matchesAvailability =
+      availability === 'all' ||
+      (availability === 'available' && !item.isSoldOut) ||
+      (availability === 'soldout' && item.isSoldOut);
+    const matchesBrand = brand === 'all' || item.brand.toLowerCase() === brand;
+    return matchesSearch && matchesAvailability && matchesBrand;
+  });
+
+  const soldOutCount = items.filter((i) => i.isSoldOut).length;
+  const isFiltered = search !== '' || availability !== 'all' || brand !== 'all';
+
+  const summary = isFiltered
+    ? `${filteredItems.length} of ${items.length} items · ${soldOutCount} sold out`
+    : `${items.length} items · ${soldOutCount} sold out`;
 
   return (
     <div>
-      <div className="mb-6 relative max-w-md">
-        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-400">
-          <Search size={18} />
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-64 max-w-md flex-1">
+          <label className="sr-only" htmlFor="menu-search">
+            Search menu items
+          </label>
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-faint"
+            aria-hidden="true"
+          />
+          <input
+            id="menu-search"
+            type="text"
+            placeholder="Search items, categories, brands…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11 w-full rounded-xl border border-border bg-surface pr-4 pl-10 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
+          />
         </div>
-        <input 
-          type="text" 
-          placeholder="Search menu items..." 
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+        <Tabs
+          tabs={[
+            { id: 'all', label: 'All' },
+            { id: 'available', label: 'Available' },
+            { id: 'soldout', label: 'Sold out' },
+          ]}
+          active={availability}
+          onChange={(id) => setAvailability(id as AvailabilityFilter)}
+          ariaLabel="Filter by availability"
+        />
+
+        <Tabs
+          tabs={BRANDS}
+          active={brand}
+          onChange={(id) => setBrand(id as BrandFilter)}
+          ariaLabel="Filter by brand"
         />
       </div>
 
+      <p className="mb-3 text-sm text-ink-soft">{summary}</p>
+
       {loading ? (
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-gray-200 rounded-xl"></div>
-          ))}
-        </div>
+        <Card padding="none" className="overflow-hidden">
+          <div className="space-y-2 p-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </Card>
+      ) : loadError ? (
+        <EmptyState
+          icon={<CircleAlert className="size-10" />}
+          title="Couldn't load the menu"
+          description="Check your connection and try again."
+          action={
+            <Button variant="secondary" onClick={fetchCatalog}>
+              Try again
+            </Button>
+          }
+        />
+      ) : filteredItems.length === 0 ? (
+        <EmptyState
+          icon={<Search className="size-10" />}
+          title="No items match"
+          description="Try a different search or clear the filters."
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearch('');
+                setAvailability('all');
+                setBrand('all');
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
-                <th className="p-4 font-medium">Item Name</th>
-                <th className="p-4 font-medium">Brand</th>
-                <th className="p-4 font-medium">Category</th>
-                <th className="p-4 font-medium text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map(item => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="p-4 font-medium">{item.name}</td>
-                  <td className="p-4 text-sm text-gray-500 uppercase">{item.brand}</td>
-                  <td className="p-4 text-sm text-gray-500">{item.category}</td>
-                  <td className="p-4 text-right">
-                    <button 
-                      onClick={() => toggleSoldOut(item.id, item.isSoldOut)}
-                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-sm transition-colors ${
-                        item.isSoldOut 
-                          ? 'bg-red-50 text-red-600 hover:bg-red-100' 
-                          : 'bg-green-50 text-green-600 hover:bg-green-100'
-                      }`}
-                    >
-                      {item.isSoldOut ? (
-                        <><ToggleRight size={18} /> Sold Out</>
-                      ) : (
-                        <><ToggleLeft size={18} /> Available</>
-                      )}
-                    </button>
-                  </td>
+        <Card padding="none" className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <caption className="sr-only">
+                Menu items and availability
+              </caption>
+              <thead>
+                <tr className="bg-surface-sunken">
+                  <th
+                    scope="col"
+                    className="p-3.5 text-sm font-semibold text-ink-soft"
+                  >
+                    Item
+                  </th>
+                  <th
+                    scope="col"
+                    className="p-3.5 text-sm font-semibold text-ink-soft"
+                  >
+                    Brand
+                  </th>
+                  <th
+                    scope="col"
+                    className="p-3.5 text-sm font-semibold text-ink-soft"
+                  >
+                    Category
+                  </th>
+                  <th
+                    scope="col"
+                    className="p-3.5 text-right text-sm font-semibold text-ink-soft"
+                  >
+                    Status
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredItems.length === 0 && (
-            <div className="p-8 text-center text-gray-500">
-              <Package size={32} className="mx-auto mb-2 opacity-50" />
-              No items found.
-            </div>
-          )}
-        </div>
+              </thead>
+              <tbody>
+                {filteredItems.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-t border-border transition-colors hover:bg-surface-sunken/60"
+                  >
+                    <td className="p-3.5 font-medium text-ink">{item.name}</td>
+                    <td className="p-3.5">
+                      <span className="inline-flex items-center gap-2 text-sm text-ink-soft">
+                        <span
+                          className={`size-2 rounded-full ${
+                            item.brand.toLowerCase() === 'zhengda'
+                              ? 'bg-zhengda'
+                              : 'bg-accent'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        {item.brand.toLowerCase() === 'zhengda'
+                          ? 'Zhengda'
+                          : 'Ai-Cha'}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-sm text-ink-soft">
+                      {item.category}
+                    </td>
+                    <td className="p-3.5 text-right">
+                      <span className="inline-flex items-center justify-end gap-3">
+                        <Badge variant={item.isSoldOut ? 'danger' : 'ready'} dot>
+                          {item.isSoldOut ? 'Sold out' : 'Available'}
+                        </Badge>
+                        <Switch
+                          checked={!item.isSoldOut}
+                          disabled={pendingIds.has(item.id)}
+                          srLabel={`${item.name} is available`}
+                          onChange={(next) => toggleSoldOut(item.id, !next)}
+                        />
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );

@@ -4,7 +4,27 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>staff</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>Ai-Cha &amp; Zhengda — Staff</title>
+    <script>
+      // Resolve theme before first paint to avoid a dark-mode flash.
+      // Mirrors useTheme: localStorage holds only an explicit "light"/"dark" pin;
+      // anything else (absent/invalid) means "system" -> follow the OS setting.
+      try {
+        var t = window.localStorage.getItem('staff-theme');
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = t;
+      } catch {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
