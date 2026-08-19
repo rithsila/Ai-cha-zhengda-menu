@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { BarChart3, CircleAlert, Lock, Plus, Users } from 'lucide-react';
+import { BarChart3, CircleAlert, Lock, Plus, Sliders, Users } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import {
   Button,
@@ -81,15 +81,20 @@ export function ManagerDashboard({
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  // Loyalty rates
+  const [rates, setRates] = useState({ pointsPerDollar: '100', earnPointsPerDollar: '10' });
+  const [savingRates, setSavingRates] = useState(false);
+
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setAnalyticsError(null);
     setRewardsError(false);
-    const [analyticsResult, rewardsResult] = await Promise.allSettled([
+    const [analyticsResult, rewardsResult, configResult] = await Promise.allSettled([
       apiFetch<AnalyticsData>('/api/analytics/sales', {
         headers: { 'x-manager-pin': managerPin },
       }),
       apiFetch<Reward[]>('/api/rewards'),
+      apiFetch<{ key: string; value: string }[]>('/api/config'),
     ]);
     if (analyticsResult.status === 'fulfilled') {
       setAnalytics(analyticsResult.value);
@@ -101,6 +106,13 @@ export function ManagerDashboard({
       setRewards(rewardsResult.value);
     } else {
       setRewardsError(true);
+    }
+    if (configResult.status === 'fulfilled') {
+      const rows = configResult.value;
+      setRates((prev) => ({
+        ...prev,
+        ...Object.fromEntries(rows.filter((r) => r.key in prev).map((r) => [r.key, r.value])),
+      }));
     }
     setLoading(false);
   }, [managerPin]);
@@ -262,6 +274,35 @@ export function ManagerDashboard({
       });
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const handleSaveRates = async () => {
+    setSavingRates(true);
+    try {
+      for (const [key, value] of Object.entries(rates)) {
+        await apiFetch('/api/config', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-manager-pin': managerPin,
+          },
+          body: JSON.stringify({ key, value }),
+        });
+      }
+      toast({ title: 'Rates saved', variant: 'success' });
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      toast({
+        title: "Couldn't save rates",
+        description:
+          status === 401
+            ? 'Manager PIN rejected.'
+            : 'Values must be numbers greater than 0.',
+        variant: 'error',
+      });
+    } finally {
+      setSavingRates(false);
     }
   };
 
@@ -710,6 +751,67 @@ export function ManagerDashboard({
                 ))}
               </ul>
             )}
+          </Card>
+
+          {/* Loyalty rates */}
+          <Card padding="lg" className="lg:col-span-2">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-ink">
+              <Sliders className="size-5" aria-hidden="true" />
+              Loyalty rates
+            </h3>
+            <p className="mt-1 text-sm text-ink-soft">
+              Configure points required for discounts and points earned per dollar spent.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-end gap-4">
+              <div className="w-56">
+                <label
+                  htmlFor="points-per-dollar"
+                  className="mb-1 block text-sm font-medium text-ink"
+                >
+                  Points for a $1 discount
+                </label>
+                <input
+                  id="points-per-dollar"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={rates.pointsPerDollar}
+                  onChange={(e) =>
+                    setRates((prev) => ({ ...prev, pointsPerDollar: e.target.value }))
+                  }
+                  className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
+                />
+              </div>
+
+              <div className="w-56">
+                <label
+                  htmlFor="earn-points-per-dollar"
+                  className="mb-1 block text-sm font-medium text-ink"
+                >
+                  Points earned per $1 spent
+                </label>
+                <input
+                  id="earn-points-per-dollar"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={rates.earnPointsPerDollar}
+                  onChange={(e) =>
+                    setRates((prev) => ({ ...prev, earnPointsPerDollar: e.target.value }))
+                  }
+                  className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
+                />
+              </div>
+
+              <Button
+                variant="primary"
+                loading={savingRates}
+                onClick={handleSaveRates}
+              >
+                Save rates
+              </Button>
+            </div>
           </Card>
         </div>
       )}

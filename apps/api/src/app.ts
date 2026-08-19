@@ -3,7 +3,7 @@ import type { RequestHandler } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
-import { settleOrderPoints } from './loyalty';
+import { settleOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
 
 export const prisma = new PrismaClient();
 
@@ -160,8 +160,8 @@ export function createApp() {
         });
       }
 
-      const POINTS_PER_DOLLAR = 100; // Task 6 makes this configurable
-      const EARN_POINTS_PER_DOLLAR = 10;
+      const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', CONFIG_DEFAULTS.pointsPerDollar);
+      const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', CONFIG_DEFAULTS.earnPointsPerDollar);
 
       let requestedPoints = 0;
       if (typeof pointsToUse === 'number' && Number.isInteger(pointsToUse) && pointsToUse > 0) {
@@ -412,11 +412,18 @@ export function createApp() {
 
   app.put('/api/config', requireManager, async (req, res) => {
     try {
-      const { key, value } = req.body;
+      const { key, value } = req.body || {};
+      if (!(key in CONFIG_DEFAULTS)) {
+        return res.status(400).json({ error: `Unknown config key. Allowed: ${Object.keys(CONFIG_DEFAULTS).join(', ')}` });
+      }
+      const num = Number(value);
+      if (!Number.isFinite(num) || num <= 0) {
+        return res.status(400).json({ error: 'value must be a number greater than 0' });
+      }
       const config = await prisma.systemConfig.upsert({
         where: { key },
-        update: { value },
-        create: { key, value }
+        update: { value: String(value) },
+        create: { key, value: String(value) }
       });
       res.json(config);
     } catch (err) {

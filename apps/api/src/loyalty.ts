@@ -20,3 +20,14 @@ export async function settleOrderPoints(prisma: PrismaClient, orderId: string) {
     return tx.order.update({ where: { id: orderId }, data: { pointsSettled: true } });
   });
 }
+
+export const CONFIG_DEFAULTS: Record<string, number> = {
+  pointsPerDollar: 100,
+  earnPointsPerDollar: 10,
+};
+
+export async function getConfigNumber(prisma: PrismaClient, key: string, fallback: number): Promise<number> {
+  const row = await prisma.systemConfig.findUnique({ where: { key } });
+  const n = row ? Number(row.value) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
