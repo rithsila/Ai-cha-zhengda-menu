@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Phone, Gift, Coin } from '@phosphor-icons/react';
 import { getTelegramUserId } from '../utils/telegramUser';
+import { API_BASE } from '../utils/api';
 
 export function AccountView() {
   const [profile, setProfile] = useState<any>(null);
@@ -12,8 +13,8 @@ export function AccountView() {
       try {
         const userId = getTelegramUserId() || 'test-user-id';
         const [userRes, rewardsRes] = await Promise.all([
-          fetch(`http://localhost:4000/api/user/${userId}`),
-          fetch('http://localhost:4000/api/rewards')
+          fetch(`${API_BASE}/api/user/${userId}`),
+          fetch(`${API_BASE}/api/rewards`)
         ]);
         
         if (userRes.ok) setProfile(await userRes.json());

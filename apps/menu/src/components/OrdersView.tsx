@@ -4,6 +4,7 @@ import { Package, RefreshCw, ShoppingCart } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import type { CartItem, MenuItem } from '../types';
 import { getTelegramUserId } from '../utils/telegramUser';
+import { API_BASE } from '../utils/api';
 
 interface OrderItem {
   id: string;
@@ -34,7 +35,7 @@ export function OrdersView({ onReorder }: OrdersViewProps) {
   const fetchOrders = async () => {
     try {
       const telegramUserId = getTelegramUserId() || 'test-user-id';
-      const res = await fetch(`http://localhost:4000/api/orders/user/${telegramUserId}`);
+      const res = await fetch(`${API_BASE}/api/orders/user/${telegramUserId}`);
       if (res.ok) {
         const data = await res.json();
         setOrders(data);

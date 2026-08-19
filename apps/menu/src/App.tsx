@@ -8,6 +8,7 @@ import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
 import { getTelegramUserId } from './utils/telegramUser';
+import { API_BASE } from './utils/api';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -53,7 +54,7 @@ const WebLogin = () => {
               script.src = "https://telegram.org/js/telegram-widget.js?22";
               script.setAttribute('data-telegram-login', botName);
               script.setAttribute('data-size', 'large');
-              script.setAttribute('data-auth-url', `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/auth/telegram/callback`);
+              script.setAttribute('data-auth-url', `${API_BASE}/api/auth/telegram/callback`);
               script.setAttribute('data-request-access', 'write');
               el.appendChild(script);
             }
@@ -103,7 +104,7 @@ export default function App() {
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
-        const res = await fetch('http://localhost:4000/api/catalog');
+        const res = await fetch(`${API_BASE}/api/catalog`);
         if (res.ok) {
           const data = await res.json();
           const overrides: Record<string, { isSoldOut: boolean }> = {};
