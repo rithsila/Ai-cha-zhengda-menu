@@ -1,10 +1,11 @@
 /**
  * Shared API client for the staff dashboard.
  *
- * NOTE: the base URL is hardcoded for local development (same convention as
- * apps/menu). Point this at the real deployment URL for any non-local deploy.
+ * Set VITE_API_URL when the API is not on localhost. Every deployed build needs
+ * it, because a tablet in the shop cannot reach the developer's machine.
  */
-export const API_BASE = 'http://localhost:4000';
+export const API_BASE: string =
+  (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000';
 
 const SESSION_KEY = 'staff-session';
 
