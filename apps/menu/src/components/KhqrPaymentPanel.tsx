@@ -1,0 +1,231 @@
+import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Button } from './ui/Button';
+import twa from '@twa-dev/sdk';
+import { API_BASE } from '../utils/api';
+
+const WebApp = (twa as any)?.WebApp || twa || {};
+
+/** Seconds -> "m:ss" for the KHQR countdown. */
+function formatCountdown(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+interface KhqrPaymentPanelProps {
+  orderId: string;
+  onPaid: (pickupCode: string) => void;
+  onCancel?: () => void;
+}
+
+/**
+ * The ABA KHQR payment screen for one existing order.
+ *
+ * It owns the whole payment lifecycle: it creates the ABA payment itself on
+ * mount, polls for confirmation, runs the expiry countdown and offers a retry.
+ * The caller only has to render it with an order id and handle `onPaid`, so
+ * checkout and "pay for an unpaid order later" share exactly the same rules.
+ *
+ * Renders panel contents only — no modal chrome, no backdrop. The caller
+ * supplies the container.
+ */
+export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanelProps) {
+  const { t } = useTranslation();
+
+  const [payment, setPayment] = useState<{
+    checkoutUrl: string;
+    khqrSvg: string;
+    expiresAt: number;
+  } | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [expired, setExpired] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again" to ask for a fresh QR for the same order.
+  const [attempt, setAttempt] = useState(0);
+
+  // Kept in refs so a re-render of the parent (or a language switch) never
+  // restarts the payment or resets the polling interval.
+  const onPaidRef = useRef(onPaid);
+  onPaidRef.current = onPaid;
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  // Create (or re-create) the ABA payment for this order.
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    setPayment(null);
+    setExpired(false);
+
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/payment/aba/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId }),
+        });
+
+        if (!res.ok) {
+          // The server explains why (no credentials, wrong hash, order already
+          // paid). Showing that beats a generic failure message.
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.error || tRef.current('paymentStartFailed', 'Could not start the payment. Please try again.'));
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+        setPayment({
+          checkoutUrl: data.checkoutUrl,
+          khqrSvg: data.khqrSvg,
+          expiresAt: data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 15 * 60 * 1000,
+        });
+      } catch (err: any) {
+        if (cancelled) return;
+        setError(err.message || tRef.current('paymentStartFailed', 'Could not start the payment. Please try again.'));
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [orderId, attempt]);
+
+  // Ask the server to check with ABA. Polling the order row alone is not enough:
+  // ABA's webhook cannot reach a machine on localhost, so in development the
+  // order would stay "pending" forever and this screen would spin.
+  useEffect(() => {
+    if (!payment || expired) return;
+    let cancelled = false;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/payment/aba/status/${orderId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (data.status === 'APPROVED') {
+          setPayment(null);
+          onPaidRef.current(data.pickupCode);
+        } else if (data.status === 'EXPIRED' || data.status === 'DECLINED') {
+          setExpired(true);
+        }
+      } catch {}
+    }, 3000);
+
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [orderId, payment, expired]);
+
+  // Countdown on the QR. ABA gives the customer about 15 minutes.
+  useEffect(() => {
+    if (!payment) return;
+
+    const tick = () => {
+      const left = Math.max(0, Math.round((payment.expiresAt - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left === 0) setExpired(true);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [payment]);
+
+  const handleRetry = () => setAttempt(a => a + 1);
+
+  const cancelButton = onCancel ? (
+    <button
+      type="button"
+      onClick={onCancel}
+      className="text-sm font-semibold text-tg-hint hover:text-tg-text transition-colors py-2"
+    >
+      {t('cancel', 'Cancel')}
+    </button>
+  ) : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-10">
+        <span className="w-8 h-8 rounded-full border-2 border-tg-hint/25 border-t-brand-primary animate-spin" />
+        <p className="text-sm text-tg-hint" aria-live="polite">
+          {t('preparingPayment', 'Preparing your payment...')}
+        </p>
+        {cancelButton}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6">
+        <div className="w-full bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium">
+          {error}
+        </div>
+        <Button onClick={handleRetry} className="w-full">
+          {t('tryAgain', 'Try again')}
+        </Button>
+        {cancelButton}
+      </div>
+    );
+  }
+
+  if (!payment || expired) {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6">
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('paymentExpired', 'This QR code has expired')}
+        </h3>
+        <p className="text-sm text-tg-hint">
+          {t('paymentExpiredHint', 'Your order is still saved. Get a new QR code to pay.')}
+        </p>
+        <Button onClick={handleRetry} className="w-full mt-2">
+          {t('tryAgain', 'Try again')}
+        </Button>
+        {cancelButton}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6 items-center w-full">
+      <div className="text-center">
+        <h3 className="font-bold text-lg mb-2 text-tg-text">
+          {t('completePayment', 'Complete Payment')}
+        </h3>
+        <p className="text-sm text-tg-hint mb-4">
+          {t('completePaymentHint', 'You can pay with ABA Mobile or scan the KHQR below.')}
+        </p>
+      </div>
+
+      <button
+        onClick={() => {
+          if (WebApp?.openLink) {
+            WebApp.openLink(payment.checkoutUrl);
+          } else {
+            window.location.href = payment.checkoutUrl;
+          }
+        }}
+        className="w-full bg-[#005E8E] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#004A70] transition-colors"
+      >
+        {t('payWithAba', 'Pay with ABA Mobile')}
+      </button>
+
+      <div className="relative w-full max-w-[280px] bg-white p-4 rounded-2xl shadow-sm border border-tg-hint/15 mt-4 flex items-center justify-center">
+        <img src={payment.khqrSvg} alt="KHQR" className="w-full max-w-[250px] h-auto" />
+      </div>
+
+      <p className="text-sm font-semibold text-tg-text tabular-nums" aria-live="polite">
+        {t('timeRemaining', 'Time remaining')}: {formatCountdown(secondsLeft)}
+      </p>
+
+      <p className="text-xs text-tg-hint text-center flex items-center justify-center gap-2 animate-pulse">
+        <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
+        {t('waitingForPayment', 'Waiting for payment confirmation...')}
+      </p>
+
+      {cancelButton}
+    </div>
+  );
+}

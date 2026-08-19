@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import twa from '@twa-dev/sdk';
 const WebApp = (twa as any)?.WebApp || twa || {};
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise, User } from '@phosphor-icons/react';
+import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise, CreditCard, Gift, User } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
@@ -21,8 +21,28 @@ import { ModifierModal } from './components/ModifierModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrdersView } from './components/OrdersView';
+import { PaymentView } from './components/PaymentView';
+import { RewardsView } from './components/RewardsView';
 import { AccountView } from './components/AccountView';
 import { Button } from './components/ui/Button';
+
+type TabId = 'menu' | 'orders' | 'payment' | 'rewards' | 'account';
+
+const TAB_META: Record<TabId, { titleKey: string; titleFallback: string; subKey: string; subFallback: string }> = {
+  menu: { titleKey: 'menuTitle', titleFallback: 'Menu', subKey: 'menuSubtitle', subFallback: 'Tap to order instantly' },
+  orders: { titleKey: 'ordersTitle', titleFallback: 'My Orders', subKey: 'ordersSubtitle', subFallback: 'Track your active and past orders' },
+  payment: { titleKey: 'paymentTitle', titleFallback: 'Payment', subKey: 'paymentSubtitle', subFallback: 'Pay for orders and see your payment history' },
+  rewards: { titleKey: 'rewardsTitle', titleFallback: 'Rewards', subKey: 'rewardsSubtitle', subFallback: 'Your points and what you can get' },
+  account: { titleKey: 'accountTitle', titleFallback: 'My Account', subKey: 'accountSubtitle', subFallback: 'Manage your profile' },
+};
+
+const TABS: { id: TabId; Icon: typeof List; labelKey: string; labelFallback: string }[] = [
+  { id: 'menu', Icon: List, labelKey: 'tabMenu', labelFallback: 'Menu' },
+  { id: 'orders', Icon: ClockCounterClockwise, labelKey: 'tabOrders', labelFallback: 'Orders' },
+  { id: 'payment', Icon: CreditCard, labelKey: 'tabPayment', labelFallback: 'Payment' },
+  { id: 'rewards', Icon: Gift, labelKey: 'tabRewards', labelFallback: 'Rewards' },
+  { id: 'account', Icon: User, labelKey: 'tabAccount', labelFallback: 'Account' },
+];
 
 const isSameModifiers = (a: Record<string, ModifierOption[]>, b: Record<string, ModifierOption[]>) => {
   const keysA = Object.keys(a).filter(k => a[k].length > 0);
@@ -77,7 +97,7 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'menu' | 'orders' | 'account'>('menu');
+  const [activeTab, setActiveTab] = useState<TabId>('menu');
   const [catalogOverrides, setCatalogOverrides] = useState<Record<string, { isSoldOut: boolean }>>({});
   
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -319,8 +339,8 @@ export default function App() {
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
           <div>
-            <h1 className="text-3xl font-bold font-sans drop-shadow-md">{activeTab === 'menu' ? t('menuTitle') : activeTab === 'orders' ? 'My Orders' : 'My Account'}</h1>
-            <p className="text-white/90 text-sm drop-shadow-md">{activeTab === 'menu' ? t('menuSubtitle') : activeTab === 'orders' ? 'Track your active and past orders' : 'Manage your profile and rewards'}</p>
+            <h1 className="text-3xl font-bold font-sans drop-shadow-md">{t(TAB_META[activeTab].titleKey, TAB_META[activeTab].titleFallback)}</h1>
+            <p className="text-white/90 text-sm drop-shadow-md">{t(TAB_META[activeTab].subKey, TAB_META[activeTab].subFallback)}</p>
           </div>
           <div className="flex gap-2">
             {activeTab === 'menu' && (
@@ -385,11 +405,11 @@ export default function App() {
       </div>
 
       <div className="px-4 pt-6">
-        {activeTab === 'orders' ? (
-          <OrdersView onReorder={handleReorder} />
-        ) : activeTab === 'account' ? (
-          <AccountView />
-        ) : (
+        {activeTab === 'orders' && <OrdersView onReorder={handleReorder} />}
+        {activeTab === 'payment' && <PaymentView />}
+        {activeTab === 'rewards' && <RewardsView />}
+        {activeTab === 'account' && <AccountView />}
+        {activeTab === 'menu' && (
           <>
             {!searchQuery && (
               <>
@@ -461,28 +481,17 @@ export default function App() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] bg-tg-bg/30 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] rounded-full py-1.5 px-6 flex justify-center gap-8 z-20 supports-[backdrop-filter]:bg-tg-bg/20">
-        <button 
-          onClick={() => setActiveTab('menu')}
-          className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'menu' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
-        >
-          <List size={22} weight={activeTab === 'menu' ? 'fill' : 'regular'} />
-          <span className="text-[10px] font-bold mt-0.5">Menu</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('orders')}
-          className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'orders' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
-        >
-          <ClockCounterClockwise size={22} weight={activeTab === 'orders' ? 'fill' : 'regular'} />
-          <span className="text-[10px] font-bold mt-0.5">Orders</span>
-        </button>
-        <button 
-          onClick={() => setActiveTab('account')}
-          className={`flex flex-col items-center py-1 px-2 transition-colors ${activeTab === 'account' ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
-        >
-          <User size={22} weight={activeTab === 'account' ? 'fill' : 'regular'} />
-          <span className="text-[10px] font-bold mt-0.5">Account</span>
-        </button>
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] max-w-[calc(100vw-1.5rem)] bg-tg-bg/30 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] rounded-full py-1.5 px-3 flex justify-around gap-1 z-20 supports-[backdrop-filter]:bg-tg-bg/20">
+        {TABS.map(({ id, Icon, labelKey, labelFallback }) => (
+          <button 
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex flex-col items-center py-1 px-1.5 transition-colors ${activeTab === id ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
+          >
+            <Icon size={20} weight={activeTab === id ? 'fill' : 'regular'} />
+            <span className="text-[10px] font-bold mt-0.5 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
+          </button>
+        ))}
       </div>
 
       {/* Floating Cart Button (Fallback if Telegram MainButton is not available) */}

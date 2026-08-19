@@ -42,6 +42,23 @@ const resources = {
       selectRequiredOptions: "Please select all required options before adding.",
       noItemsInCategory: "No items in this category yet.",
 
+      // Tabs
+      tabMenu: "Menu",
+      tabOrders: "Orders",
+      tabPayment: "Payment",
+      tabRewards: "Rewards",
+      tabAccount: "Account",
+
+      // Page titles
+      ordersTitle: "My Orders",
+      ordersSubtitle: "Track your active and past orders",
+      accountTitle: "My Account",
+      accountSubtitle: "Manage your profile",
+      paymentTitle: "Payment",
+      paymentSubtitle: "Pay for orders and see your payment history",
+      rewardsTitle: "Rewards",
+      rewardsSubtitle: "Your points and what you can get",
+
       // Categories
       "Cones": "Cones",
       "Milk Tea": "Milk Tea",
@@ -225,6 +242,23 @@ const resources = {
       selectRequiredOptions: "សូមជ្រើសរើសជម្រើសដែលតម្រូវអោយមុនពេលបន្ថែម។",
       noItemsInCategory: "មិនទាន់មានមុខទំនិញនៅក្នុងប្រភេទនេះទេ។",
 
+      // Tabs
+      tabMenu: "ម៉ឺនុយ",
+      tabOrders: "ការកុម្ម៉ង់",
+      tabPayment: "ទូទាត់",
+      tabRewards: "រង្វាន់",
+      tabAccount: "គណនី",
+
+      // Page titles
+      ordersTitle: "ការកុម្ម៉ង់របស់ខ្ញុំ",
+      ordersSubtitle: "តាមដានការកុម្ម៉ង់បច្ចុប្បន្ន និងកន្លងមក",
+      accountTitle: "គណនីរបស់ខ្ញុំ",
+      accountSubtitle: "គ្រប់គ្រងប្រវត្តិរូបរបស់អ្នក",
+      paymentTitle: "ការទូទាត់",
+      paymentSubtitle: "ទូទាត់ការកុម្ម៉ង់ និងមើលប្រវត្តិការទូទាត់របស់អ្នក",
+      rewardsTitle: "រង្វាន់",
+      rewardsSubtitle: "ពិន្ទុរបស់អ្នក និងអ្វីដែលអ្នកអាចទទួលបាន",
+
       // Categories
       "Cones": "កោណ",
       "Milk Tea": "តែទឹកដោះគោ",
@@ -407,6 +441,23 @@ const resources = {
       pleaseSelect: "请选择",
       selectRequiredOptions: "请在添加前选择所有必选项。",
       noItemsInCategory: "该分类暂无商品。",
+
+      // Tabs
+      tabMenu: "菜单",
+      tabOrders: "订单",
+      tabPayment: "支付",
+      tabRewards: "奖励",
+      tabAccount: "账户",
+
+      // Page titles
+      ordersTitle: "我的订单",
+      ordersSubtitle: "查看进行中和历史订单",
+      accountTitle: "我的账户",
+      accountSubtitle: "管理您的个人资料",
+      paymentTitle: "支付",
+      paymentSubtitle: "支付订单并查看您的支付记录",
+      rewardsTitle: "奖励",
+      rewardsSubtitle: "您的积分以及可兑换的奖励",
 
       // Categories
       "Cones": "冰淇淋甜筒",

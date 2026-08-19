@@ -5,20 +5,12 @@ import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
 import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-icons/react';
-import twa from '@twa-dev/sdk';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { getTelegramUserId } from '../utils/telegramUser';
 import { API_BASE } from '../utils/api';
-
-const WebApp = (twa as any)?.WebApp || twa || {};
-
-/** Seconds -> "m:ss" for the KHQR countdown. */
-function formatCountdown(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
+import { KhqrPaymentPanel } from './KhqrPaymentPanel';
+import { getDefaultPaymentMethod } from '../utils/paymentPrefs';
 
 const customIcon = new L.Icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -66,7 +58,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const { t } = useTranslation();
   const shouldReduceMotion = useReducedMotion();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [method, setMethod] = useState<'khqr' | 'cash'>('khqr');
+  const [method, setMethod] = useState<'khqr' | 'cash'>(getDefaultPaymentMethod);
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
@@ -76,60 +68,15 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [pointsToUse, setPointsToUse] = useState(0);
   const [pointsPerDollar, setPointsPerDollar] = useState(100);
   
-  const [paymentScreen, setPaymentScreen] = useState<{
-    checkoutUrl: string;
-    khqrSvg: string;
-    orderId: string;
-    expiresAt: number;
-  } | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(0);
-  const [paymentExpired, setPaymentExpired] = useState(false);
-  
+  // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
+  // about the payment (creating it, polling, expiry, retry).
+  const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [branches, setBranches] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-
-  // Ask the server to check with ABA. Polling the order row alone is not enough:
-  // ABA's webhook cannot reach a machine on localhost, so in development the
-  // order would stay "pending" forever and this screen would spin.
-  useEffect(() => {
-    if (!paymentScreen || paymentExpired) return;
-    let cancelled = false;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/payment/aba/status/${paymentScreen.orderId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-
-        if (data.status === 'APPROVED') {
-          setPaymentScreen(null);
-          onSuccess(data.pickupCode);
-        } else if (data.status === 'EXPIRED' || data.status === 'DECLINED') {
-          setPaymentExpired(true);
-        }
-      } catch {}
-    }, 3000);
-
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [paymentScreen, paymentExpired, onSuccess]);
-
-  // Countdown on the QR. ABA gives the customer about 15 minutes.
-  useEffect(() => {
-    if (!paymentScreen) return;
-
-    const tick = () => {
-      const left = Math.max(0, Math.round((paymentScreen.expiresAt - Date.now()) / 1000));
-      setSecondsLeft(left);
-      if (left === 0) setPaymentExpired(true);
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, [paymentScreen]);
 
   // Fetch branches and user profile dynamically when open, reset on close
   useEffect(() => {
@@ -137,15 +84,14 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       // Reset state on close
       setStep(1);
       setError(null);
-      setMethod('khqr');
+      setMethod(getDefaultPaymentMethod());
       setOrderType('pickup');
       setDeliveryAddress('');
       setDeliveryLat(null);
       setDeliveryLng(null);
       setPointsToUse(0);
       setBranchId('');
-      setPaymentScreen(null);
-      setPaymentExpired(false);
+      setPaymentOrderId(null);
       return;
     }
 
@@ -223,7 +169,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       const orderData = await response.json();
 
       if (method === 'khqr') {
-        await startAbaPayment(orderData.id);
+        setPaymentOrderId(orderData.id);
         setStep(3);
         setIsLoading(false);
         return;
@@ -234,44 +180,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setError(err.message || 'An error occurred during checkout');
       setIsLoading(false);
     }
-  };
-
-  // Start (or restart) an ABA payment for an order that already exists. Split
-  // out so the "Try again" button on an expired QR can reuse it.
-  const startAbaPayment = async (orderId: string) => {
-    const abaRes = await fetch(`${API_BASE}/api/payment/aba/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId }),
-    });
-
-    if (!abaRes.ok) {
-      // The server explains why (no credentials, wrong hash, order already
-      // paid). Showing that beats a generic failure message.
-      const body = await abaRes.json().catch(() => null);
-      throw new Error(body?.error || t('paymentStartFailed', 'Could not start the payment. Please try again.'));
-    }
-
-    const abaData = await abaRes.json();
-    setPaymentExpired(false);
-    setPaymentScreen({
-      checkoutUrl: abaData.checkoutUrl,
-      khqrSvg: abaData.khqrSvg,
-      orderId,
-      expiresAt: abaData.expiresAt ? new Date(abaData.expiresAt).getTime() : Date.now() + 15 * 60 * 1000,
-    });
-  };
-
-  const handleRetryPayment = async () => {
-    if (!paymentScreen) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      await startAbaPayment(paymentScreen.orderId);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during checkout');
-    }
-    setIsLoading(false);
   };
 
   return (
@@ -333,57 +241,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               </div>
             )}
 
-            {step === 3 && paymentScreen ? (
-              paymentExpired ? (
-                <div className="flex flex-col gap-4 items-center w-full text-center py-6">
-                  <h3 className="font-bold text-lg text-tg-text">
-                    {t('paymentExpired', 'This QR code has expired')}
-                  </h3>
-                  <p className="text-sm text-tg-hint">
-                    {t('paymentExpiredHint', 'Your order is still saved. Get a new QR code to pay.')}
-                  </p>
-                  <Button onClick={handleRetryPayment} disabled={isLoading} className="w-full mt-2">
-                    {t('tryAgain', 'Try again')}
-                  </Button>
-                </div>
-              ) : (
-              <div className="flex flex-col gap-6 items-center w-full">
-                <div className="text-center">
-                  <h3 className="font-bold text-lg mb-2 text-tg-text">
-                    {t('completePayment', 'Complete Payment')}
-                  </h3>
-                  <p className="text-sm text-tg-hint mb-4">
-                    {t('completePaymentHint', 'You can pay with ABA Mobile or scan the KHQR below.')}
-                  </p>
-                </div>
-                
-                <button 
-                  onClick={() => {
-                    if (WebApp?.openLink) {
-                      WebApp.openLink(paymentScreen.checkoutUrl);
-                    } else {
-                      window.location.href = paymentScreen.checkoutUrl;
-                    }
-                  }}
-                  className="w-full bg-[#005E8E] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#004A70] transition-colors"
-                >
-                  {t('payWithAba', 'Pay with ABA Mobile')}
-                </button>
-
-                <div className="relative w-full max-w-[280px] bg-white p-4 rounded-2xl shadow-sm border border-tg-hint/15 mt-4 flex items-center justify-center">
-                  <img src={paymentScreen.khqrSvg} alt="KHQR" className="w-full max-w-[250px] h-auto" />
-                </div>
-
-                <p className="text-sm font-semibold text-tg-text tabular-nums" aria-live="polite">
-                  {t('timeRemaining', 'Time remaining')}: {formatCountdown(secondsLeft)}
-                </p>
-                
-                <p className="text-xs text-tg-hint text-center flex items-center justify-center gap-2 animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-brand-primary"></span>
-                  {t('waitingForPayment', 'Waiting for payment confirmation...')}
-                </p>
-              </div>
-              )
+            {step === 3 && paymentOrderId ? (
+              <KhqrPaymentPanel orderId={paymentOrderId} onPaid={(code) => onSuccess(code)} />
             ) : step === 1 ? (
               <div className="flex flex-col gap-4">
                 <div className="space-y-2">
