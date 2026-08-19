@@ -112,7 +112,10 @@ export function PaymentView() {
     setDefaultPaymentMethod(method);
   };
 
-  const unpaid = orders.filter(o => o.status === 'pending' && o.paymentMethod === 'khqr');
+  // Every pending order belongs here, not just the KHQR ones. A pending cash
+  // order has nothing to pay online, but it still is not paid -- filtering it
+  // out of both this section and the history below made it vanish entirely.
+  const unpaid = orders.filter(o => o.status === 'pending');
   const history = orders.filter(o => o.status !== 'pending');
   const shownHistory = history.slice(0, HISTORY_LIMIT);
 
@@ -164,7 +167,7 @@ export function PaymentView() {
             {t('needsPayment', 'Needs payment')}
           </h3>
           <p className="text-sm text-tg-hint mb-3">
-            {t('needsPaymentHint', 'These orders are not paid yet. Tap Pay now to open the QR code again.')}
+            {t('needsPaymentHint', 'These orders are not paid yet.')}
           </p>
 
           <div className="grid gap-3">
@@ -185,16 +188,36 @@ export function PaymentView() {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => {
-                    setPaidCode(null);
-                    setSelectedOrderId(order.id);
-                  }}
-                  className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-brand-primary text-white font-bold active:scale-95 transition-transform"
-                >
-                  <CreditCard size={18} weight="fill" />
-                  {t('payNow', 'Pay now')}
-                </button>
+                {order.paymentMethod === 'cash' ? (
+                  // Cash is paid at the counter, so there is no button to press
+                  // here. Show the pickup code instead -- that is what the
+                  // customer actually needs at the shop.
+                  <div className="mt-3 flex items-start gap-2 rounded-xl bg-tg-hint/10 p-3">
+                    <Money size={18} weight="fill" className="text-tg-hint flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-tg-text">
+                        {t('payCashAtCounter', 'Pay with cash when you pick up')}
+                      </p>
+                      {order.pickupCode && (
+                        <p className="text-xs text-tg-hint mt-1">
+                          {t('showThisCode', 'Show this code at the counter:')}{' '}
+                          <span className="font-mono font-bold text-tg-text">{order.pickupCode}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setPaidCode(null);
+                      setSelectedOrderId(order.id);
+                    }}
+                    className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-brand-primary text-white font-bold active:scale-95 transition-transform"
+                  >
+                    <CreditCard size={18} weight="fill" />
+                    {t('payNow', 'Pay now')}
+                  </button>
+                )}
               </div>
             ))}
           </div>
