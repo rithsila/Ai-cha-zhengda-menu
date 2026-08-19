@@ -13,27 +13,24 @@ async function main() {
   await prisma.modifierGroup.deleteMany({});
   await prisma.menuItem.deleteMany({});
 
-  // Seed Branches
-  const b1 = await prisma.branch.upsert({
-    where: { id: 'branch-toul-kork' },
-    update: {},
+  // Seed Branches — the shop itself. Delivery is Arakawa-only for now, and the
+  // pickup counter is the same address.
+  const shop = await prisma.branch.upsert({
+    where: { id: 'branch-arakawa' },
+    update: { name: 'Ai-Cha & Zhengda — Arakawa', address: 'Shop J03, Ground Floor, Arakawa', isActive: true },
     create: {
-      id: 'branch-toul-kork',
-      name: 'Toul Kork Branch',
-      address: 'Street 315, Toul Kork, Phnom Penh',
+      id: 'branch-arakawa',
+      name: 'Ai-Cha & Zhengda — Arakawa',
+      address: 'Shop J03, Ground Floor, Arakawa',
       isActive: true,
     }
   });
 
-  const b2 = await prisma.branch.upsert({
-    where: { id: 'branch-bkk1' },
-    update: {},
-    create: {
-      id: 'branch-bkk1',
-      name: 'BKK1 Branch',
-      address: 'Street 51, BKK1, Phnom Penh',
-      isActive: true,
-    }
+  // The two invented branches from the first prototype are hidden, not deleted:
+  // old orders still point at them with a foreign key.
+  await prisma.branch.updateMany({
+    where: { id: { in: ['branch-toul-kork', 'branch-bkk1'] } },
+    data: { isActive: false }
   });
 
   // Seed MenuItems from the static catalog, preserving static ids
@@ -69,7 +66,7 @@ async function main() {
     });
   }
 
-  console.log(`Seeded successfully! ${CATALOG.length} menu items, branches:`, { b1, b2 });
+  console.log(`Seeded successfully! ${CATALOG.length} menu items, branch:`, shop);
 }
 
 main()

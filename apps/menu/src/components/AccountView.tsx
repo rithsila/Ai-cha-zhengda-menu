@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Phone } from '@phosphor-icons/react';
+import { useTranslation } from 'react-i18next';
+import { Phone, House, Storefront } from '@phosphor-icons/react';
 import { getTelegramUserId } from '../utils/telegramUser';
 import { API_BASE } from '../utils/api';
+import { AddressForm, AddressSummary } from './AddressForm';
+import { isValidBuilding, isValidRoom, formatPhone, SHOP_UNIT, RESIDENCE_NAME } from '../utils/address';
 
 export function AccountView() {
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -31,6 +36,8 @@ export function AccountView() {
     return <div className="p-8 text-center text-[#E53935]">Could not load profile.</div>;
   }
 
+  const hasAddress = isValidBuilding(profile.building) && isValidRoom(profile.roomNumber);
+
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto">
       {/* Profile Card */}
@@ -40,11 +47,69 @@ export function AccountView() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-tg-text">
-            {[profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Telegram User'}
+            {profile.contactName || [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Telegram User'}
           </h2>
           <p className="text-sm text-tg-hint font-medium">
-            {profile.phoneNumber ? `+${profile.phoneNumber}` : 'No phone linked yet'}
+            {formatPhone(profile.phoneNumber) || t('noPhoneYet', 'No phone linked yet')}
           </p>
+        </div>
+      </div>
+
+      {/* Delivery address */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-tg-text flex items-center gap-1.5">
+            <House size={16} weight="fill" className="text-brand-primary" />
+            {t('deliveryAddress', 'Delivery address')}
+          </h3>
+          {hasAddress && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="rounded-full bg-brand-primary/10 px-3 py-1 text-xs font-bold text-brand-primary"
+            >
+              {t('edit', 'Edit')}
+            </button>
+          )}
+        </div>
+
+        <div className="bg-tg-secondary-bg rounded-2xl p-5 shadow-sm border border-tg-hint/10">
+          {editing ? (
+            <AddressForm
+              profile={profile}
+              onSaved={(user) => { setProfile(user); setEditing(false); }}
+              onCancel={hasAddress ? () => setEditing(false) : undefined}
+            />
+          ) : hasAddress ? (
+            <AddressSummary profile={profile} />
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-2 text-center">
+              <p className="text-sm text-tg-hint">
+                {t('noAddressYet', 'No delivery address yet. Add it so we can bring your order to your room.')}
+              </p>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-bold text-white"
+              >
+                {t('addAddress', 'Add address')}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Shop info */}
+      <div className="bg-tg-secondary-bg rounded-2xl p-5 shadow-sm border border-tg-hint/10 flex items-start gap-3">
+        <Storefront size={20} weight="fill" className="text-brand-primary mt-0.5 shrink-0" />
+        <div>
+          <div className="text-sm font-semibold text-tg-text">{t('ourShop', 'Our shop')}</div>
+          <div className="text-sm text-tg-hint">
+            {t('shopAddress', `${SHOP_UNIT}, Ground Floor, ${RESIDENCE_NAME}`)}
+          </div>
+          <div className="mt-1 text-xs font-semibold text-brand-primary">
+            {t('freeDeliveryInside', `Delivery inside ${RESIDENCE_NAME} is free`)}
+          </div>
         </div>
       </div>
     </div>

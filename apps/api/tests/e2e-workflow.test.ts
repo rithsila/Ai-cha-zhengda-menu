@@ -206,22 +206,23 @@ describe('End-to-End System & Workflow Validation', () => {
   });
 
   it('4. Customer places a delivery order with ABA KHQR payment and webhook confirmation', async () => {
-    // Single item $3.00 + $1.00 delivery fee = $4.00 server total
+    // Single item $3.00 + $0.00 delivery fee (free inside Arakawa) = $3.00
     const createRes = await request(app).post('/api/orders').send({
       items: [{ menuItemId: snackItemId, quantity: 1, totalPrice: 3.00, selectedModifiers: {} }],
       paymentMethod: 'khqr',
       orderType: 'delivery',
-      deliveryAddress: 'Street 2004, Phnom Penh',
-      deliveryLat: 11.55,
-      deliveryLng: 104.92,
+      building: 'G',
+      roomNumber: '1110',
+      contactName: 'Sok Dara',
+      contactPhone: '+85512345678',
       telegramUserId: customerTelegramId,
       pointsToUse: 0,
     });
     expect(createRes.status).toBe(200);
     const order = createRes.body;
-    expect(order.totalAmount).toBe(4.00); // 3 + 1 delivery fee
+    expect(order.totalAmount).toBe(3.00); // 3 + 0 delivery fee
     expect(order.orderType).toBe('delivery');
-    expect(order.deliveryAddress).toBe('Street 2004, Phnom Penh');
+    expect(order.deliveryAddress).toContain('G1110');
 
     // ABA create payment
     const tranId = `aba-tx-${Date.now()}`;
@@ -241,9 +242,9 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(paidOrder?.status).toBe('paid');
     expect(paidOrder?.pointsSettled).toBe(true);
 
-    // Earned 40 points on $4.00 order
+    // Earned 30 points on the $3.00 order
     const afterPoints = (await prisma.user.findUnique({ where: { telegramUserId: customerTelegramId } }))!.loyaltyPoints;
-    expect(afterPoints).toBe(beforePoints + 40);
+    expect(afterPoints).toBe(beforePoints + 30);
   });
 
   it('5. Staff toggles item sold-out status', async () => {

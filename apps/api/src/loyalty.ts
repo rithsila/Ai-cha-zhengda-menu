@@ -47,6 +47,8 @@ export async function refundOrderPoints(prisma: PrismaClient, orderId: string) {
 export const CONFIG_DEFAULTS: Record<string, number> = {
   pointsPerDollar: 100,
   earnPointsPerDollar: 10,
+  // Free inside Arakawa for now. The shop can raise it later via PUT /api/config.
+  deliveryFee: 0,
 };
 
 export async function getConfigNumber(prisma: PrismaClient, key: string, fallback: number): Promise<number> {

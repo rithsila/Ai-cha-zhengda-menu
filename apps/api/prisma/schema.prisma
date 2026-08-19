@@ -14,6 +14,9 @@ model User {
   firstName      String?
   lastName       String?
   loyaltyPoints  Int     @default(0)
+  contactName    String? // name to call at the door
+  building       String? // Arakawa building, "A".."G"
+  roomNumber     String? // 4 digits, "1110" = floor 11, room 10
   orders         Order[]
 }
 
@@ -74,7 +77,13 @@ model Order {
   telegramUserId String?
   user           User?       @relation(fields: [telegramUserId], references: [telegramUserId])
   orderType      String      @default("pickup") // "pickup" | "delivery"
+  // Snapshot of where the order actually went — the user profile may change later.
   deliveryAddress String?
+  deliveryBuilding String?
+  deliveryRoom     String?
+  contactName      String?
+  contactPhone     String?
+  deliveryFee      Float      @default(0)
   deliveryLat     Float?
   deliveryLng     Float?
   branchId       String?

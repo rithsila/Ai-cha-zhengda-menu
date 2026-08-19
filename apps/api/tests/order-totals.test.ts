@@ -40,15 +40,20 @@ describe('server-side totals', () => {
     expect(res.body.totalAmount).toBe(7);
   });
 
-  it('adds the delivery fee server-side', async () => {
+  it('applies the configured delivery fee server-side (free inside Arakawa)', async () => {
     const res = await request(app).post('/api/orders').send({
       items: [{ menuItemId: itemId, quantity: 1, totalPrice: 3.0, selectedModifiers: {} }],
       totalAmount: 3.0,
       paymentMethod: 'cash',
       orderType: 'delivery',
-      deliveryAddress: 'Test St',
+      building: 'G',
+      roomNumber: '1110',
+      contactName: 'Sok Dara',
+      contactPhone: '+85512345678',
     });
-    expect(res.body.totalAmount).toBe(4); // 3 + 1 delivery fee
+    expect(res.status).toBe(200);
+    expect(res.body.totalAmount).toBe(3); // 3 + 0 delivery fee
+    expect(res.body.deliveryFee).toBe(0);
   });
 
   it('rejects an empty items array', async () => {

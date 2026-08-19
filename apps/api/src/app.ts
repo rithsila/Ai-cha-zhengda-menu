@@ -4,6 +4,9 @@ import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
 import { settleOrderPoints, refundOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
+import {
+  isValidBuilding, isValidRoom, isValidName, isValidPhone, normalizePhone, formatAddress,
+} from './address';
 import { issueToken, requireStaff, requireManager, staffPin, managerPin } from './auth';
 
 export const prisma = new PrismaClient();
@@ -122,6 +125,57 @@ export function createApp() {
     }
   });
 
+  /**
+   * The customer's own profile: who to call and which Arakawa room to deliver to.
+   * Only the fields present in the body are written, so saving an address never
+   * wipes a phone number the bot stored earlier (see bot.ts `on('contact')`).
+   */
+  app.put('/api/user/:telegramUserId/profile', async (req, res) => {
+    try {
+      const { telegramUserId } = req.params;
+      if (!telegramUserId) {
+        return res.status(400).json({ error: 'Missing telegramUserId' });
+      }
+      const { contactName, phoneNumber, building, roomNumber } = req.body || {};
+      const data: Record<string, string> = {};
+
+      if (contactName !== undefined) {
+        if (!isValidName(contactName)) {
+          return res.status(400).json({ error: 'Name must be 2 to 60 characters.' });
+        }
+        data.contactName = contactName.trim();
+      }
+      if (phoneNumber !== undefined) {
+        if (!isValidPhone(phoneNumber)) {
+          return res.status(400).json({ error: 'Phone number must have 8 to 15 digits.' });
+        }
+        data.phoneNumber = normalizePhone(phoneNumber);
+      }
+      if (building !== undefined) {
+        if (!isValidBuilding(building)) {
+          return res.status(400).json({ error: 'Building must be A to G.' });
+        }
+        data.building = building.trim().toUpperCase();
+      }
+      if (roomNumber !== undefined) {
+        if (!isValidRoom(roomNumber)) {
+          return res.status(400).json({ error: 'Room must be 4 digits, floor 01 to 22 (example: 1110).' });
+        }
+        data.roomNumber = roomNumber.trim();
+      }
+
+      const user = await prisma.user.upsert({
+        where: { telegramUserId },
+        update: data,
+        create: { telegramUserId, loyaltyPoints: 0, ...data }
+      });
+      res.json(user);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to save profile' });
+    }
+  });
+
   app.get('/api/catalog', async (req, res) => {
     try {
       const catalog = await prisma.menuItem.findMany({
@@ -157,7 +211,7 @@ export function createApp() {
 
   app.post('/api/orders', async (req, res) => {
     try {
-      const { items, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, pointsToUse } = req.body;
+      const { items, paymentMethod, telegramUserId, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse } = req.body;
 
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order must contain at least one item' });
@@ -205,8 +259,36 @@ export function createApp() {
         pricedItems.push({ menuItemId: menuItem.id, quantity, price: lineTotal, modifiers: JSON.stringify(selected) });
       }
 
-      const DELIVERY_FEE = 1.0;
-      const serverTotal = Math.round((itemsTotal + (orderType === 'delivery' ? DELIVERY_FEE : 0)) * 100) / 100;
+      // Delivery details are validated and formatted server-side: the client may
+      // send anything, and an old order must keep the address it was sent to.
+      let delivery: { building: string; room: string; name: string; phone: string } | null = null;
+      if (orderType === 'delivery') {
+        const saved = telegramUserId
+          ? await prisma.user.findUnique({ where: { telegramUserId } })
+          : null;
+        const b = (building ?? saved?.building ?? '').toString().trim().toUpperCase();
+        const r = (roomNumber ?? saved?.roomNumber ?? '').toString().trim();
+        const n = (contactName ?? saved?.contactName ?? '').toString().trim();
+        const p = normalizePhone(contactPhone ?? saved?.phoneNumber ?? '');
+
+        if (!isValidBuilding(b)) {
+          return res.status(400).json({ error: 'Please choose your building (A to G).' });
+        }
+        if (!isValidRoom(r)) {
+          return res.status(400).json({ error: 'Room must be 4 digits, floor 01 to 22 (example: 1110).' });
+        }
+        if (!isValidName(n)) {
+          return res.status(400).json({ error: 'Please add the name we should ask for at the door.' });
+        }
+        if (!isValidPhone(p)) {
+          return res.status(400).json({ error: 'Please add a phone number we can call.' });
+        }
+        delivery = { building: b, room: r, name: n, phone: p };
+      }
+
+      const DELIVERY_FEE = await getConfigNumber(prisma, 'deliveryFee', CONFIG_DEFAULTS.deliveryFee);
+      const deliveryFee = orderType === 'delivery' ? DELIVERY_FEE : 0;
+      const serverTotal = Math.round((itemsTotal + deliveryFee) * 100) / 100;
 
       const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', CONFIG_DEFAULTS.pointsPerDollar);
       const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', CONFIG_DEFAULTS.earnPointsPerDollar);
@@ -250,9 +332,12 @@ export function createApp() {
             status: 'pending',
             pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
             orderType: orderType || 'pickup',
-            deliveryAddress: deliveryAddress || null,
-            deliveryLat: deliveryLat || null,
-            deliveryLng: deliveryLng || null,
+            deliveryAddress: delivery ? formatAddress(delivery.building, delivery.room) : null,
+            deliveryBuilding: delivery ? delivery.building : null,
+            deliveryRoom: delivery ? delivery.room : null,
+            contactName: delivery ? delivery.name : null,
+            contactPhone: delivery ? delivery.phone : null,
+            deliveryFee,
             branchId: branchId || null,
             pointsEarned,
             pointsRedeemed,
@@ -597,8 +682,10 @@ export function createApp() {
         return res.status(400).json({ error: `Unknown config key. Allowed: ${Object.keys(CONFIG_DEFAULTS).join(', ')}` });
       }
       const num = Number(value);
-      if (!Number.isFinite(num) || num <= 0) {
-        return res.status(400).json({ error: 'value must be a number greater than 0' });
+      // deliveryFee may legitimately be 0 (free inside Arakawa); the rate keys may not.
+      const min = key === 'deliveryFee' ? 0 : 1;
+      if (!Number.isFinite(num) || num < min) {
+        return res.status(400).json({ error: `value must be a number of at least ${min}` });
       }
       const config = await prisma.systemConfig.upsert({
         where: { key },

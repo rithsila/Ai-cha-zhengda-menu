@@ -55,6 +55,10 @@ type Order = {
   pickupCode: string | null;
   orderType: string;
   deliveryAddress: string | null;
+  deliveryBuilding: string | null;
+  deliveryRoom: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
   deliveryLat: number | null;
   deliveryLng: number | null;
   items: OrderItem[];
@@ -212,16 +216,25 @@ function OrderCard({
           <span className="mb-1 block text-xs font-semibold text-ink-faint">
             Deliver to
           </span>
+          {order.deliveryBuilding && order.deliveryRoom && (
+            <span className="block text-lg font-bold leading-tight text-ink">
+              {order.deliveryBuilding}
+              {order.deliveryRoom}
+            </span>
+          )}
           <span className="text-ink">{order.deliveryAddress}</span>
-          {order.deliveryLat != null && order.deliveryLng != null && (
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryLat},${order.deliveryLng}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1.5 block text-xs font-semibold text-accent hover:text-accent-strong"
-            >
-              Open in Google Maps
-            </a>
+          {(order.contactName || order.contactPhone) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {order.contactName && <span className="text-ink">{order.contactName}</span>}
+              {order.contactPhone && (
+                <a
+                  href={`tel:${order.contactPhone}`}
+                  className="text-xs font-semibold text-accent hover:text-accent-strong"
+                >
+                  {order.contactPhone}
+                </a>
+              )}
+            </div>
           )}
         </div>
       )}

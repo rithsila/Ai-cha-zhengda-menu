@@ -5,47 +5,13 @@ import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
 import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-icons/react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
+import { AddressForm, AddressSummary } from './AddressForm';
+import { isValidBuilding, isValidRoom, isValidName, isValidPhone } from '../utils/address';
 import { getTelegramUserId } from '../utils/telegramUser';
 import { API_BASE } from '../utils/api';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
 import { getDefaultPaymentMethod } from '../utils/paymentPrefs';
 
-const customIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
-});
-
-function LocationMarker({ position, setPosition }: any) {
-  const map = useMapEvents({
-    click(e) {
-      setPosition(e.latlng);
-    },
-  });
-
-  useEffect(() => {
-    if (position) {
-      map.flyTo(position, map.getZoom());
-    }
-  }, [position, map]);
-
-  return position === null ? null : (
-    <Marker 
-      position={position} 
-      icon={customIcon} 
-      draggable={true} 
-      eventHandlers={{
-        dragend: (e) => {
-          setPosition(e.target.getLatLng());
-        }
-      }} 
-    />
-  );
-}
 interface CheckoutModalProps {
   isOpen: boolean;
   total: number;
@@ -61,12 +27,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [method, setMethod] = useState<'khqr' | 'cash'>(getDefaultPaymentMethod);
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
-  const [deliveryAddress, setDeliveryAddress] = useState<string>('');
-  const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
-  const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
-  const [isLocating, setIsLocating] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
   const [pointsToUse, setPointsToUse] = useState(0);
   const [pointsPerDollar, setPointsPerDollar] = useState(100);
+  // Free inside Arakawa today; the shop can change it with PUT /api/config.
+  const [deliveryFeeRate, setDeliveryFeeRate] = useState(0);
   
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
   // about the payment (creating it, polling, expiry, retry).
@@ -86,9 +51,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setError(null);
       setMethod(getDefaultPaymentMethod());
       setOrderType('pickup');
-      setDeliveryAddress('');
-      setDeliveryLat(null);
-      setDeliveryLng(null);
+      setEditingAddress(false);
       setPointsToUse(0);
       setBranchId('');
       setPaymentOrderId(null);
@@ -114,6 +77,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           const rows: { key: string; value: string }[] = await cfgRes.json();
           const rate = Number(rows.find(r => r.key === 'pointsPerDollar')?.value);
           if (Number.isFinite(rate) && rate > 0) setPointsPerDollar(rate);
+          const fee = Number(rows.find(r => r.key === 'deliveryFee')?.value);
+          if (Number.isFinite(fee) && fee >= 0) setDeliveryFeeRate(fee);
         }
       } catch (err) {
         console.error('Failed to fetch checkout data', err);
@@ -122,7 +87,13 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     fetchData();
   }, [isOpen]);
 
-  const deliveryFee = orderType === 'delivery' ? 1.00 : 0;
+  const deliveryFee = orderType === 'delivery' ? deliveryFeeRate : 0;
+  // A delivery order needs a complete saved profile: room, name and phone.
+  const hasAddress = !!userProfile
+    && isValidBuilding(userProfile.building)
+    && isValidRoom(userProfile.roomNumber)
+    && isValidName(userProfile.contactName)
+    && isValidPhone(userProfile.phoneNumber);
   const maxUsablePoints = userProfile
     ? Math.min(userProfile.loyaltyPoints, Math.floor((total + deliveryFee) * pointsPerDollar))
     : 0;
@@ -134,8 +105,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setError('Please select a branch.');
       return;
     }
-    if (orderType === 'delivery' && !deliveryAddress.trim()) {
-      setError('Please provide a delivery address.');
+    if (orderType === 'delivery' && !hasAddress) {
+      setError(t('addressRequired', 'Please add your building, room, name and phone number.'));
       return;
     }
     setError(null);
@@ -155,9 +126,10 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           telegramUserId: getTelegramUserId() || 'test-user-id',
           branchId: orderType === 'pickup' ? branchId : null,
           orderType,
-          deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
-          deliveryLat: orderType === 'delivery' ? deliveryLat : null,
-          deliveryLng: orderType === 'delivery' ? deliveryLng : null,
+          building: orderType === 'delivery' ? userProfile?.building : null,
+          roomNumber: orderType === 'delivery' ? userProfile?.roomNumber : null,
+          contactName: orderType === 'delivery' ? userProfile?.contactName : null,
+          contactPhone: orderType === 'delivery' ? userProfile?.phoneNumber : null,
           pointsToUse
         }),
       });
@@ -301,64 +273,26 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <h3 id="delivery-address-label" className="font-semibold text-sm">{t('deliveryAddress', 'Delivery Address')}</h3>
-                      </div>
-                      <textarea 
-                        value={deliveryAddress}
-                        onChange={e => setDeliveryAddress(e.target.value)}
-                        placeholder={t('enterFullAddress', 'Enter your full address...')}
-                        aria-labelledby="delivery-address-label"
-                        className="w-full bg-tg-secondary-bg border border-tg-hint/15 rounded-2xl p-4 text-sm focus:outline-none focus:border-brand-primary min-h-[88px] text-tg-text"
-                        rows={3}
-                      />
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm">{t('deliveryAddress', 'Delivery Address')}</h3>
+                    <div className="rounded-2xl border border-tg-hint/15 bg-tg-secondary-bg p-4">
+                      {hasAddress && !editingAddress ? (
+                        <AddressSummary
+                          profile={userProfile}
+                          compact
+                          onEdit={() => setEditingAddress(true)}
+                        />
+                      ) : (
+                        <AddressForm
+                          profile={userProfile}
+                          onSaved={(user) => { setUserProfile(user); setEditingAddress(false); setError(null); }}
+                          onCancel={hasAddress ? () => setEditingAddress(false) : undefined}
+                        />
+                      )}
                     </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-semibold text-sm">Pin Location</h3>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setIsLocating(true);
-                            navigator.geolocation.getCurrentPosition(
-                              (pos) => {
-                                setDeliveryLat(pos.coords.latitude);
-                                setDeliveryLng(pos.coords.longitude);
-                                setIsLocating(false);
-                              },
-                              (err) => {
-                                console.error(err);
-                                setIsLocating(false);
-                                setError('Could not get your location. Please drag the pin on the map.');
-                              }
-                            );
-                          }}
-                          className="text-brand-primary text-xs font-bold bg-brand-primary/10 px-3 py-1 rounded-full"
-                          disabled={isLocating}
-                        >
-                          {isLocating ? 'Locating...' : 'Use Current Location'}
-                        </button>
-                      </div>
-                      <div className="h-[200px] w-full rounded-2xl overflow-hidden border border-tg-hint/15 relative z-0">
-                        <MapContainer 
-                          center={deliveryLat && deliveryLng ? [deliveryLat, deliveryLng] : [11.5564, 104.9282]}
-                          zoom={13} 
-                          style={{ height: '100%', width: '100%' }}
-                        >
-                          <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                          />
-                          <LocationMarker 
-                            position={deliveryLat && deliveryLng ? {lat: deliveryLat, lng: deliveryLng} : null}
-                            setPosition={(pos: any) => { setDeliveryLat(pos.lat); setDeliveryLng(pos.lng); }}
-                          />
-                        </MapContainer>
-                      </div>
-                    </div>
+                    <p className="text-xs text-tg-hint">
+                      {t('arakawaOnly', 'We deliver inside Arakawa only, from our shop at J03 on the ground floor.')}
+                    </p>
                   </div>
                 )}
               </div>
@@ -459,7 +393,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     {orderType === 'delivery' && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-tg-hint">{t('deliveryFee', 'Delivery Fee')}</span>
-                        <span className="font-medium text-tg-text">{formatCurrency(deliveryFee)}</span>
+                        <span className={`font-medium ${deliveryFee === 0 ? 'text-brand-primary' : 'text-tg-text'}`}>
+                          {deliveryFee === 0 ? t('free', 'FREE') : formatCurrency(deliveryFee)}
+                        </span>
                       </div>
                     )}
 
