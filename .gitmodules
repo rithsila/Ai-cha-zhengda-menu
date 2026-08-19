@@ -1,0 +1,3 @@
+[submodule "packages/aba-payway-sdk-unofficial"]
+	path = packages/aba-payway-sdk-unofficial
+	url = https://github.com/rithsila/aba-payway-unofficial.git
