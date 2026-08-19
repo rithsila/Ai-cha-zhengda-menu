@@ -64,7 +64,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [deliveryLat, setDeliveryLat] = useState<number | null>(null);
   const [deliveryLng, setDeliveryLng] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [usePoints, setUsePoints] = useState(false);
+  const [pointsToUse, setPointsToUse] = useState(0);
+  const [pointsPerDollar, setPointsPerDollar] = useState(100);
   
   const [paymentScreen, setPaymentScreen] = useState<{ checkoutUrl: string; khqrSvg: string; orderId: string; } | null>(null);
   
@@ -85,7 +86,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             setPaymentScreen(null);
             onSuccess(data.pickupCode);
           }
-        } catch(e) {}
+        } catch {}
       }, 3000);
     }
     return () => clearInterval(interval);
@@ -102,16 +103,17 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setDeliveryAddress('');
       setDeliveryLat(null);
       setDeliveryLng(null);
-      setUsePoints(false);
+      setPointsToUse(0);
       setBranchId('');
       return;
     }
 
     const fetchData = async () => {
       try {
-        const [branchRes, userRes] = await Promise.all([
+        const [branchRes, userRes, cfgRes] = await Promise.all([
           fetch('http://localhost:4000/api/branches'),
-          fetch(`http://localhost:4000/api/user/${WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id'}`)
+          fetch(`http://localhost:4000/api/user/${WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id'}`),
+          fetch('http://localhost:4000/api/config')
         ]);
         if (branchRes.ok) {
           const data = await branchRes.json();
@@ -121,6 +123,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         if (userRes.ok) {
           setUserProfile(await userRes.json());
         }
+        if (cfgRes.ok) {
+          const rows: { key: string; value: string }[] = await cfgRes.json();
+          const rate = Number(rows.find(r => r.key === 'pointsPerDollar')?.value);
+          if (Number.isFinite(rate) && rate > 0) setPointsPerDollar(rate);
+        }
       } catch (err) {
         console.error('Failed to fetch checkout data', err);
       }
@@ -129,9 +136,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   }, [isOpen]);
 
   const deliveryFee = orderType === 'delivery' ? 1.00 : 0;
-  const maxDiscountFromPoints = userProfile ? userProfile.loyaltyPoints / 100 : 0;
-  const discountApplied = usePoints ? Math.min(maxDiscountFromPoints, total + deliveryFee) : 0;
-  const finalTotal = total + deliveryFee - discountApplied;
+  const maxUsablePoints = userProfile
+    ? Math.min(userProfile.loyaltyPoints, Math.floor((total + deliveryFee) * pointsPerDollar))
+    : 0;
+  const discountApplied = pointsToUse / pointsPerDollar;
+  const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
 
   const handleNext = () => {
     if (orderType === 'pickup' && !branchId) {
@@ -155,7 +164,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: cart,
-          totalAmount: total + deliveryFee,
           paymentMethod: method,
           telegramUserId: WebApp?.initDataUnsafe?.user?.id?.toString() || 'test-user-id',
           branchId: orderType === 'pickup' ? branchId : null,
@@ -163,7 +171,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
           deliveryLat: orderType === 'delivery' ? deliveryLat : null,
           deliveryLng: orderType === 'delivery' ? deliveryLng : null,
-          usePoints
+          pointsToUse
         }),
       });
 
@@ -379,7 +387,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                               (err) => {
                                 console.error(err);
                                 setIsLocating(false);
-                                alert("Failed to get location.");
+                                setError('Could not get your location. Please drag the pin on the map.');
                               }
                             );
                           }}
@@ -412,27 +420,36 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             ) : (
               <div className="flex flex-col gap-6">
                 {userProfile && userProfile.loyaltyPoints > 0 && (
-                  <div className={`rounded-2xl p-4 flex justify-between items-center transition-all border ${
-                    usePoints 
-                      ? 'bg-brand-primary/10 border-brand-primary/30' 
-                      : 'bg-tg-secondary-bg border-tg-hint/15'
+                  <div className={`rounded-2xl p-4 border transition-all ${
+                    pointsToUse > 0 ? 'bg-brand-primary/10 border-brand-primary/30' : 'bg-tg-secondary-bg border-tg-hint/15'
                   }`}>
-                    <div>
-                      <div className="font-bold text-tg-text flex items-center gap-2">
-                        <Coins size={20} weight="fill" className={usePoints ? 'text-brand-primary' : 'text-tg-hint'} /> 
-                        {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')}
-                      </div>
-                      <div className="text-xs text-tg-hint mt-1">
-                        {t('usePointsText', 'Use {{points}} points for {{discount}} off', {
-                          points: Math.min(userProfile.loyaltyPoints, Math.round((total + deliveryFee) * 100)),
-                          discount: formatCurrency(Math.min(maxDiscountFromPoints, total + deliveryFee))
-                        })}
-                      </div>
+                    <div className="font-bold text-tg-text flex items-center gap-2 mb-1">
+                      <Coins size={20} weight="fill" className={pointsToUse > 0 ? 'text-brand-primary' : 'text-tg-hint'} />
+                      {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')}
                     </div>
-                    <label className="inline-flex items-center cursor-pointer min-h-[44px] px-2">
-                      <input type="checkbox" className="sr-only peer" checked={usePoints} onChange={() => setUsePoints(!usePoints)} aria-label="Use loyalty points" />
-                      <div className="relative w-11 h-6 bg-tg-hint/30 border border-tg-hint peer-focus:outline-none rounded-full peer peer-checked:bg-brand-primary peer-checked:border-brand-primary peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-tg-hint/30 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                    </label>
+                    <p className="text-xs text-tg-hint mb-3">
+                      {t('choosePoints', 'Choose how many points to use. {{rate}} points = $1 off.', { rate: pointsPerDollar })}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range" min={0} max={maxUsablePoints} step={1} value={pointsToUse}
+                        onChange={e => setPointsToUse(Number(e.target.value))}
+                        className="flex-1 accent-brand-primary"
+                        aria-label="Points to use"
+                      />
+                      <input
+                        type="number" min={0} max={maxUsablePoints} value={pointsToUse}
+                        onChange={e => {
+                          const v = Math.floor(Number(e.target.value) || 0);
+                          setPointsToUse(Math.max(0, Math.min(v, maxUsablePoints)));
+                        }}
+                        className="w-20 bg-tg-bg border border-tg-hint/20 rounded-lg px-2 py-1 text-sm font-bold text-center text-tg-text"
+                        aria-label="Points to use (number)"
+                      />
+                    </div>
+                    <div className="text-xs font-bold text-brand-primary mt-2">
+                      -{formatCurrency(discountApplied)} {t('discount', 'discount')}
+                    </div>
                   </div>
                 )}
 

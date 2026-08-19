@@ -115,7 +115,7 @@ export function createApp() {
 
   app.post('/api/orders', async (req, res) => {
     try {
-      const { items, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, usePoints, pointsToUse } = req.body;
+      const { items, paymentMethod, telegramUserId, branchId, orderType, deliveryAddress, deliveryLat, deliveryLng, pointsToUse } = req.body;
 
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order must contain at least one item' });
@@ -166,8 +166,6 @@ export function createApp() {
       let requestedPoints = 0;
       if (typeof pointsToUse === 'number' && Number.isInteger(pointsToUse) && pointsToUse > 0) {
         requestedPoints = pointsToUse;
-      } else if (usePoints) {
-        requestedPoints = user?.loyaltyPoints ?? 0; // legacy boolean = use max (removed in Task 7)
       }
 
       const available = user?.loyaltyPoints ?? 0;
