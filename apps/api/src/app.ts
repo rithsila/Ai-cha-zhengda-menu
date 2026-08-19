@@ -1,10 +1,10 @@
 import express from 'express';
-import type { RequestHandler } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { ABAPayWay, generateKHQR, generateTransactionId } from 'aba-payway-sdk-unofficial';
-import { settleOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
+import { settleOrderPoints, refundOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
+import { issueToken, requireStaff, requireManager, staffPin, managerPin } from './auth';
 
 export const prisma = new PrismaClient();
 
@@ -18,16 +18,6 @@ export function createApp() {
     }
   }));
   app.use(cors());
-
-  const staffPin = () => process.env.STAFF_PIN || '1234';
-  const managerPin = () => process.env.MANAGER_PIN || '9999';
-
-  const requireManager: RequestHandler = (req, res, next) => {
-    if (req.headers['x-manager-pin'] !== managerPin()) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    next();
-  };
 
   app.get('/api/auth/telegram/callback', async (req, res) => {
     try {
@@ -75,7 +65,8 @@ export function createApp() {
     }
     const expected = role === 'manager' ? managerPin() : staffPin();
     if (pin !== expected) return res.status(401).json({ error: 'Invalid PIN' });
-    res.json({ ok: true });
+    const { token, expiresAt } = issueToken(role);
+    res.json({ ok: true, token, role, expiresAt });
   });
 
   // Initialize ABA PayWay client
@@ -138,7 +129,7 @@ export function createApp() {
     }
   });
 
-  app.put('/api/catalog/:id/sold-out', async (req, res) => {
+  app.put('/api/catalog/:id/sold-out', requireStaff, async (req, res) => {
     try {
       const { id } = req.params;
       const { isSoldOut } = req.body;
@@ -173,14 +164,30 @@ export function createApp() {
         if (!menuItem) {
           return res.status(400).json({ error: `Unknown menu item: ${item?.menuItemId}` });
         }
+        if (menuItem.isSoldOut) {
+          return res.status(400).json({ error: `Sold out: ${menuItem.name}` });
+        }
         const quantity = Number.isInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1;
-        const allOptions = menuItem.modifiers.flatMap((g) => g.options);
         const selected = item.selectedModifiers && typeof item.selectedModifiers === 'object' ? item.selectedModifiers : {};
-        const optionIds = Object.values(selected).flat().map((o: any) => o?.id).filter(Boolean);
         let unitPrice = menuItem.basePrice;
-        for (const oid of optionIds) {
-          const opt = allOptions.find((o) => o.id === oid);
-          if (opt) unitPrice += opt.priceDelta;   // DB price, never the client's
+        // The client sends static catalog ids ("toppings" -> "boba"); rows carry
+        // those in `key` and a generated uuid in `id`. Match either one.
+        for (const [groupKey, groupSelection] of Object.entries(selected)) {
+          const group = menuItem.modifiers.find(
+            (g) => g.key === groupKey || g.id === groupKey || g.name === groupKey
+          );
+          const pool = group ? group.options : menuItem.modifiers.flatMap((g) => g.options);
+          for (const chosen of ([] as any[]).concat(groupSelection ?? [])) {
+            const oid = chosen?.id;
+            if (!oid) continue;
+            const opt = pool.find((o) => o.key === oid || o.id === oid);
+            if (!opt) {
+              // Never silently drop an option — that is how a cart total and the
+              // charged total drift apart.
+              return res.status(400).json({ error: `Unknown modifier option: ${groupKey}/${oid}` });
+            }
+            unitPrice += opt.priceDelta;   // DB price, never the client's
+          }
         }
         const lineTotal = Math.round(unitPrice * quantity * 100) / 100;
         itemsTotal += lineTotal;
@@ -190,16 +197,6 @@ export function createApp() {
       const DELIVERY_FEE = 1.0;
       const serverTotal = Math.round((itemsTotal + (orderType === 'delivery' ? DELIVERY_FEE : 0)) * 100) / 100;
 
-      // Check if user exists to handle points
-      let user = null;
-      if (telegramUserId) {
-        user = await prisma.user.upsert({
-          where: { telegramUserId },
-          update: {},
-          create: { telegramUserId, loyaltyPoints: 0 }
-        });
-      }
-
       const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', CONFIG_DEFAULTS.pointsPerDollar);
       const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', CONFIG_DEFAULTS.earnPointsPerDollar);
 
@@ -207,31 +204,51 @@ export function createApp() {
       if (typeof pointsToUse === 'number' && Number.isInteger(pointsToUse) && pointsToUse > 0) {
         requestedPoints = pointsToUse;
       }
-
-      const available = user?.loyaltyPoints ?? 0;
       const maxByTotal = Math.floor(serverTotal * POINTS_PER_DOLLAR);
-      const pointsRedeemed = Math.min(requestedPoints, available, maxByTotal);
-      const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
-      const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
-      const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
 
-      const order = await prisma.order.create({
-        data: {
-          totalAmount: finalAmount,
-          paymentMethod,
-          telegramUserId,
-          status: 'pending',
-          pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
-          orderType: orderType || 'pickup',
-          deliveryAddress: deliveryAddress || null,
-          deliveryLat: deliveryLat || null,
-          deliveryLng: deliveryLng || null,
-          branchId: branchId || null,
-          pointsEarned,
-          pointsRedeemed,
-          discountApplied,
-          items: { create: pricedItems }
+      // Points are reserved (deducted) the moment the order is created, inside one
+      // transaction. Otherwise two pending orders could each redeem the same balance.
+      const order = await prisma.$transaction(async (tx) => {
+        let available = 0;
+        if (telegramUserId) {
+          const user = await tx.user.upsert({
+            where: { telegramUserId },
+            update: {},
+            create: { telegramUserId, loyaltyPoints: 0 }
+          });
+          available = user.loyaltyPoints;
         }
+
+        const pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
+        const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
+        const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
+        const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
+
+        if (telegramUserId && pointsRedeemed > 0) {
+          await tx.user.update({
+            where: { telegramUserId },
+            data: { loyaltyPoints: { decrement: pointsRedeemed } }
+          });
+        }
+
+        return tx.order.create({
+          data: {
+            totalAmount: finalAmount,
+            paymentMethod,
+            telegramUserId,
+            status: 'pending',
+            pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
+            orderType: orderType || 'pickup',
+            deliveryAddress: deliveryAddress || null,
+            deliveryLat: deliveryLat || null,
+            deliveryLng: deliveryLng || null,
+            branchId: branchId || null,
+            pointsEarned,
+            pointsRedeemed,
+            discountApplied,
+            items: { create: pricedItems }
+          }
+        });
       });
 
       res.json(order);
@@ -242,7 +259,7 @@ export function createApp() {
   });
 
   // Staff Dashboard APIs
-  app.get('/api/orders', async (req, res) => {
+  app.get('/api/orders', requireStaff, async (req, res) => {
     try {
       const { branchId } = req.query;
 
@@ -309,7 +326,7 @@ export function createApp() {
     }
   });
 
-  app.put('/api/orders/:id/status', async (req, res) => {
+  app.put('/api/orders/:id/status', requireStaff, async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -321,6 +338,8 @@ export function createApp() {
 
       if (status === 'completed' || status === 'paid') {
         await settleOrderPoints(prisma, id);
+      } else if (status === 'cancelled') {
+        await refundOrderPoints(prisma, id);
       }
 
       // In a real app, you might notify the user via Telegram bot here that their order status changed
@@ -518,8 +537,9 @@ export function createApp() {
   // Analytics API
   app.get('/api/analytics/sales', requireManager, async (req, res) => {
     try {
+      // Cash pickup orders never pass through "paid" — they end as "completed".
       const paidOrders = await prisma.order.findMany({
-        where: { status: 'paid' },
+        where: { status: { in: ['paid', 'completed'] } },
         select: { totalAmount: true, createdAt: true }
       });
 

@@ -25,7 +25,15 @@ import {
   useToast,
 } from './components/ui';
 import type { BadgeVariant, ButtonVariant } from './components/ui';
-import { API_BASE } from './lib/api';
+import {
+  API_BASE,
+  authHeaders,
+  clearSession,
+  handleUnauthorized,
+  loadSession,
+  onUnauthorized,
+  saveSession,
+} from './lib/api';
 
 type OrderItem = {
   id: string;
@@ -340,7 +348,11 @@ function StaffApp() {
         const url = selectedBranch
           ? `/api/orders?branchId=${selectedBranch}`
           : '/api/orders';
-        const res = await fetch(`${API_BASE}${url}`);
+        const res = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
+        if (res.status === 401) {
+          handleUnauthorized();
+          return;
+        }
         if (!res.ok) throw new Error('orders fetch failed');
         const data: Order[] = await res.json();
 
@@ -408,9 +420,10 @@ function StaffApp() {
       try {
         const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ status }),
         });
+        if (res.status === 401) handleUnauthorized();
         if (!res.ok) throw new Error('status update failed');
         if (status === 'completed') {
           toast({
@@ -710,7 +723,30 @@ function StaffApp() {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Restore the saved session so a reload does not send staff back to the PIN screen.
+  const [isAuthenticated, setIsAuthenticated] = useState(() => loadSession() !== null);
+
+  useEffect(() => {
+    const unsubscribe = onUnauthorized(() => setIsAuthenticated(false));
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Lock the dashboard the moment the 12-hour session expires.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const session = loadSession();
+    if (!session) {
+      setIsAuthenticated(false);
+      return;
+    }
+    const id = setTimeout(() => {
+      clearSession();
+      setIsAuthenticated(false);
+    }, Math.max(0, session.expiresAt - Date.now()));
+    return () => clearTimeout(id);
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) {
     return (
@@ -726,6 +762,8 @@ export default function App() {
               body: JSON.stringify({ pin, role: 'staff' }),
             });
             if (res.ok) {
+              const data = await res.json();
+              saveSession({ token: data.token, role: 'staff', expiresAt: data.expiresAt });
               setIsAuthenticated(true);
               return true;
             }

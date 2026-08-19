@@ -11,7 +11,12 @@ beforeAll(async () => {
   await prisma.menuItem.create({
     data: {
       id: itemId, brand: 'ai-cha', category: 'Test', name: 'Priced Tea', basePrice: 3.0,
-      modifiers: { create: [{ name: 'Size', type: 'single', options: { create: [{ name: 'Large', priceDelta: 0.5 }] } }] },
+      modifiers: {
+        create: [{
+          key: 'size', name: 'Size', type: 'single',
+          options: { create: [{ key: 'large', name: 'Large', priceDelta: 0.5 }] },
+        }],
+      },
     },
     include: { modifiers: { include: { options: true } } },
   });

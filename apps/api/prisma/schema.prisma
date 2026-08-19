@@ -40,20 +40,26 @@ model MenuItem {
 
 model ModifierGroup {
   id         String           @id @default(uuid())
+  key        String           // stable id from the static catalog, e.g. "toppings"
   name       String
   type       String           // "single" | "multiple"
   required   Boolean          @default(false)
   menuItemId String
   menuItem   MenuItem         @relation(fields: [menuItemId], references: [id])
   options    ModifierOption[]
+
+  @@unique([menuItemId, key])
 }
 
 model ModifierOption {
   id              String        @id @default(uuid())
+  key             String        // stable id from the static catalog, e.g. "boba"
   name            String
   priceDelta      Float         @default(0)
   modifierGroupId String
   modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id])
+
+  @@unique([modifierGroupId, key])
 }
 
 model Order {

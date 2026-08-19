@@ -28,8 +28,8 @@ beforeAll(async () => {
   });
 });
 
-describe('order creation does not move points', () => {
-  it('keeps user points unchanged while order is pending', async () => {
+describe('order creation reserves points', () => {
+  it('deducts redeemed points as soon as the order is created', async () => {
     const res = await request(app).post('/api/orders').send(orderBody(100));
     expect(res.status).toBe(200);
     expect(res.body.pointsRedeemed).toBe(100);
@@ -37,7 +37,7 @@ describe('order creation does not move points', () => {
     expect(res.body.totalAmount).toBe(4);          // 5 - 1
     expect(res.body.pointsEarned).toBe(40);        // floor(4 * 10)
     const user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
-    expect(user?.loyaltyPoints).toBe(200);         // untouched
+    expect(user?.loyaltyPoints).toBe(100);         // 200 - 100 reserved
   });
 });
 
@@ -46,11 +46,11 @@ describe('settlement on completion (cash path)', () => {
     const created = await request(app).post('/api/orders').send(orderBody(100));
     const id = created.body.id;
 
-    await request(app).put(`/api/orders/${id}/status`).send({ status: 'completed' });
+    await request(app).put(`/api/orders/${id}/status`).set('x-manager-pin', '9999').send({ status: 'completed' });
     let user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
-    const afterFirst = user!.loyaltyPoints;        // 200 - 100 + 40 = 140 (relative to fresh 200 minus prior test noise)
+    const afterFirst = user!.loyaltyPoints;        // earned points credited once
 
-    await request(app).put(`/api/orders/${id}/status`).send({ status: 'completed' });
+    await request(app).put(`/api/orders/${id}/status`).set('x-manager-pin', '9999').send({ status: 'completed' });
     user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
     expect(user!.loyaltyPoints).toBe(afterFirst);  // idempotent
     const order = await prisma.order.findUnique({ where: { id } });

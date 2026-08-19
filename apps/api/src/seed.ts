@@ -50,11 +50,15 @@ async function main() {
         isSoldOut: false,
         modifiers: {
           create: (item.modifiers ?? []).map((group) => ({
+            // `key` keeps the static catalog id so the API can price the
+            // option ids the client sends (row ids are generated uuids).
+            key: group.id,
             name: group.name,
             type: group.type,
             required: group.required ?? false,
             options: {
               create: group.options.map((option) => ({
+                key: option.id,
                 name: option.name,
                 priceDelta: option.priceDelta,
               }))
