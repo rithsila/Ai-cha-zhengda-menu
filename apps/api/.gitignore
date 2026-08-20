@@ -6,3 +6,8 @@ node_modules
 
 prisma/test.db
 prisma/test.db-journal
+# WAL leaves two sidecar files next to each database
+prisma/test.db-wal
+prisma/test.db-shm
+prisma/dev.db-wal
+prisma/dev.db-shm

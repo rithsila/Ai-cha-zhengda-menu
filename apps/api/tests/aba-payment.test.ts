@@ -11,18 +11,19 @@ import {
   stubAbaFetch,
   approvedStatus,
 } from './helpers/aba';
+import { asCustomer } from './helpers/customer';
 
 const app = createApp();
 const uid = `aba-${randomUUID()}`;
+let staffToken = '';
 const itemId = `aba-item-${randomUUID()}`;
 const ITEM_PRICE = 5.0;
 
 /** Create a pending khqr order and hand back the row. */
 async function makeOrder() {
-  const res = await request(app).post('/api/orders').send({
+  const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
     items: [{ menuItemId: itemId, quantity: 1, selectedModifiers: {} }],
     paymentMethod: 'khqr',
-    telegramUserId: uid,
     orderType: 'pickup',
     pointsToUse: 0,
   });
@@ -49,24 +50,50 @@ beforeAll(async () => {
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Test Milk Tea', basePrice: ITEM_PRICE },
   });
+  const login = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
+  staffToken = login.body.token;
 });
 
 beforeEach(() => { enableAba(); });
 afterEach(() => { vi.restoreAllMocks(); });
 afterAll(() => { disableAba(); });
 
+// The customer app reads this before drawing the payment step, so KHQR is never
+// offered on a device that has not yet had a payment fail.
+describe('GET /api/payment/methods', () => {
+  it('reports online payment as unavailable when ABA is not configured', async () => {
+    disableAba();
+    const res = await request(app).get('/api/payment/methods');
+    expect(res.status).toBe(200);
+    expect(res.body.online).toBe(false);
+    expect(res.body.cash).toBe(true);
+  });
+
+  it('reports online payment as available once credentials exist', async () => {
+    enableAba();
+    const res = await request(app).get('/api/payment/methods');
+    expect(res.status).toBe(200);
+    expect(res.body.online).toBe(true);
+  });
+
+  it('is readable without signing in', async () => {
+    const res = await request(app).get('/api/payment/methods');
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('POST /api/payment/aba/create', () => {
   it('returns 503 when ABA credentials are not configured', async () => {
     disableAba();
     const order = await makeOrder();
-    const res = await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
+    const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
     expect(res.status).toBe(503);
     expect(res.body.error).toContain('ABA_MERCHANT_ID');
   });
 
   it('returns 404 for an unknown order', async () => {
     stubAbaFetch();
-    const res = await request(app).post('/api/payment/aba/create').send({ orderId: 'does-not-exist' });
+    const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: 'does-not-exist' });
     expect(res.status).toBe(404);
   });
 
@@ -74,7 +101,7 @@ describe('POST /api/payment/aba/create', () => {
     stubAbaFetch();
     const order = await makeOrder();
 
-    const res = await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
+    const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
     expect(res.status).toBe(200);
     expect(res.body.checkoutUrl).toContain('checkout');
     expect(res.body.abapayDeeplink).toContain('abapay://');
@@ -93,7 +120,7 @@ describe('POST /api/payment/aba/create', () => {
     const spy = stubAbaFetch();
     const order = await makeOrder();
 
-    await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
+    await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
 
     const purchaseCall = spy.mock.calls.find((c) => String(c[0]).includes('/payments/purchase'));
     expect(purchaseCall).toBeTruthy();
@@ -109,8 +136,8 @@ describe('POST /api/payment/aba/create', () => {
     stubAbaFetch();
     const order = await makeOrder();
 
-    const first = await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
-    const second = await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
+    const first = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
+    const second = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
 
     expect(second.body.transactionId).toBe(first.body.transactionId);
   });
@@ -120,7 +147,7 @@ describe('POST /api/payment/aba/create', () => {
     const order = await makeOrder();
     await prisma.order.update({ where: { id: order.id }, data: { status: 'paid' } });
 
-    const res = await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
+    const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
     expect(res.status).toBe(409);
   });
 
@@ -128,7 +155,7 @@ describe('POST /api/payment/aba/create', () => {
     stubAbaFetch({ purchase: { status: 1, description: 'Wrong Hash' } });
     const order = await makeOrder();
 
-    const res = await request(app).post('/api/payment/aba/create').send({ orderId: order.id });
+    const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
     expect(res.status).toBe(502);
     expect(res.body.error).toContain('Wrong Hash');
   });
@@ -243,12 +270,12 @@ describe('GET /api/payment/aba/status/:orderId', () => {
   it('returns 503 when ABA credentials are not configured', async () => {
     const { id } = await makeOrderWithTransaction();
     disableAba();
-    const res = await request(app).get(`/api/payment/aba/status/${id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
     expect(res.status).toBe(503);
   });
 
   it('returns 404 for an unknown order', async () => {
-    const res = await request(app).get('/api/payment/aba/status/does-not-exist');
+    const res = await request(app).get('/api/payment/aba/status/does-not-exist').set(asCustomer(uid));
     expect(res.status).toBe(404);
   });
 
@@ -256,7 +283,7 @@ describe('GET /api/payment/aba/status/:orderId', () => {
     const { id } = await makeOrderWithTransaction();
     stubAbaFetch({ status: { status: 0, payment_status: 'PENDING' } });
 
-    const res = await request(app).get(`/api/payment/aba/status/${id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('PENDING');
@@ -270,7 +297,7 @@ describe('GET /api/payment/aba/status/:orderId', () => {
     stubAbaFetch({ status: approvedStatus(totalAmount) });
     const before = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
 
-    const res = await request(app).get(`/api/payment/aba/status/${id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('APPROVED');
@@ -286,7 +313,7 @@ describe('GET /api/payment/aba/status/:orderId', () => {
     const { id, totalAmount } = await makeOrderWithTransaction();
     stubAbaFetch({ status: approvedStatus(totalAmount - 1) });
 
-    const res = await request(app).get(`/api/payment/aba/status/${id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
 
     expect(res.status).toBe(400);
     const order = await prisma.order.findUnique({ where: { id } });
@@ -301,7 +328,7 @@ describe('GET /api/payment/aba/status/:orderId', () => {
     });
     stubAbaFetch();
 
-    const res = await request(app).get(`/api/payment/aba/status/${id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('EXPIRED');
@@ -313,13 +340,13 @@ describe('GET /api/payment/aba/status/:orderId', () => {
     const { id, transactionId } = await makeOrderWithTransaction();
     await request(app)
       .put(`/api/orders/${id}/status`)
-      .set('x-manager-pin', '9999')
+      .set('Authorization', `Bearer ${staffToken}`)
       .send({ status: 'cancelled' });
     const cancelled = await prisma.order.findUnique({ where: { id } });
     expect(cancelled!.pointsSettled).toBe(true); // the refund marks it settled
 
     stubAbaFetch({ status: approvedStatus(cancelled!.totalAmount) });
-    const res = await request(app).get(`/api/payment/aba/status/${id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
 
     expect(res.status).toBe(409);
     const after = await prisma.order.findUnique({ where: { id } });
@@ -328,7 +355,7 @@ describe('GET /api/payment/aba/status/:orderId', () => {
 
   it('returns 409 when no payment has been started for the order', async () => {
     const order = await makeOrder();
-    const res = await request(app).get(`/api/payment/aba/status/${order.id}`);
+    const res = await request(app).get(`/api/payment/aba/status/${order.id}`).set(asCustomer(uid));
     expect(res.status).toBe(409);
   });
 });

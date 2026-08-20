@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { asCustomer } from './helpers/customer';
 
 const app = createApp();
 
@@ -10,9 +11,11 @@ const soldOutId = `sec-soldout-${randomUUID()}`;
 const uid = `sec-user-${randomUUID()}`;
 
 let staffToken = '';
+let managerToken = '';
 let orderId = '';
 
 const auth = () => ({ Authorization: `Bearer ${staffToken}` });
+const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
 
 beforeAll(async () => {
   delete process.env.ABA_WEBHOOK_SECRET;
@@ -43,6 +46,8 @@ beforeAll(async () => {
 
   const login = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
   staffToken = login.body.token;
+  const managerLogin = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
+  managerToken = managerLogin.body.token;
 
   const created = await request(app).post('/api/orders').send({
     items: [{ menuItemId: itemId, quantity: 1, totalPrice: 2.0, selectedModifiers: {} }],
@@ -138,14 +143,14 @@ describe('loyalty points cannot be spent twice', () => {
   it('gives the second pending order no discount', async () => {
     const body = () => ({
       items: [{ menuItemId: itemId, quantity: 1, totalPrice: 2.0, selectedModifiers: {} }],
-      paymentMethod: 'cash', orderType: 'pickup', telegramUserId: uid, pointsToUse: 100,
+      paymentMethod: 'cash', orderType: 'pickup', pointsToUse: 100,
     });
 
-    const first = await request(app).post('/api/orders').send(body());
+    const first = await request(app).post('/api/orders').set(asCustomer(uid)).send(body());
     expect(first.body.pointsRedeemed).toBe(100);
     expect(first.body.discountApplied).toBe(1);
 
-    const second = await request(app).post('/api/orders').send(body());
+    const second = await request(app).post('/api/orders').set(asCustomer(uid)).send(body());
     expect(second.body.pointsRedeemed).toBe(0);
     expect(second.body.discountApplied).toBe(0);
 
@@ -156,9 +161,9 @@ describe('loyalty points cannot be spent twice', () => {
   it('gives reserved points back when an order is cancelled', async () => {
     await prisma.user.update({ where: { telegramUserId: uid }, data: { loyaltyPoints: 100 } });
 
-    const created = await request(app).post('/api/orders').send({
+    const created = await request(app).post('/api/orders').set(asCustomer(uid)).send({
       items: [{ menuItemId: itemId, quantity: 1, totalPrice: 2.0, selectedModifiers: {} }],
-      paymentMethod: 'cash', orderType: 'pickup', telegramUserId: uid, pointsToUse: 100,
+      paymentMethod: 'cash', orderType: 'pickup', pointsToUse: 100,
     });
     expect(created.body.pointsRedeemed).toBe(100);
 
@@ -172,7 +177,7 @@ describe('loyalty points cannot be spent twice', () => {
 
 describe('analytics', () => {
   it('counts completed cash orders, not only paid ones', async () => {
-    const before = await request(app).get('/api/analytics/sales').set('x-manager-pin', '9999');
+    const before = await request(app).get('/api/analytics/sales').set(managerAuth());
 
     const created = await request(app).post('/api/orders').send({
       items: [{ menuItemId: itemId, quantity: 1, totalPrice: 2.0, selectedModifiers: {} }],
@@ -181,7 +186,7 @@ describe('analytics', () => {
     await request(app)
       .put(`/api/orders/${created.body.id}/status`).set(auth()).send({ status: 'completed' });
 
-    const after = await request(app).get('/api/analytics/sales').set('x-manager-pin', '9999');
+    const after = await request(app).get('/api/analytics/sales').set(managerAuth());
     expect(after.body.orderCount).toBe(before.body.orderCount + 1);
     expect(after.body.totalRevenue).toBeCloseTo(before.body.totalRevenue + 2.0, 2);
   });

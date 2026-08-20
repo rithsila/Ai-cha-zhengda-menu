@@ -32,14 +32,16 @@ describe('verifyTelegramLogin', () => {
 });
 
 describe('GET /api/auth/telegram/callback', () => {
-  it('redirects with tg_id on valid login', async () => {
+  it('redirects with a customer token on valid login', async () => {
     const signed = signLogin(
       { id: '4242', first_name: 'Web', auth_date: String(Math.floor(Date.now() / 1000)) },
       BOT_TOKEN
     );
     const res = await request(app).get('/api/auth/telegram/callback').query(signed);
     expect(res.status).toBe(302);
-    expect(res.headers.location).toContain('#tg_id=4242');
+    // A raw id in the URL is only a claim; the callback hands back a session token.
+    expect(res.headers.location).toContain('#tg_token=');
+    expect(res.headers.location).not.toContain('#tg_id=');
   });
   it('rejects an invalid hash', async () => {
     const res = await request(app).get('/api/auth/telegram/callback')

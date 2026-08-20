@@ -10,8 +10,9 @@ import {
   X,
   Coins,
 } from '@phosphor-icons/react';
-import { API_BASE } from '../utils/api';
-import { getTelegramUserId } from '../utils/telegramUser';
+import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { SignInPrompt } from './SignInPrompt';
+import { useOnlinePaymentState } from '../utils/onlinePayment';
 import { formatCurrency } from '../utils/format';
 import {
   getDefaultPaymentMethod,
@@ -63,8 +64,15 @@ function itemCount(order: PaymentOrder): number {
   return order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
 }
 
-export function PaymentView() {
+interface PaymentViewProps {
+  onBrowseMenu?: () => void;
+}
+
+export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
   const { t } = useTranslation();
+  // Payments and history belong to one account, so a guest has nothing here.
+  const signedIn = hasIdentity();
+  const khqrOffered = useOnlinePaymentState() === 'available';
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -77,8 +85,7 @@ export function PaymentView() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const telegramUserId = getTelegramUserId() || 'test-user-id';
-      const res = await fetch(`${API_BASE}/api/orders/user/${telegramUserId}`);
+      const res = await apiFetch(ME.orders());
       if (res.ok) {
         const data = await res.json();
         setOrders(Array.isArray(data) ? data : []);
@@ -91,12 +98,16 @@ export function PaymentView() {
   }, []);
 
   useEffect(() => {
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
     fetchOrders();
     const interval = setInterval(() => {
       if (!panelOpenRef.current) fetchOrders();
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }, [fetchOrders, signedIn]);
 
   const handlePaid = useCallback(
     (pickupCode: string) => {
@@ -107,6 +118,15 @@ export function PaymentView() {
     [fetchOrders]
   );
 
+  // Keep the saved preference honest: KHQR cannot be the default while the
+  // shop has no online payment.
+  useEffect(() => {
+    if (!khqrOffered && defaultMethod === 'khqr') {
+      setMethod('cash');
+      setDefaultPaymentMethod('cash');
+    }
+  }, [khqrOffered, defaultMethod]);
+
   const handleChangeMethod = (method: PaymentMethod) => {
     setMethod(method);
     setDefaultPaymentMethod(method);
@@ -115,9 +135,23 @@ export function PaymentView() {
   // Every pending order belongs here, not just the KHQR ones. A pending cash
   // order has nothing to pay online, but it still is not paid -- filtering it
   // out of both this section and the history below made it vanish entirely.
+  //
+  // The server cancels an unpaid KHQR order once its QR expires, so an order can
+  // leave this list on its own between two polls. That is correct: a cancelled
+  // order must never offer a way to pay, and it drops into the history below,
+  // where it is marked cancelled rather than dressed up as a past payment.
   const unpaid = orders.filter(o => o.status === 'pending');
   const history = orders.filter(o => o.status !== 'pending');
   const shownHistory = history.slice(0, HISTORY_LIMIT);
+
+  if (!signedIn) {
+    return (
+      <SignInPrompt
+        what={t('signInForPayments', 'Open the shop from our Telegram bot to pay for orders and see your payment history.')}
+        onBrowseMenu={onBrowseMenu}
+      />
+    );
+  }
 
   if (loading && orders.length === 0) {
     return (
@@ -188,16 +222,23 @@ export function PaymentView() {
                   </p>
                 </div>
 
-                {order.paymentMethod === 'cash' ? (
+                {order.paymentMethod === 'cash' || !khqrOffered ? (
                   // Cash is paid at the counter, so there is no button to press
                   // here. Show the pickup code instead -- that is what the
-                  // customer actually needs at the shop.
+                  // customer actually needs at the shop. An unpaid KHQR order
+                  // lands here too while online payment is switched off, so the
+                  // customer never taps a button that cannot work.
                   <div className="mt-3 flex items-start gap-2 rounded-xl bg-tg-hint/10 p-3">
                     <Money size={18} weight="fill" className="text-tg-hint flex-shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-tg-text">
                         {t('payCashAtCounter', 'Pay with cash when you pick up')}
                       </p>
+                      {order.paymentMethod !== 'cash' && (
+                        <p className="text-xs text-tg-hint mt-1">
+                          {t('onlinePaymentUnavailable', 'Online payment is not available right now.')}
+                        </p>
+                      )}
                       {order.pickupCode && (
                         <p className="text-xs text-tg-hint mt-1">
                           {t('showThisCode', 'Show this code at the counter:')}{' '}
@@ -239,7 +280,12 @@ export function PaymentView() {
           </div>
         ) : (
           <div className="grid gap-3">
-            {shownHistory.map(order => (
+            {shownHistory.map(order => {
+              // A cancelled order is not a payment. Showing it with a payment
+              // badge, a pickup code and points would tell the customer they
+              // bought something they did not.
+              const cancelled = order.status === 'cancelled';
+              return (
               <div
                 key={order.id}
                 className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10"
@@ -247,30 +293,41 @@ export function PaymentView() {
                 <div className="flex justify-between items-start gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
-                          order.paymentMethod === 'cash'
-                            ? 'bg-tg-hint/15 text-tg-hint'
-                            : 'bg-brand-primary/10 text-brand-primary'
-                        }`}
-                      >
-                        {order.paymentMethod === 'cash' ? (
-                          <Money size={14} weight="fill" />
-                        ) : (
-                          <CreditCard size={14} weight="fill" />
-                        )}
-                        {order.paymentMethod === 'cash' ? t('cash', 'Cash') : t('khqr', 'KHQR')}
-                      </span>
+                      {cancelled ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-500/15 text-red-600 dark:text-red-400">
+                          <X size={14} weight="bold" />
+                          {t('orderCancelled', 'Cancelled')}
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
+                            order.paymentMethod === 'cash'
+                              ? 'bg-tg-hint/15 text-tg-hint'
+                              : 'bg-brand-primary/10 text-brand-primary'
+                          }`}
+                        >
+                          {order.paymentMethod === 'cash' ? (
+                            <Money size={14} weight="fill" />
+                          ) : (
+                            <CreditCard size={14} weight="fill" />
+                          )}
+                          {order.paymentMethod === 'cash' ? t('cash', 'Cash') : t('khqr', 'KHQR')}
+                        </span>
+                      )}
                       <span className="text-xs font-mono text-tg-hint">#{shortRef(order.id)}</span>
                     </div>
                     <p className="text-xs text-tg-hint mt-2">{shortDate(order.createdAt)}</p>
                   </div>
 
                   <div className="text-right">
-                    <p className="font-bold text-tg-text whitespace-nowrap">
+                    <p
+                      className={`font-bold whitespace-nowrap ${
+                        cancelled ? 'text-tg-hint line-through' : 'text-tg-text'
+                      }`}
+                    >
                       {formatCurrency(order.totalAmount)}
                     </p>
-                    {order.pickupCode && (
+                    {!cancelled && order.pickupCode && (
                       <p className="text-xs font-mono font-bold mt-1 bg-tg-bg px-2 py-1 rounded">
                         {t('code', 'Code')}: {order.pickupCode}
                       </p>
@@ -278,13 +335,20 @@ export function PaymentView() {
                   </div>
                 </div>
 
-                {(order.pointsEarned ?? 0) > 0 && (
-                  <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
-                    <Coins size={14} weight="fill" />+{order.pointsEarned} {t('points', 'points')}
+                {cancelled ? (
+                  <p className="mt-2 text-xs text-tg-hint">
+                    {t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
                   </p>
+                ) : (
+                  (order.pointsEarned ?? 0) > 0 && (
+                    <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
+                      <Coins size={14} weight="fill" />+{order.pointsEarned} {t('points', 'points')}
+                    </p>
+                  )
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -307,7 +371,9 @@ export function PaymentView() {
 
         <div className="grid grid-cols-2 gap-3">
           {([
-            { key: 'khqr' as const, label: t('khqr', 'KHQR'), Icon: CreditCard },
+            ...(khqrOffered
+              ? [{ key: 'khqr' as const, label: t('khqr', 'KHQR'), Icon: CreditCard }]
+              : []),
             { key: 'cash' as const, label: t('cash', 'Cash'), Icon: Money },
           ]).map(({ key, label, Icon }) => {
             const active = defaultMethod === key;
@@ -362,6 +428,7 @@ export function PaymentView() {
                 orderId={selectedOrderId}
                 onPaid={handlePaid}
                 onCancel={() => setSelectedOrderId(null)}
+                onUseCash={() => setSelectedOrderId(null)}
               />
             </motion.div>
           </motion.div>

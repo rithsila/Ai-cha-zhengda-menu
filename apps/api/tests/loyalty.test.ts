@@ -3,16 +3,17 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { enableAba, postWebhook, stubAbaFetch, approvedStatus } from './helpers/aba';
+import { asCustomer } from './helpers/customer';
 
 const app = createApp();
 const uid = `test-${randomUUID()}`;
+let staffToken = '';
 const itemId = `test-item-${randomUUID()}`;
 
 const orderBody = (pointsToUse: number) => ({
   items: [{ menuItemId: itemId, quantity: 1, totalPrice: 5.0, selectedModifiers: {} }],
   totalAmount: 5.0,
   paymentMethod: 'khqr',
-  telegramUserId: uid,
   orderType: 'pickup',
   pointsToUse,
 });
@@ -27,11 +28,13 @@ beforeAll(async () => {
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Test Tea', basePrice: 5.0 },
   });
+  const login = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
+  staffToken = login.body.token;
 });
 
 describe('order creation reserves points', () => {
   it('deducts redeemed points as soon as the order is created', async () => {
-    const res = await request(app).post('/api/orders').send(orderBody(100));
+    const res = await request(app).post('/api/orders').set(asCustomer(uid)).send(orderBody(100));
     expect(res.status).toBe(200);
     expect(res.body.pointsRedeemed).toBe(100);
     expect(res.body.discountApplied).toBe(1);      // 100 pts / 100 per $ = $1
@@ -44,14 +47,14 @@ describe('order creation reserves points', () => {
 
 describe('settlement on completion (cash path)', () => {
   it('settles exactly once', async () => {
-    const created = await request(app).post('/api/orders').send(orderBody(100));
+    const created = await request(app).post('/api/orders').set(asCustomer(uid)).send(orderBody(100));
     const id = created.body.id;
 
-    await request(app).put(`/api/orders/${id}/status`).set('x-manager-pin', '9999').send({ status: 'completed' });
+    await request(app).put(`/api/orders/${id}/status`).set('Authorization', `Bearer ${staffToken}`).send({ status: 'completed' });
     let user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
     const afterFirst = user!.loyaltyPoints;        // earned points credited once
 
-    await request(app).put(`/api/orders/${id}/status`).set('x-manager-pin', '9999').send({ status: 'completed' });
+    await request(app).put(`/api/orders/${id}/status`).set('Authorization', `Bearer ${staffToken}`).send({ status: 'completed' });
     user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
     expect(user!.loyaltyPoints).toBe(afterFirst);  // idempotent
     const order = await prisma.order.findUnique({ where: { id } });
@@ -63,7 +66,7 @@ describe('settlement on webhook (ABA path)', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('marks paid and settles points', async () => {
-    const created = await request(app).post('/api/orders').send(orderBody(0));
+    const created = await request(app).post('/api/orders').set(asCustomer(uid)).send(orderBody(0));
     const tranId = `t-${randomUUID()}`;
     await prisma.order.update({ where: { id: created.body.id }, data: { transactionId: tranId } });
     const before = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;

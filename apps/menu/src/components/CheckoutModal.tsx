@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
 import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-icons/react';
-import { AddressForm, AddressSummary } from './AddressForm';
+import { AddressForm, AddressSummary, type AddressFormHandle } from './AddressForm';
 import { isValidBuilding, isValidRoom, isValidName, isValidPhone } from '../utils/address';
-import { getTelegramUserId } from '../utils/telegramUser';
-import { API_BASE } from '../utils/api';
+import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
 import { getDefaultPaymentMethod } from '../utils/paymentPrefs';
+import { isOnlinePaymentOffered, refreshOnlinePaymentState, useOnlinePaymentState } from '../utils/onlinePayment';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -20,11 +20,21 @@ interface CheckoutModalProps {
   onSuccess: (pickupCode: string) => void;
 }
 
+/** The saved preference, but never KHQR while online payment is switched off. */
+function initialPaymentMethod(): 'khqr' | 'cash' {
+  return isOnlinePaymentOffered() ? getDefaultPaymentMethod() : 'cash';
+}
+
 export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: CheckoutModalProps) {
   const { t } = useTranslation();
   const shouldReduceMotion = useReducedMotion();
+  const onlinePaymentState = useOnlinePaymentState();
+  const khqrOffered = onlinePaymentState === 'available';
+  // A guest may still order for pickup and pay cash; everything tied to an
+  // account (points, saved address, delivery) needs a verified identity.
+  const signedIn = hasIdentity();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [method, setMethod] = useState<'khqr' | 'cash'>(getDefaultPaymentMethod);
+  const [method, setMethod] = useState<'khqr' | 'cash'>(initialPaymentMethod);
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
@@ -36,12 +46,16 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
   // about the payment (creating it, polling, expiry, retry).
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
+  const [paymentOrderCode, setPaymentOrderCode] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [branches, setBranches] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
+  // Lets "Continue to Payment" save the typed address first — the form's own
+  // save button sits under the sticky footer where nobody sees it.
+  const addressFormRef = useRef<AddressFormHandle | null>(null);
 
   // Lock background scroll when open
   useEffect(() => {
@@ -60,28 +74,33 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       // Reset state on close
       setStep(1);
       setError(null);
-      setMethod(getDefaultPaymentMethod());
+      setMethod(initialPaymentMethod());
       setOrderType('pickup');
       setEditingAddress(false);
       setPointsToUse(0);
       setBranchId('');
       setPaymentOrderId(null);
+      setPaymentOrderCode(null);
       return;
     }
+
+    // Settle whether the shop can take a QR payment before the payment step is
+    // drawn, so KHQR is never offered when it would only fail.
+    refreshOnlinePaymentState();
 
     const fetchData = async () => {
       try {
         const [branchRes, userRes, cfgRes] = await Promise.all([
-          fetch(`${API_BASE}/api/branches`),
-          fetch(`${API_BASE}/api/user/${getTelegramUserId() || 'test-user-id'}`),
-          fetch(`${API_BASE}/api/config`)
+          apiFetch('/api/branches'),
+          signedIn ? apiFetch(ME.profile()) : Promise.resolve(null),
+          apiFetch('/api/config')
         ]);
         if (branchRes.ok) {
           const data = await branchRes.json();
           setBranches(data);
           if (data.length > 0) setBranchId(data[0].id);
         }
-        if (userRes.ok) {
+        if (userRes?.ok) {
           setUserProfile(await userRes.json());
         }
         if (cfgRes.ok) {
@@ -96,7 +115,13 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       }
     };
     fetchData();
-  }, [isOpen]);
+  }, [isOpen, signedIn]);
+
+  // If KHQR turns out to be off while this screen is open, quietly fall back to
+  // cash rather than leaving a selected option that cannot be paid.
+  useEffect(() => {
+    if (!khqrOffered) setMethod('cash');
+  }, [khqrOffered]);
 
   const deliveryFee = orderType === 'delivery' ? deliveryFeeRate : 0;
   // A delivery order needs a complete saved profile: room, name and phone.
@@ -111,14 +136,32 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const discountApplied = pointsToUse / pointsPerDollar;
   const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (orderType === 'pickup' && !branchId) {
-      setError('Please select a branch.');
+      setError(t('selectBranchFirst', 'Please select a branch.'));
       return;
     }
-    if (orderType === 'delivery' && !hasAddress) {
-      setError(t('addressRequired', 'Please add your building, room, name and phone number.'));
-      return;
+    if (orderType === 'delivery') {
+      if (!signedIn) {
+        setError(t('deliveryNeedsTelegram', 'Delivery needs a saved address. Open the shop from Telegram to use it.'));
+        return;
+      }
+      // The address form's own save button sits below this sticky footer and is
+      // easy to miss, so a filled-in form is saved here before moving on.
+      const form = addressFormRef.current;
+      if (form) {
+        if (!form.canSave) {
+          setError(t('addressRequired', 'Please add your building, room, name and phone number.'));
+          return;
+        }
+        setIsLoading(true);
+        const saved = await form.save();
+        setIsLoading(false);
+        if (!saved) return;
+      } else if (!hasAddress) {
+        setError(t('addressRequired', 'Please add your building, room, name and phone number.'));
+        return;
+      }
     }
     setError(null);
     setStep(2);
@@ -128,14 +171,18 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/orders`, {
+      // No telegramUserId in the body: the server reads the customer from the
+      // identity headers apiFetch attaches, and a guest simply has none.
+      const response = await apiFetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: cart,
           paymentMethod: method,
-          telegramUserId: getTelegramUserId() || 'test-user-id',
-          branchId: orderType === 'pickup' ? branchId : null,
+          // Delivery orders carry a branch too — it is the shop the food leaves
+          // from. Sending null here hid every delivery order from the staff
+          // board, which filters by branch and defaults to the first one.
+          branchId: branchId || null,
           orderType,
           building: orderType === 'delivery' ? userProfile?.building : null,
           roomNumber: orderType === 'delivery' ? userProfile?.roomNumber : null,
@@ -146,23 +193,32 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create order');
+        throw new Error('order-failed');
       }
 
       const orderData = await response.json();
 
       if (method === 'khqr') {
         setPaymentOrderId(orderData.id);
+        setPaymentOrderCode(orderData.pickupCode ?? null);
         setStep(3);
         setIsLoading(false);
         return;
       }
 
       onSuccess(orderData.pickupCode);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during checkout');
+    } catch {
+      // Never show the server's own wording — it is written for developers.
+      setError(t('orderFailed', 'We could not place your order. Please try again.'));
       setIsLoading(false);
     }
+  };
+
+  // The order is already saved when online payment fails, so finish it here and
+  // let the customer pay at the counter instead of leaving them stuck.
+  const handlePayCashInstead = () => {
+    if (paymentOrderCode) onSuccess(paymentOrderCode);
+    else onClose();
   };
 
   return (
@@ -225,7 +281,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             )}
 
             {step === 3 && paymentOrderId ? (
-              <KhqrPaymentPanel orderId={paymentOrderId} onPaid={(code) => onSuccess(code)} />
+              <KhqrPaymentPanel
+                orderId={paymentOrderId}
+                onPaid={(code) => onSuccess(code)}
+                onUseCash={handlePayCashInstead}
+              />
             ) : step === 1 ? (
               <div className="flex flex-col gap-4">
                 <div className="space-y-2">
@@ -287,7 +347,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">{t('deliveryAddress', 'Delivery Address')}</h3>
                     <div className="rounded-2xl border border-tg-hint/15 bg-tg-secondary-bg p-4">
-                      {hasAddress && !editingAddress ? (
+                      {!signedIn ? (
+                        <p className="text-sm text-tg-hint text-center py-2">
+                          {t('deliveryNeedsTelegram', 'Delivery needs a saved address. Open the shop from Telegram to use it.')}
+                        </p>
+                      ) : hasAddress && !editingAddress ? (
                         <AddressSummary
                           profile={userProfile}
                           compact
@@ -296,6 +360,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       ) : (
                         <AddressForm
                           profile={userProfile}
+                          saveRef={addressFormRef}
                           onSaved={(user) => { setUserProfile(user); setEditingAddress(false); setError(null); }}
                           onCancel={hasAddress ? () => setEditingAddress(false) : undefined}
                         />
@@ -345,25 +410,33 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
                 <div className="flex flex-col gap-3">
                   <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
-                  <button 
-                    onClick={() => setMethod('khqr')}
-                    aria-pressed={method === 'khqr'}
-                    className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
-                      method === 'khqr' 
-                        ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
-                        : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold text-base text-tg-text">{t('khqr')}</div>
-                      <div className="text-xs text-tg-hint mt-1">{t('khqrDescription', 'Pay instantly via any Cambodian bank app')}</div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      method === 'khqr' ? 'border-brand-primary' : 'border-tg-hint/25'
-                    }`}>
-                      {method === 'khqr' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
-                    </div>
-                  </button>
+                  {/* KHQR hides itself once the server says online payment is
+                      not set up, and comes back on its own when it is. */}
+                  {khqrOffered ? (
+                    <button
+                      onClick={() => setMethod('khqr')}
+                      aria-pressed={method === 'khqr'}
+                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
+                        method === 'khqr'
+                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm'
+                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-base text-tg-text">{t('khqr')}</div>
+                        <div className="text-xs text-tg-hint mt-1">{t('khqrDescription', 'Pay instantly via any Cambodian bank app')}</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        method === 'khqr' ? 'border-brand-primary' : 'border-tg-hint/25'
+                      }`}>
+                        {method === 'khqr' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
+                      </div>
+                    </button>
+                  ) : (
+                    <p className="text-xs text-tg-hint">
+                      {t('onlinePaymentUnavailable', 'Online payment is not available right now.')}
+                    </p>
+                  )}
 
                   <button 
                     onClick={() => setMethod('cash')}
@@ -427,7 +500,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             {step !== 3 && (
               <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
                 {step === 1 ? (
-                  <Button fullWidth onClick={handleNext} className="py-4 flex items-center justify-center gap-2">
+                  <Button fullWidth onClick={() => { void handleNext(); }} disabled={isLoading} className="py-4 flex items-center justify-center gap-2">
                     {t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} />
                   </Button>
                 ) : (

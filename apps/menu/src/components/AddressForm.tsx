@@ -1,26 +1,32 @@
-import { useState } from 'react';
+import { useImperativeHandle, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PaperPlaneTilt, Pencil } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
-import { API_BASE } from '../utils/api';
-import { getTelegramUserId } from '../utils/telegramUser';
+import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { requestPhoneFromTelegram, pollForPhone } from '../utils/telegramPhone';
 import {
   BUILDINGS, isValidBuilding, isValidRoom, isValidName, isValidPhone,
   floorFromRoom, unitFromRoom, formatUnitCode, formatPhone, RESIDENCE_NAME,
 } from '../utils/address';
 
+/** What the checkout footer can do with the form without re-implementing it. */
+export interface AddressFormHandle {
+  save: () => Promise<boolean>;
+  canSave: boolean;
+}
+
 interface AddressFormProps {
   profile: any;
   onSaved: (user: any) => void;
   onCancel?: () => void;
+  saveRef?: RefObject<AddressFormHandle | null>;
 }
 
 /**
  * The one place the customer types their Arakawa address. Used by the Account
  * tab and by the delivery step of checkout, so both stay identical.
  */
-export function AddressForm({ profile, onSaved, onCancel }: AddressFormProps) {
+export function AddressForm({ profile, onSaved, onCancel, saveRef }: AddressFormProps) {
   const { t } = useTranslation();
   const [name, setName] = useState<string>(profile?.contactName || [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || '');
   const [phone, setPhone] = useState<string>(profile?.phoneNumber || '');
@@ -40,8 +46,7 @@ export function AddressForm({ profile, onSaved, onCancel }: AddressFormProps) {
     setAskingPhone(true);
     const result = await requestPhoneFromTelegram();
     if (result === 'sent') {
-      const userId = getTelegramUserId();
-      const found = userId ? await pollForPhone(userId) : null;
+      const found = await pollForPhone();
       if (found) {
         setPhone(found);
         setAskingPhone(false);
@@ -53,29 +58,44 @@ export function AddressForm({ profile, onSaved, onCancel }: AddressFormProps) {
     setAskingPhone(false);
   };
 
-  const handleSave = async () => {
-    if (!canSave || saving) return;
+  /**
+   * Saves the address. Exposed through the `saveRef` handle too, so the
+   * checkout footer can save before moving on — the form's own button sits
+   * under the sticky footer and is easy to miss.
+   */
+  const handleSave = async (): Promise<boolean> => {
+    if (!canSave || saving) return false;
+    if (!hasIdentity()) {
+      setError(t('deliveryNeedsTelegram', 'Delivery needs a saved address. Open the shop from Telegram to use it.'));
+      return false;
+    }
     setSaving(true);
     setError(null);
     try {
-      const userId = getTelegramUserId() || 'test-user-id';
-      const res = await fetch(`${API_BASE}/api/user/${userId}/profile`, {
+      const res = await apiFetch(ME.saveProfile(), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contactName: name, phoneNumber: phone, building, roomNumber: room }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(data?.error || t('addressSaveFailed', 'Could not save. Please try again.'));
-        return;
+        setError(t('addressSaveFailed', 'Could not save. Please try again.'));
+        return false;
       }
       onSaved(data);
+      return true;
     } catch {
       setError(t('addressSaveFailed', 'Could not save. Please try again.'));
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // Let the parent trigger the same save without duplicating any of the rules.
+  // No dependency array on purpose: the handle must always close over the
+  // fields as they are typed right now, not as they were on the last save.
+  useImperativeHandle(saveRef, () => ({ save: handleSave, canSave }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -190,7 +210,7 @@ export function AddressForm({ profile, onSaved, onCancel }: AddressFormProps) {
             {t('cancel', 'Cancel')}
           </Button>
         )}
-        <Button fullWidth onClick={handleSave} disabled={!canSave || saving} type="button">
+        <Button fullWidth onClick={() => { void handleSave(); }} disabled={!canSave || saving} type="button">
           {saving ? t('saving', 'Saving...') : t('saveAddress', 'Save address')}
         </Button>
       </div>

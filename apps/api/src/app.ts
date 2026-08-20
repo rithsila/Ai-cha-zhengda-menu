@@ -1,18 +1,39 @@
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
+import helmet from 'helmet';
+import { randomUUID } from 'crypto';
 import { ABAPayWay, generateKHQR, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
 import { settleOrderPoints, refundOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
 import {
   isValidBuilding, isValidRoom, isValidName, isValidPhone, normalizePhone, formatAddress,
 } from './address';
-import { issueToken, requireStaff, requireManager, staffPin, managerPin } from './auth';
+import {
+  issueToken, requireStaff, requireManager, staffPin, managerPin,
+  staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
+} from './auth';
+import {
+  issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
+} from './telegram-initdata';
+import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
 
-export const prisma = new PrismaClient();
+// The tuned SQLite client lives in db.ts; re-exported here because every
+// caller (and every test) already imports it from this module.
+export { prisma };
+
+/** The only statuses an order may hold. */
+const ORDER_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled', 'paid'];
+
+/** Browser origins allowed to call this API. Comma-separated in CORS_ORIGINS. */
+function allowedOrigins(): string[] {
+  const raw = process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174';
+  return raw.split(',').map((o) => o.trim()).filter(Boolean);
+}
 
 export function createApp() {
   const app = express();
+
+  app.use(helmet());
 
   // Middleware to parse raw body for webhook verification
   app.use(express.json({
@@ -20,7 +41,14 @@ export function createApp() {
       req.rawBody = buf;
     }
   }));
-  app.use(cors());
+
+  // Only the shop's own front-ends may call the API from a browser. Requests
+  // with no Origin (the ABA webhook, curl, the bot) are not browser requests
+  // and are left alone; the routes' own auth still applies to them.
+  app.use(cors({
+    origin: (origin, callback) => callback(null, !origin || allowedOrigins().includes(origin)),
+    credentials: true,
+  }));
 
   app.get('/api/auth/telegram/callback', async (req, res) => {
     try {
@@ -53,21 +81,28 @@ export function createApp() {
         },
       });
 
+      // Hand back a session token, not the raw id. A raw id in the URL is only
+      // a claim: anyone could paste someone else's number and be believed.
+      const { token: customerToken } = issueCustomerToken(user.telegramUserId);
       const target = process.env.WEBAPP_URL || 'http://localhost:5173';
-      res.redirect(`${target}#tg_id=${encodeURIComponent(user.telegramUserId)}`);
+      res.redirect(`${target}#tg_token=${encodeURIComponent(customerToken)}`);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Login failed' });
     }
   });
 
-  app.post('/api/auth/staff-login', (req, res) => {
+  app.post('/api/auth/staff-login', loginRateLimit, (req, res) => {
     const { pin, role } = req.body || {};
     if (typeof pin !== 'string' || (role !== 'staff' && role !== 'manager')) {
       return res.status(400).json({ error: 'pin and role are required' });
     }
     const expected = role === 'manager' ? managerPin() : staffPin();
-    if (pin !== expected) return res.status(401).json({ error: 'Invalid PIN' });
+    if (pin !== expected) {
+      recordFailedLogin(req);
+      return res.status(401).json({ error: 'Invalid PIN' });
+    }
+    clearFailedLogins(req);
     const { token, expiresAt } = issueToken(role);
     res.json({ ok: true, token, role, expiresAt });
   });
@@ -107,9 +142,15 @@ export function createApp() {
     }
   });
 
-  app.get('/api/user/:telegramUserId', async (req, res) => {
+  // The path id is kept for the client's sake, but it must match the verified
+  // caller: reading it straight from the URL handed anyone else's phone number,
+  // address and points to any anonymous caller. The upsert is now only ever the
+  // caller's own row, so it can no longer be used to create junk users.
+  app.get('/api/user/:telegramUserId', requireCustomer, requireSelf, async (req, res) => {
     try {
-      const { telegramUserId } = req.params;
+      // Express 5 widens a param to string | string[] once middleware is in
+      // front of the handler; this route only ever matches one segment.
+      const telegramUserId = String(req.params.telegramUserId);
       if (!telegramUserId) {
         return res.status(400).json({ error: 'Missing telegramUserId' });
       }
@@ -129,10 +170,12 @@ export function createApp() {
    * The customer's own profile: who to call and which Arakawa room to deliver to.
    * Only the fields present in the body are written, so saving an address never
    * wipes a phone number the bot stored earlier (see bot.ts `on('contact')`).
+   *
+   * Only the signed-in customer may write their own row.
    */
-  app.put('/api/user/:telegramUserId/profile', async (req, res) => {
+  app.put('/api/user/:telegramUserId/profile', requireCustomer, requireSelf, async (req, res) => {
     try {
-      const { telegramUserId } = req.params;
+      const telegramUserId = String(req.params.telegramUserId);
       if (!telegramUserId) {
         return res.status(400).json({ error: 'Missing telegramUserId' });
       }
@@ -211,9 +254,14 @@ export function createApp() {
     }
   });
 
-  app.post('/api/orders', async (req, res) => {
+  app.post('/api/orders', resolveCustomer, async (req, res) => {
     try {
-      const { items, paymentMethod, telegramUserId, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse } = req.body;
+      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse } = req.body;
+
+      // The owner of an order is the verified caller, never a body field —
+      // a body field let anyone attach an order to a stranger and spend their
+      // points. Guest checkout stays open, it just earns and spends nothing.
+      const telegramUserId = (req as any).telegramUserId as string | null;
 
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order must contain at least one item' });
@@ -296,57 +344,83 @@ export function createApp() {
       const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', CONFIG_DEFAULTS.earnPointsPerDollar);
 
       let requestedPoints = 0;
-      if (typeof pointsToUse === 'number' && Number.isInteger(pointsToUse) && pointsToUse > 0) {
+      // An anonymous order has no balance to spend from.
+      if (telegramUserId && typeof pointsToUse === 'number' && Number.isInteger(pointsToUse) && pointsToUse > 0) {
         requestedPoints = pointsToUse;
       }
       const maxByTotal = Math.floor(serverTotal * POINTS_PER_DOLLAR);
 
+      // Make sure the customer row exists *before* the transaction. Creating it
+      // is not something that has to be atomic with the order, and SQLite has a
+      // single writer, so every statement kept out of the transaction is lock
+      // time given back to the next checkout. Everything above (menu lookup,
+      // pricing, address validation, config reads) is outside for the same reason.
+      if (telegramUserId) {
+        await withWriteRetry(() => prisma.user.upsert({
+          where: { telegramUserId },
+          update: {},
+          create: { telegramUserId, loyaltyPoints: 0 },
+        }));
+      }
+
+      // The id is minted here, before the first attempt, so that every attempt
+      // writes the same row. That is what makes the retry below safe: a lock
+      // timeout can in principle fire on a transaction that did commit, and if
+      // it does, the next attempt finds the order already there and returns it
+      // instead of creating a second one and spending the points twice. When
+      // the transaction really was rolled back nothing exists under this id, so
+      // the balance is re-read and the points are reserved exactly once.
+      const orderId = randomUUID();
+
       // Points are reserved (deducted) the moment the order is created, inside one
       // transaction. Otherwise two pending orders could each redeem the same balance.
-      const order = await prisma.$transaction(async (tx) => {
-        let available = 0;
-        if (telegramUserId) {
-          const user = await tx.user.upsert({
-            where: { telegramUserId },
-            update: {},
-            create: { telegramUserId, loyaltyPoints: 0 }
-          });
-          available = user.loyaltyPoints;
+      const order = await withWriteRetry(async (attempt) => {
+        if (attempt > 0) {
+          const existing = await prisma.order.findUnique({ where: { id: orderId } });
+          if (existing) return existing;
         }
-
-        const pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
-        const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
-        const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
-        const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
-
-        if (telegramUserId && pointsRedeemed > 0) {
-          await tx.user.update({
-            where: { telegramUserId },
-            data: { loyaltyPoints: { decrement: pointsRedeemed } }
-          });
-        }
-
-        return tx.order.create({
-          data: {
-            totalAmount: finalAmount,
-            paymentMethod,
-            telegramUserId,
-            status: 'pending',
-            pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
-            orderType: orderType || 'pickup',
-            deliveryAddress: delivery ? formatAddress(delivery.building, delivery.room) : null,
-            deliveryBuilding: delivery ? delivery.building : null,
-            deliveryRoom: delivery ? delivery.room : null,
-            contactName: delivery ? delivery.name : null,
-            contactPhone: delivery ? delivery.phone : null,
-            deliveryFee,
-            branchId: branchId || null,
-            pointsEarned,
-            pointsRedeemed,
-            discountApplied,
-            items: { create: pricedItems }
+        return prisma.$transaction(async (tx) => {
+          let available = 0;
+          if (telegramUserId) {
+            const user = await tx.user.findUnique({ where: { telegramUserId } });
+            available = user?.loyaltyPoints ?? 0;
           }
-        });
+
+          const pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
+          const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
+          const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
+          const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
+
+          if (telegramUserId && pointsRedeemed > 0) {
+            await tx.user.update({
+              where: { telegramUserId },
+              data: { loyaltyPoints: { decrement: pointsRedeemed } }
+            });
+          }
+
+          return tx.order.create({
+            data: {
+              id: orderId,
+              totalAmount: finalAmount,
+              paymentMethod,
+              telegramUserId,
+              status: 'pending',
+              pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
+              orderType: orderType || 'pickup',
+              deliveryAddress: delivery ? formatAddress(delivery.building, delivery.room) : null,
+              deliveryBuilding: delivery ? delivery.building : null,
+              deliveryRoom: delivery ? delivery.room : null,
+              contactName: delivery ? delivery.name : null,
+              contactPhone: delivery ? delivery.phone : null,
+              deliveryFee,
+              branchId: branchId || null,
+              pointsEarned,
+              pointsRedeemed,
+              discountApplied,
+              items: { create: pricedItems }
+            }
+          });
+        }, WRITE_TX_OPTIONS);
       });
 
       res.json(order);
@@ -368,7 +442,12 @@ export function createApp() {
 
       const whereClause: any = {};
       if (branchId) {
-        whereClause.branchId = String(branchId);
+        // Orders with no branch are included too. Delivery orders used to be
+        // saved with branchId null, and because the dashboard auto-selects the
+        // first branch they never appeared on the board at all — the kitchen
+        // simply never saw them. An unassigned order showing on every board is
+        // the safe failure; an order nobody can see is not.
+        whereClause.OR = [{ branchId: String(branchId) }, { branchId: null }];
       }
       if (since) {
         const from = new Date(String(since));
@@ -399,9 +478,11 @@ export function createApp() {
     }
   });
 
-  app.get('/api/orders/user/:telegramUserId', async (req, res) => {
+  // Order history carries the delivery address and phone of every past order,
+  // so it is readable only by the customer it belongs to.
+  app.get('/api/orders/user/:telegramUserId', requireCustomer, requireSelf, async (req, res) => {
     try {
-      const { telegramUserId } = req.params;
+      const telegramUserId = String(req.params.telegramUserId);
       const userOrders = await prisma.order.findMany({
         where: { telegramUserId },
         include: {
@@ -418,9 +499,9 @@ export function createApp() {
     }
   });
 
-  app.get('/api/orders/:id', async (req, res) => {
+  app.get('/api/orders/:id', resolveCustomer, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const order = await prisma.order.findUnique({
         where: { id },
         include: {
@@ -430,6 +511,18 @@ export function createApp() {
         }
       });
       if (!order) return res.status(404).json({ error: 'Not found' });
+
+      // Readable by the customer who placed it, or by staff working the board.
+      // A guest order (telegramUserId null) stays readable by whoever holds its
+      // id: there is no account to check it against, and the guest needs the
+      // receipt. Accepted trade-off — the id is a random uuid, not a counter.
+      const caller = (req as any).telegramUserId as string | null;
+      const isOwner = order.telegramUserId != null && order.telegramUserId === caller;
+      const isGuestOrder = order.telegramUserId == null;
+      if (!isOwner && !isGuestOrder && !staffRoleOf(req as any)) {
+        return res.status(403).json({ error: 'This order belongs to someone else' });
+      }
+
       res.json(order);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch order' });
@@ -440,6 +533,12 @@ export function createApp() {
     try {
       const id = String(req.params.id);
       const { status } = req.body;
+
+      // Prisma stores whatever string it is given, so an unchecked status ends
+      // up on the tablet and in the customer's order list verbatim.
+      if (!ORDER_STATUSES.includes(status)) {
+        return res.status(400).json({ error: `status must be one of: ${ORDER_STATUSES.join(', ')}` });
+      }
 
       const updatedOrder = await prisma.order.update({
         where: { id },
@@ -474,6 +573,35 @@ export function createApp() {
   // ---------------------------------------------------------------------------
 
   const AMOUNT_TOLERANCE = 0.01; // one cent, for float comparison
+
+  /**
+   * May this caller start or watch the payment for this order?
+   *
+   * Holding an order id used to be enough, so a stranger who learned one could
+   * open someone else's payment or poll its state. The rule now matches
+   * GET /api/orders/:id:
+   *   - the signed-in customer who placed it, or
+   *   - any logged-in staff member (they work the board and take payments), or
+   *   - anybody, if the order is a guest order.
+   *
+   * The guest hole is deliberate and the same trade-off as on the order route: a
+   * guest never signed in, so there is no identity to check against, and they
+   * still have to be able to pay. The id is a random uuid, not a counter.
+   *
+   * Returns null when the caller is allowed, otherwise the response to send:
+   * 401 when nothing was proved at all, 403 when someone else's identity was.
+   */
+  function denyPaymentAccess(
+    req: express.Request,
+    order: { telegramUserId: string | null }
+  ): { code: number; body: { error: string } } | null {
+    if (order.telegramUserId == null) return null;
+    const caller = (req as any).telegramUserId as string | null;
+    if (caller === order.telegramUserId) return null;
+    if (staffRoleOf(req as any)) return null;
+    if (!caller) return { code: 401, body: { error: 'Telegram sign-in required' } };
+    return { code: 403, body: { error: 'This order belongs to someone else' } };
+  }
 
   /**
    * Confirm a transaction with ABA and, only if it really is approved for the
@@ -522,7 +650,20 @@ export function createApp() {
     return { ok: true as const, status: 'APPROVED', orderStatus: updated.status, order: updated };
   }
 
-  app.post('/api/payment/aba/create', async (req, res) => {
+  /**
+   * Which payment methods the shop can actually take right now.
+   *
+   * The customer app asks this before drawing the payment step, so KHQR is only
+   * offered when ABA credentials really exist. Learning it from a failed payment
+   * instead would mean the first customer on every device still picks KHQR and
+   * hits an error. Public on purpose: it exposes no secret, only "can we take a
+   * QR payment today", and the checkout screen needs it before anyone signs in.
+   */
+  app.get('/api/payment/methods', (req, res) => {
+    res.json({ cash: true, online: getAbaClient() !== null });
+  });
+
+  app.post('/api/payment/aba/create', resolveCustomer, async (req, res) => {
     try {
       const aba = getAbaClient();
       if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
@@ -533,6 +674,10 @@ export function createApp() {
         include: { items: { include: { menuItem: true } } },
       });
       if (!order) return res.status(404).json({ error: 'Order not found' });
+
+      const denied = denyPaymentAccess(req, order);
+      if (denied) return res.status(denied.code).json(denied.body);
+
       if (order.status === 'paid') {
         return res.status(409).json({ error: 'This order is already paid' });
       }
@@ -642,13 +787,16 @@ export function createApp() {
     }
   });
 
-  app.get('/api/payment/aba/status/:orderId', async (req, res) => {
+  app.get('/api/payment/aba/status/:orderId', resolveCustomer, async (req, res) => {
     try {
       const aba = getAbaClient();
       if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
 
-      const order = await prisma.order.findUnique({ where: { id: req.params.orderId } });
+      const order = await prisma.order.findUnique({ where: { id: String(req.params.orderId) } });
       if (!order) return res.status(404).json({ error: 'Order not found' });
+
+      const denied = denyPaymentAccess(req, order);
+      if (denied) return res.status(denied.code).json(denied.body);
 
       const base = {
         orderStatus: order.status,
@@ -739,9 +887,46 @@ export function createApp() {
 
   app.put('/api/rewards/:id', requireManager, async (req, res) => {
     try {
+      // Handing req.body to Prisma let any column be written, including a
+      // negative pointsCost. Copy across the editable fields only, checking
+      // them the same way POST /api/rewards does.
+      const { name, description, pointsCost, image, isActive } = req.body || {};
+      const data: Record<string, unknown> = {};
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim()) {
+          return res.status(400).json({ error: 'name must be text' });
+        }
+        data.name = name.trim();
+      }
+      if (pointsCost !== undefined) {
+        if (!Number.isInteger(pointsCost) || pointsCost <= 0) {
+          return res.status(400).json({ error: 'pointsCost must be a whole number above 0' });
+        }
+        data.pointsCost = pointsCost;
+      }
+      if (description !== undefined) {
+        if (description !== null && typeof description !== 'string') {
+          return res.status(400).json({ error: 'description must be text' });
+        }
+        data.description = description || null;
+      }
+      if (image !== undefined) {
+        if (image !== null && typeof image !== 'string') {
+          return res.status(400).json({ error: 'image must be text' });
+        }
+        data.image = image || null;
+      }
+      if (isActive !== undefined) {
+        if (typeof isActive !== 'boolean') {
+          return res.status(400).json({ error: 'isActive must be true or false' });
+        }
+        data.isActive = isActive;
+      }
+
       const reward = await prisma.reward.update({
         where: { id: String(req.params.id) },
-        data: req.body
+        data
       });
       res.json(reward);
     } catch (err) {

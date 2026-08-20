@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "DATABASE_URL=file:./test.db npx prisma db push --skip-generate --accept-data-loss && DATABASE_URL=file:./test.db vitest run --no-file-parallelism"
+    "test": "DATABASE_URL=file:./test.db npx prisma db push --skip-generate --accept-data-loss && DATABASE_URL=file:./test.db ALLOW_UNVERIFIED_TELEGRAM=1 vitest run --no-file-parallelism"
   },
   "keywords": [],
   "author": "",
@@ -30,6 +30,7 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "helmet": "^8.3.0",
     "telegraf": "^4.16.3"
   }
 }

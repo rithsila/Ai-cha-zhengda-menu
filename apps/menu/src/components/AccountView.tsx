@@ -1,24 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Phone, House, Storefront, Sun, Moon } from '@phosphor-icons/react';
-import { getTelegramUserId } from '../utils/telegramUser';
-import { API_BASE } from '../utils/api';
+import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { SignInPrompt } from './SignInPrompt';
 import { AddressForm, AddressSummary } from './AddressForm';
 import { isValidBuilding, isValidRoom, formatPhone, SHOP_UNIT, RESIDENCE_NAME } from '../utils/address';
 import { useTheme } from '../hooks/useTelegramTheme';
 
-export function AccountView() {
+interface AccountViewProps {
+  onBrowseMenu?: () => void;
+}
+
+export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const { t } = useTranslation();
   const { isDark, toggleTheme } = useTheme();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  // A profile, address and phone number belong to one person. Without a
+  // verified identity every guest would share the same row.
+  const signedIn = hasIdentity();
 
   useEffect(() => {
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
     const fetchData = async () => {
       try {
-        const userId = getTelegramUserId() || 'test-user-id';
-        const userRes = await fetch(`${API_BASE}/api/user/${userId}`);
+        const userRes = await apiFetch(ME.profile());
 
         if (userRes.ok) setProfile(await userRes.json());
       } catch (err) {
@@ -28,7 +38,16 @@ export function AccountView() {
       }
     };
     fetchData();
-  }, []);
+  }, [signedIn]);
+
+  if (!signedIn) {
+    return (
+      <SignInPrompt
+        what={t('signInForAccount', 'Open the shop from our Telegram bot to save your address, phone number and points.')}
+        onBrowseMenu={onBrowseMenu}
+      />
+    );
+  }
 
   if (loading) {
     return <div className="p-8 text-center text-tg-hint animate-pulse">Loading profile...</div>;

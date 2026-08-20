@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListPlus,
   Package,
+  QrCode,
   RefreshCw,
   TriangleAlert,
   X,
@@ -19,6 +20,7 @@ import {
   STALE_AFTER_MS,
   TONE_THRESHOLDS,
   formatElapsed,
+  isAwaitingPayment,
 } from './lib/orders';
 import {
   Badge,
@@ -193,6 +195,21 @@ function BoardLegend() {
                 {TONE_THRESHOLDS.preparing.late}m, ready {TONE_THRESHOLDS.ready.late}m
               </li>
             </ul>
+            <h4 className="mt-4 font-semibold text-ink">Waiting for payment</h4>
+            <ul className="mt-2 space-y-1.5 text-ink-soft">
+              <li className="flex items-center gap-2">
+                <span className="inline-block size-3 shrink-0 rounded-full bg-danger" />
+                Red card, red band — the QR payment has not landed. Do not make
+                it. It clears itself when the customer pays, or is cancelled once
+                the QR expires.
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="inline-block size-3 shrink-0 rounded-full bg-status-pending-soft" />
+                A Cash ticket in Pending <em>is</em> paid for at the counter —
+                start it as normal.
+              </li>
+            </ul>
+
             <h4 className="mt-4 font-semibold text-ink">Item dots</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
@@ -239,7 +256,10 @@ function BoardLegend() {
 function StaffApp() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
-  const [managerPin, setManagerPin] = useState('');
+  // Only "are manager tools unlocked?" — the PIN itself is never kept. The
+  // login below swaps the stored session for a manager token, and apiFetch
+  // sends that instead.
+  const [managerUnlocked, setManagerUnlocked] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -435,12 +455,24 @@ function StaffApp() {
     [orders],
   );
 
+  /*
+   * Unpaid KHQR tickets are pulled out of the lanes entirely. They used to sit
+   * in Pending next to cash orders wearing the same amber tag and the same green
+   * "Start preparing" button, so staff made drinks nobody had paid for. They are
+   * not queue work until the money lands, so they are not in the queue — and
+   * "Pending N" now counts only tickets that really are ready to make.
+   */
+  const awaitingPaymentOrders = useMemo(
+    () => openOrders.filter(isAwaitingPayment).sort((a, b) => boardOrder(a, b, now)),
+    [openOrders, now],
+  );
+
   const laneOrders = useMemo(
     () =>
       LANES.map((lane) => ({
         ...lane,
         orders: openOrders
-          .filter((o) => lane.statuses.includes(o.status))
+          .filter((o) => lane.statuses.includes(o.status) && !isAwaitingPayment(o))
           .sort((a, b) => boardOrder(a, b, now)),
       })),
     [openOrders, now],
@@ -478,6 +510,16 @@ function StaffApp() {
 
   const cancelOrder = useCallback(
     (id: string) => setStatus(id, 'cancelled'),
+    [setStatus],
+  );
+
+  /*
+   * The QR failed and the customer handed over cash instead. `paid` rather than
+   * `preparing` so the money is recorded (the API settles loyalty points on
+   * `paid`) and the ticket rejoins the normal lane run at Pending.
+   */
+  const markPaidAtCounter = useCallback(
+    (id: string) => setStatus(id, 'paid'),
     [setStatus],
   );
 
@@ -653,11 +695,8 @@ function StaffApp() {
         {activeTab === 'menu' ? (
           <MenuManagement />
         ) : activeTab === 'manager' ? (
-          managerPin ? (
-            <ManagerDashboard
-              managerPin={managerPin}
-              onLock={() => setManagerPin('')}
-            />
+          managerUnlocked ? (
+            <ManagerDashboard onLock={() => setManagerUnlocked(false)} />
           ) : (
             <PinScreen
               title="Manager Mode"
@@ -671,7 +710,11 @@ function StaffApp() {
                     body: JSON.stringify({ pin, role: 'manager' }),
                   });
                   if (res.ok) {
-                    setManagerPin(pin);
+                    // Keep the manager token, not the PIN. A manager token also
+                    // passes every staff route, so the dashboard keeps working.
+                    const data = await res.json();
+                    saveSession({ token: data.token, role: 'manager', expiresAt: data.expiresAt });
+                    setManagerUnlocked(true);
                     return true;
                   }
                   return false;
@@ -720,6 +763,51 @@ function StaffApp() {
               </section>
             ) : null}
 
+            {awaitingPaymentOrders.length > 0 ? (
+              /*
+               * Above the board and outside the lane grid, on purpose. Physical
+               * separation is what stops a reflex tap: these tickets are not in
+               * the column staff work down.
+               */
+              <section
+                aria-labelledby="awaiting-payment-heading"
+                className="overflow-hidden rounded-2xl border-2 border-danger"
+              >
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 bg-danger-soft px-4 py-2.5">
+                  <h2
+                    id="awaiting-payment-heading"
+                    className="flex items-center gap-2 font-bold text-danger"
+                  >
+                    <QrCode className="size-5 shrink-0" aria-hidden="true" />
+                    Waiting for payment
+                    <span className="tabular-nums">
+                      {awaitingPaymentOrders.length}
+                    </span>
+                  </h2>
+                  <p className="text-sm font-medium text-danger">
+                    Not paid yet — do not make these. They clear on their own when
+                    the QR payment lands.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 items-start gap-3 p-3 md:grid-cols-3">
+                  {awaitingPaymentOrders.map((order) => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      now={now}
+                      updating={updatingIds.has(order.id)}
+                      isNew={newIds.has(order.id)}
+                      showBranch={showBranch}
+                      onAction={advance}
+                      onCancel={cancelOrder}
+                      onMarkPaid={markPaidAtCounter}
+                      onSeen={markSeen}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-3">
               {laneOrders.map((lane) => {
                 const oldest = lane.orders[0];
@@ -764,6 +852,7 @@ function StaffApp() {
                             showBranch={showBranch}
                             onAction={advance}
                             onCancel={cancelOrder}
+                            onMarkPaid={markPaidAtCounter}
                             onSeen={markSeen}
                           />
                         ))}

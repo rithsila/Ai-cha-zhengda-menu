@@ -17,6 +17,11 @@ export type Order = {
   status: string;
   createdAt: string;
   pickupCode: string | null;
+  /**
+   * When the KHQR code stops being payable. ISO timestamp, null for cash orders
+   * and for KHQR orders whose QR was never issued (ABA unreachable at checkout).
+   */
+  paymentExpiresAt: string | null;
   orderType: string;
   deliveryAddress: string | null;
   deliveryBuilding: string | null;

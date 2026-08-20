@@ -6,24 +6,29 @@ import { createApp, prisma } from '../src/app';
 const app = createApp();
 const uid = `test-${randomUUID()}`;
 
+let managerToken = '';
+const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
+
 beforeAll(async () => {
   process.env.MANAGER_PIN = '9999';
+  const login = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
+  managerToken = login.body.token;
   await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 50 } });
 });
 
 describe('GET /api/users/:id (find-only)', () => {
-  it('returns 401 without manager pin', async () => {
+  it('returns 401 without a manager token', async () => {
     const res = await request(app).get(`/api/users/${uid}`);
     expect(res.status).toBe(401);
   });
   it('returns 404 for unknown user', async () => {
     const res = await request(app)
       .get(`/api/users/no-such-${randomUUID()}`)
-      .set('x-manager-pin', '9999');
+      .set(managerAuth());
     expect(res.status).toBe(404);
   });
   it('returns an existing user', async () => {
-    const res = await request(app).get(`/api/users/${uid}`).set('x-manager-pin', '9999');
+    const res = await request(app).get(`/api/users/${uid}`).set(managerAuth());
     expect(res.status).toBe(200);
     expect(res.body.loyaltyPoints).toBe(50);
   });
@@ -31,7 +36,7 @@ describe('GET /api/users/:id (find-only)', () => {
 
 describe('PUT /api/users/:id/points validation', () => {
   const put = (body: unknown) =>
-    request(app).put(`/api/users/${uid}/points`).set('x-manager-pin', '9999').send(body as object);
+    request(app).put(`/api/users/${uid}/points`).set(managerAuth()).send(body as object);
 
   it('rejects negative points', async () => {
     expect((await put({ points: -500 })).status).toBe(400);

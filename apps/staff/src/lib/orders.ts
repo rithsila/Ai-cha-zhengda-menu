@@ -1,4 +1,5 @@
 import type { ButtonVariant } from '../components/ui';
+import type { Order } from '../types';
 
 /**
  * Past this age an order is not "late", it is history — a leftover row from a
@@ -74,3 +75,41 @@ export const STATUS_CONFIG: Record<string, StatusConfig> = {
 };
 
 export const PAID_STATUSES = new Set(['paid', 'completed']);
+
+/* -------------------------------------------------------------------------- */
+/* Waiting for payment                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The order row is written *before* payment is attempted, so a KHQR order sits
+ * at `pending` until ABA confirms it. Nobody has paid for those, and making one
+ * is a drink given away. Cash at `pending` is the opposite: a real ticket the
+ * counter collects on handover, which staff should absolutely start.
+ *
+ * That is the whole difference, and it is the reason this predicate exists
+ * rather than a status check at each call site.
+ */
+export function isAwaitingPayment(
+  order: Pick<Order, 'paymentMethod' | 'status'>,
+): boolean {
+  return order.status === 'pending' && order.paymentMethod.toLowerCase() === 'khqr';
+}
+
+/**
+ * A null `paymentExpiresAt` means no QR was ever issued (ABA was unreachable at
+ * checkout), not that the QR expired — so it is never "expired", just unpaid
+ * with no clock. Only a real timestamp in the past counts.
+ */
+export function paymentExpiryAt(
+  order: Pick<Order, 'paymentExpiresAt'>,
+): number | null {
+  if (!order.paymentExpiresAt) return null;
+  const at = new Date(order.paymentExpiresAt).getTime();
+  return Number.isFinite(at) ? at : null;
+}
+
+/** "4:07" — mm:ss, clamped at zero so a passed deadline never renders negative. */
+export function formatCountdown(ms: number): string {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}

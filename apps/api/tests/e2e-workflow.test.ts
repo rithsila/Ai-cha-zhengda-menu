@@ -22,9 +22,14 @@ describe('End-to-End System & Workflow Validation', () => {
   let snackItemId: string;
   let drinkOptionId: string;
   let staffToken: string;
+  let managerToken: string;
+  let customerToken: string;
   const branchId = 'branch-toul-kork';
   // Staff endpoints need a login token; helper keeps the calls below readable.
   const staffAuth = () => ({ Authorization: `Bearer ${staffToken}` });
+  const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
+  // Customer endpoints need the token the Telegram login callback handed back.
+  const customerAuth = () => ({ Authorization: `Bearer ${customerToken}` });
 
   beforeAll(async () => {
     process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
@@ -97,6 +102,8 @@ describe('End-to-End System & Workflow Validation', () => {
 
     const staffLogin = await request(app).post('/api/auth/staff-login').send({ pin: STAFF_PIN, role: 'staff' });
     staffToken = staffLogin.body.token;
+    const managerLogin = await request(app).post('/api/auth/staff-login').send({ pin: MANAGER_PIN, role: 'manager' });
+    managerToken = managerLogin.body.token;
   });
 
   it('1. Customer browses full multi-brand catalog and branches', async () => {
@@ -129,10 +136,13 @@ describe('End-to-End System & Workflow Validation', () => {
 
     const callbackRes = await request(app).get('/api/auth/telegram/callback').query(payload);
     expect(callbackRes.status).toBe(302);
-    expect(callbackRes.headers.location).toContain(`#tg_id=${customerTelegramId}`);
+    // The callback returns a session token, not the raw telegram id.
+    const tokenMatch = /#tg_token=([^&]+)/.exec(callbackRes.headers.location);
+    expect(tokenMatch).toBeTruthy();
+    customerToken = decodeURIComponent(tokenMatch![1]);
 
     // Verify user profile exists in database
-    const userRes = await request(app).get(`/api/user/${customerTelegramId}`);
+    const userRes = await request(app).get(`/api/user/${customerTelegramId}`).set(customerAuth());
     expect(userRes.status).toBe(200);
     expect(userRes.body.telegramUserId).toBe(customerTelegramId);
     expect(userRes.body.firstName).toBe('Sila');
@@ -150,7 +160,7 @@ describe('End-to-End System & Workflow Validation', () => {
     // Redeem 100 points (default 100 pts = $1 discount)
     // Server Total: $5.75 - $1.00 = $4.75
     // Earn points: floor(4.75 * 10) = 47 points
-    const createOrderRes = await request(app).post('/api/orders').send({
+    const createOrderRes = await request(app).post('/api/orders').set(customerAuth()).send({
       items: [
         {
           menuItemId: drinkItemId,
@@ -168,7 +178,6 @@ describe('End-to-End System & Workflow Validation', () => {
       paymentMethod: 'cash',
       orderType: 'pickup',
       branchId,
-      telegramUserId: customerTelegramId,
       pointsToUse: 100,
     });
 
@@ -188,7 +197,7 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(userPending?.loyaltyPoints).toBe(200);
 
     // Check order shows in customer history
-    const historyRes = await request(app).get(`/api/orders/user/${customerTelegramId}`);
+    const historyRes = await request(app).get(`/api/orders/user/${customerTelegramId}`).set(customerAuth());
     expect(historyRes.status).toBe(200);
     expect(historyRes.body.some((o: any) => o.id === order.id)).toBe(true);
 
@@ -207,7 +216,7 @@ describe('End-to-End System & Workflow Validation', () => {
 
   it('4. Customer places a delivery order with ABA KHQR payment and webhook confirmation', async () => {
     // Single item $3.00 + $0.00 delivery fee (free inside Arakawa) = $3.00
-    const createRes = await request(app).post('/api/orders').send({
+    const createRes = await request(app).post('/api/orders').set(customerAuth()).send({
       items: [{ menuItemId: snackItemId, quantity: 1, totalPrice: 3.00, selectedModifiers: {} }],
       paymentMethod: 'khqr',
       orderType: 'delivery',
@@ -215,7 +224,6 @@ describe('End-to-End System & Workflow Validation', () => {
       roomNumber: '1110',
       contactName: 'Sok Dara',
       contactPhone: '+85512345678',
-      telegramUserId: customerTelegramId,
       pointsToUse: 0,
     });
     expect(createRes.status).toBe(200);
@@ -276,7 +284,7 @@ describe('End-to-End System & Workflow Validation', () => {
 
     // 2. Manager updates loyalty rates
     const updateRateRes = await request(app).put('/api/config')
-      .set('x-manager-pin', MANAGER_PIN)
+      .set(managerAuth())
       .send({ key: 'pointsPerDollar', value: '50' });
     expect(updateRateRes.status).toBe(200);
 
@@ -285,21 +293,21 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(configRes.body.some((c: any) => c.key === 'pointsPerDollar' && c.value === '50')).toBe(true);
 
     // 3. Manager views sales analytics
-    const salesRes = await request(app).get('/api/analytics/sales').set('x-manager-pin', MANAGER_PIN);
+    const salesRes = await request(app).get('/api/analytics/sales').set(managerAuth());
     expect(salesRes.status).toBe(200);
     expect(salesRes.body.orderCount).toBeGreaterThanOrEqual(1);
     expect(salesRes.body.totalRevenue).toBeGreaterThan(0);
 
     // 4. Manager manually adjusts user points
     const adjustRes = await request(app).put(`/api/users/${customerTelegramId}/points`)
-      .set('x-manager-pin', MANAGER_PIN)
+      .set(managerAuth())
       .send({ points: 500 });
     expect(adjustRes.status).toBe(200);
     expect(adjustRes.body.loyaltyPoints).toBe(500);
 
     // 5. Manager creates and manages rewards catalog
     const createRewardRes = await request(app).post('/api/rewards')
-      .set('x-manager-pin', MANAGER_PIN)
+      .set(managerAuth())
       .send({ name: 'Free Jasmine Milk Tea', pointsCost: 350, description: '1 Regular Cup' });
     expect(createRewardRes.status).toBe(200);
     const rewardId = createRewardRes.body.id;
@@ -310,7 +318,7 @@ describe('End-to-End System & Workflow Validation', () => {
 
     // Manager deactivates reward
     await request(app).put(`/api/rewards/${rewardId}`)
-      .set('x-manager-pin', MANAGER_PIN)
+      .set(managerAuth())
       .send({ isActive: false });
 
     // Customer no longer sees inactive reward

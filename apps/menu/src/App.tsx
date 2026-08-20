@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
-import { getTelegramUserId } from './utils/telegramUser';
-import { API_BASE } from './utils/api';
+import { API_BASE, apiFetch, hasIdentity } from './utils/api';
+import { refreshOnlinePaymentState } from './utils/onlinePayment';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -56,7 +56,7 @@ const isSameModifiers = (a: Record<string, ModifierOption[]>, b: Record<string, 
   return true;
 };
 
-const WebLogin = () => {
+const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
   const botName = import.meta.env.VITE_BOT_NAME || 'YourBotUsername';
 
   return (
@@ -84,6 +84,16 @@ const WebLogin = () => {
         <p className="text-xs text-tg-hint mt-6">
           Or open this link directly inside the Telegram app.
         </p>
+
+        {/* Logging in is only needed for points, saved address and history.
+            A guest can still browse and order for pickup with cash. */}
+        <button
+          type="button"
+          onClick={onContinueAsGuest}
+          className="mt-4 text-sm font-semibold text-brand-primary underline underline-offset-4"
+        >
+          Continue as guest
+        </button>
       </div>
     </div>
   );
@@ -110,6 +120,7 @@ export default function App() {
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [pickupCode, setPickupCode] = useState('');
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -119,12 +130,18 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Ask the server once, on load, whether it can take a QR payment today, so no
+  // screen offers KHQR when ABA has no credentials.
+  useEffect(() => {
+    refreshOnlinePaymentState();
+  }, []);
+
   // Simulate initial data loading and fetch catalog overrides
   const [isLoading, setIsLoading] = useState(true);
   useEffect(() => {
     const fetchCatalog = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/catalog`);
+        const res = await apiFetch('/api/catalog');
         if (res.ok) {
           const data = await res.json();
           const overrides: Record<string, { isSoldOut: boolean }> = {};
@@ -304,10 +321,10 @@ export default function App() {
     i18n.changeLanguage(next);
   };
 
-  const isTelegramWebApp = typeof window !== 'undefined' && !!(window as any).Telegram?.WebApp?.initData;
-  
-  if (!isTelegramWebApp && !getTelegramUserId() && import.meta.env.PROD) {
-    return <WebLogin />;
+  // Logging in unlocks the personal tabs. A guest who taps "continue" still
+  // gets the menu and cash pickup -- the API allows an order with no identity.
+  if (!hasIdentity() && !guestMode && import.meta.env.PROD) {
+    return <WebLogin onContinueAsGuest={() => setGuestMode(true)} />;
   }
 
   if (isSuccessOpen) {
@@ -406,10 +423,10 @@ export default function App() {
       </div>
 
       <div className="px-4 pt-6">
-        {activeTab === 'orders' && <OrdersView onReorder={handleReorder} />}
-        {activeTab === 'payment' && <PaymentView />}
-        {activeTab === 'rewards' && <RewardsView />}
-        {activeTab === 'account' && <AccountView />}
+        {activeTab === 'orders' && <OrdersView onReorder={handleReorder} onBrowseMenu={() => setActiveTab('menu')} />}
+        {activeTab === 'payment' && <PaymentView onBrowseMenu={() => setActiveTab('menu')} />}
+        {activeTab === 'rewards' && <RewardsView onBrowseMenu={() => setActiveTab('menu')} />}
+        {activeTab === 'account' && <AccountView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'menu' && (
           <>
             {!searchQuery && (

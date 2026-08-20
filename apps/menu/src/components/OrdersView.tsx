@@ -3,8 +3,8 @@ import { motion } from 'motion/react';
 import { Package, RefreshCw, ShoppingCart } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import type { CartItem, MenuItem } from '../types';
-import { getTelegramUserId } from '../utils/telegramUser';
-import { API_BASE } from '../utils/api';
+import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { SignInPrompt } from './SignInPrompt';
 
 interface OrderItem {
   id: string;
@@ -26,16 +26,19 @@ interface Order {
 
 interface OrdersViewProps {
   onReorder: (items: CartItem[]) => void;
+  onBrowseMenu?: () => void;
 }
 
-export function OrdersView({ onReorder }: OrdersViewProps) {
+export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  // Order history belongs to one person. Without a verified identity there is
+  // nobody to look up, so we ask instead of guessing.
+  const signedIn = hasIdentity();
 
   const fetchOrders = async () => {
     try {
-      const telegramUserId = getTelegramUserId() || 'test-user-id';
-      const res = await fetch(`${API_BASE}/api/orders/user/${telegramUserId}`);
+      const res = await apiFetch(ME.orders());
       if (res.ok) {
         const data = await res.json();
         setOrders(data);
@@ -48,10 +51,14 @@ export function OrdersView({ onReorder }: OrdersViewProps) {
   };
 
   useEffect(() => {
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
     fetchOrders();
     const interval = setInterval(fetchOrders, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [signedIn]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -75,6 +82,10 @@ export function OrdersView({ onReorder }: OrdersViewProps) {
     }));
     onReorder(cartItems);
   };
+
+  if (!signedIn) {
+    return <SignInPrompt onBrowseMenu={onBrowseMenu} />;
+  }
 
   if (loading && orders.length === 0) {
     return (

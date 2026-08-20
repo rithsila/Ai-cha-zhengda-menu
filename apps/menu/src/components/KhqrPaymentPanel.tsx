@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import twa from '@twa-dev/sdk';
-import { API_BASE } from '../utils/api';
+import { apiFetch } from '../utils/api';
+import { markOnlinePaymentAvailable, markOnlinePaymentUnavailable } from '../utils/onlinePayment';
 
 const WebApp = (twa as any)?.WebApp || twa || {};
 
@@ -17,6 +18,8 @@ interface KhqrPaymentPanelProps {
   orderId: string;
   onPaid: (pickupCode: string) => void;
   onCancel?: () => void;
+  /** Way out when online payment fails, so the customer is never stuck. */
+  onUseCash?: () => void;
 }
 
 /**
@@ -30,7 +33,7 @@ interface KhqrPaymentPanelProps {
  * Renders panel contents only — no modal chrome, no backdrop. The caller
  * supplies the container.
  */
-export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanelProps) {
+export function KhqrPaymentPanel({ orderId, onPaid, onCancel, onUseCash }: KhqrPaymentPanelProps) {
   const { t } = useTranslation();
 
   const [payment, setPayment] = useState<{
@@ -41,7 +44,9 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [expired, setExpired] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // 'unavailable' means the shop has no online payment set up yet, so retrying
+  // can never help; 'failed' is a normal error worth trying again.
+  const [error, setError] = useState<'unavailable' | 'failed' | null>(null);
   // Bumped by "Try again" to ask for a fresh QR for the same order.
   const [attempt, setAttempt] = useState(0);
 
@@ -49,8 +54,6 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
   // restarts the payment or resets the polling interval.
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
-  const tRef = useRef(t);
-  tRef.current = t;
 
   // Create (or re-create) the ABA payment for this order.
   useEffect(() => {
@@ -62,29 +65,37 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/payment/aba/create`, {
+        const res = await apiFetch('/api/payment/aba/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId }),
         });
 
         if (!res.ok) {
-          // The server explains why (no credentials, wrong hash, order already
-          // paid). Showing that beats a generic failure message.
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.error || tRef.current('paymentStartFailed', 'Could not start the payment. Please try again.'));
+          // 503 = the shop has not added its ABA credentials. Remember that so
+          // the KHQR option hides itself everywhere until it starts working.
+          if (res.status === 503) {
+            markOnlinePaymentUnavailable();
+            if (!cancelled) setError('unavailable');
+            return;
+          }
+          // The server's own message names internal config and is written for
+          // developers, so it never reaches the customer.
+          if (!cancelled) setError('failed');
+          return;
         }
 
         const data = await res.json();
+        markOnlinePaymentAvailable();
         if (cancelled) return;
         setPayment({
           checkoutUrl: data.checkoutUrl,
           khqrSvg: data.khqrSvg,
           expiresAt: data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 15 * 60 * 1000,
         });
-      } catch (err: any) {
+      } catch {
         if (cancelled) return;
-        setError(err.message || tRef.current('paymentStartFailed', 'Could not start the payment. Please try again.'));
+        setError('failed');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -102,7 +113,7 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/payment/aba/status/${orderId}`);
+        const res = await apiFetch(`/api/payment/aba/status/${orderId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -145,6 +156,16 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
     </button>
   ) : null;
 
+  const cashButton = onUseCash ? (
+    <button
+      type="button"
+      onClick={onUseCash}
+      className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 py-3 text-sm font-bold text-brand-primary active:scale-95 transition-transform"
+    >
+      {t('payWithCashInstead', 'Pay with cash instead')}
+    </button>
+  ) : null;
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4 items-center w-full text-center py-10">
@@ -161,11 +182,23 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
     return (
       <div className="flex flex-col gap-4 items-center w-full text-center py-6">
         <div className="w-full bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium">
-          {error}
+          {error === 'unavailable'
+            ? t('onlinePaymentUnavailable', 'Online payment is not available right now.')
+            : t('paymentStartFailed', 'Could not start the payment. Please try again.')}
         </div>
-        <Button onClick={handleRetry} className="w-full">
-          {t('tryAgain', 'Try again')}
-        </Button>
+        {error === 'unavailable' && (
+          <p className="text-sm text-tg-hint">
+            {t('orderSavedPayCash', 'Your order is saved. Please pay with cash at the counter.')}
+          </p>
+        )}
+        {/* Retrying a missing setup can never work, so it is only offered for
+            errors that might pass on a second try. */}
+        {error === 'failed' && (
+          <Button onClick={handleRetry} className="w-full">
+            {t('tryAgain', 'Try again')}
+          </Button>
+        )}
+        {cashButton}
         {cancelButton}
       </div>
     );
@@ -183,6 +216,7 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel }: KhqrPaymentPanel
         <Button onClick={handleRetry} className="w-full mt-2">
           {t('tryAgain', 'Try again')}
         </Button>
+        {cashButton}
         {cancelButton}
       </div>
     );

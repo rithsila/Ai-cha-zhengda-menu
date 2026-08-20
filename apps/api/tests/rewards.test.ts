@@ -3,10 +3,13 @@ import request from 'supertest';
 import { createApp } from '../src/app';
 
 const app = createApp();
-const auth = (r: request.Test) => r.set('x-manager-pin', '9999');
+let managerToken = '';
+const auth = (r: request.Test) => r.set('Authorization', `Bearer ${managerToken}`);
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env.MANAGER_PIN = '9999';
+  const login = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
+  managerToken = login.body.token;
 });
 
 describe('rewards API', () => {

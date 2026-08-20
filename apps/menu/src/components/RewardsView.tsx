@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Gift, Coin, Info, ShoppingCart } from '@phosphor-icons/react';
-import { getTelegramUserId } from '../utils/telegramUser';
-import { API_BASE } from '../utils/api';
+import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { SignInPrompt } from './SignInPrompt';
 
 const DEFAULT_EARN_PER_DOLLAR = 10;
 const DEFAULT_POINTS_PER_DOLLAR = 100;
@@ -13,8 +13,14 @@ function readConfigNumber(rows: { key: string; value: string }[], key: string, f
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-export function RewardsView() {
+interface RewardsViewProps {
+  onBrowseMenu?: () => void;
+}
+
+export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
   const { t } = useTranslation();
+  // Points belong to one account. A guest has none to show.
+  const signedIn = hasIdentity();
   const [points, setPoints] = useState<number | null>(null);
   const [rewards, setRewards] = useState<any[]>([]);
   const [earnPerDollar, setEarnPerDollar] = useState(DEFAULT_EARN_PER_DOLLAR);
@@ -23,13 +29,16 @@ export function RewardsView() {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (!signedIn) {
+      setLoading(false);
+      return;
+    }
     const fetchData = async () => {
       try {
-        const userId = getTelegramUserId() || 'test-user-id';
         const [userRes, rewardsRes, cfgRes] = await Promise.all([
-          fetch(`${API_BASE}/api/user/${userId}`),
-          fetch(`${API_BASE}/api/rewards`),
-          fetch(`${API_BASE}/api/config`)
+          apiFetch(ME.profile()),
+          apiFetch('/api/rewards'),
+          apiFetch('/api/config')
         ]);
 
         if (userRes.ok) {
@@ -52,7 +61,16 @@ export function RewardsView() {
       }
     };
     fetchData();
-  }, []);
+  }, [signedIn]);
+
+  if (!signedIn) {
+    return (
+      <SignInPrompt
+        what={t('signInForRewards', 'Open the shop from our Telegram bot to collect and spend loyalty points.')}
+        onBrowseMenu={onBrowseMenu}
+      />
+    );
+  }
 
   if (loading) {
     return <div className="p-8 text-center text-tg-hint animate-pulse">Loading rewards...</div>;

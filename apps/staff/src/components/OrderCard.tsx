@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Banknote,
   CircleCheck,
+  Hourglass,
   MapPin,
   QrCode,
   TriangleAlert,
@@ -12,7 +13,10 @@ import {
   PAID_STATUSES,
   STATUS_CONFIG,
   elapsedTone,
+  formatCountdown,
   formatElapsed,
+  isAwaitingPayment,
+  paymentExpiryAt,
 } from '../lib/orders';
 import type { Tone } from '../lib/orders';
 import type { Order } from '../types';
@@ -60,9 +64,12 @@ function PaymentTag({ order }: { order: Order }) {
       }
     : khqr
       ? {
+          // Amber here would read the same as a cash ticket, which is exactly
+          // the mix-up that gets an unpaid drink made. Red, and the word
+          // "Unpaid" rather than the payment method.
           Icon: QrCode,
-          label: 'KHQR',
-          classes: 'bg-status-pending-soft text-status-pending',
+          label: 'Unpaid',
+          classes: 'bg-danger-soft text-danger',
           note: 'QR payment not confirmed yet',
         }
       : {
@@ -93,7 +100,12 @@ function ElapsedTag({
   now: number;
 }) {
   const { label, stale } = formatElapsed(order.createdAt, now);
-  const tone = elapsedTone(order.status, order.createdAt, now);
+  // An unpaid order is not "late for the kitchen" — nothing is owed until the
+  // money lands. Leaving it on the pending 5/10-minute clock would paint it red
+  // for the wrong reason and dilute the red that means "do not make this".
+  const tone = isAwaitingPayment(order)
+    ? 'normal'
+    : elapsedTone(order.status, order.createdAt, now);
   const spoken = stale
     ? `Placed ${label}, earlier shift`
     : tone === 'late'
@@ -116,6 +128,93 @@ function ElapsedTag({
   );
 }
 
+/**
+ * The unmissable part. A solid --danger band the full width of the card, so an
+ * unpaid ticket is a different colour of object from across the counter, not a
+ * card with a small grey label on it.
+ *
+ * It owns a one-second tick of its own: the board clock runs at 15s (elapsed
+ * labels are minute-resolution) and an mm:ss countdown that jumps in 15s steps
+ * looks broken. Keeping the interval here means only this strip re-renders.
+ */
+function AwaitingPaymentBanner({ order }: { order: Order }) {
+  const [tick, setTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const expiresAt = paymentExpiryAt(order);
+  const remaining = expiresAt == null ? null : expiresAt - tick;
+  const expired = remaining != null && remaining <= 0;
+
+  // No expiry means the QR was never issued, so there is no clock to show —
+  // but the order is every bit as unpaid.
+  const timer =
+    remaining == null
+      ? 'No QR issued'
+      : expired
+        ? `Expired ${formatCountdown(-remaining)} ago`
+        : `${formatCountdown(remaining)} left`;
+
+  /*
+   * Both states are the same solid red, because the instruction is the same:
+   * do not make it. The difference is carried by the icon and the words, not a
+   * second red — --danger-strong is darker than --danger in the light theme and
+   * lighter in the dark one, so a shade swap would mean opposite things
+   * depending on which theme the tablet is in.
+   */
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-danger px-4 py-2 text-on-danger">
+      <span className="inline-flex items-center gap-2 text-sm font-bold tracking-wide uppercase">
+        {expired ? (
+          <TriangleAlert className="size-4 shrink-0" aria-hidden="true" />
+        ) : (
+          <Hourglass className="size-4 shrink-0" aria-hidden="true" />
+        )}
+        {expired ? 'Payment expired' : 'Waiting for payment'}
+      </span>
+      <span className="text-sm font-bold tabular-nums">{timer}</span>
+      <span className="sr-only">
+        {expired
+          ? 'The QR code for this order has expired and it was never paid. Do not make it.'
+          : 'This order has not been paid. Do not start making it.'}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Two-tap confirm. A modal for this would block the whole board mid-rush, and
+ * the second tap expires on its own so a stray press never arms a button that
+ * somebody else walks up and hits.
+ */
+function useTapConfirm(onConfirm: () => void, timeoutMs = 4000) {
+  const [armed, setArmed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const press = useCallback(() => {
+    if (!armed) {
+      setArmed(true);
+      timer.current = setTimeout(() => setArmed(false), timeoutMs);
+      return;
+    }
+    if (timer.current) clearTimeout(timer.current);
+    setArmed(false);
+    onConfirm();
+  }, [armed, onConfirm, timeoutMs]);
+
+  return { armed, press };
+}
+
 export interface OrderCardProps {
   order: Order;
   now: number;
@@ -125,6 +224,8 @@ export interface OrderCardProps {
   showBranch: boolean;
   onAction: (id: string, status: string) => void;
   onCancel: (id: string) => void;
+  /** Escape hatch: the customer paid at the counter instead of scanning. */
+  onMarkPaid: (id: string) => void;
   onSeen: (id: string) => void;
 }
 
@@ -136,30 +237,19 @@ function OrderCardImpl({
   showBranch,
   onAction,
   onCancel,
+  onMarkPaid,
   onSeen,
 }: OrderCardProps) {
-  const config = STATUS_CONFIG[order.status];
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const cancelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const awaitingPayment = isAwaitingPayment(order);
+  // No "Start preparing" while nobody has paid — see the footer below.
+  const config = awaitingPayment ? undefined : STATUS_CONFIG[order.status];
 
-  useEffect(
-    () => () => {
-      if (cancelTimer.current) clearTimeout(cancelTimer.current);
-    },
-    [],
+  const cancelConfirm = useTapConfirm(
+    useCallback(() => onCancel(order.id), [onCancel, order.id]),
   );
-
-  const handleCancel = () => {
-    if (!confirmCancel) {
-      // Second tap confirms. A modal for this would block the whole board mid-rush.
-      setConfirmCancel(true);
-      cancelTimer.current = setTimeout(() => setConfirmCancel(false), 4000);
-      return;
-    }
-    if (cancelTimer.current) clearTimeout(cancelTimer.current);
-    setConfirmCancel(false);
-    onCancel(order.id);
-  };
+  const paidConfirm = useTapConfirm(
+    useCallback(() => onMarkPaid(order.id), [onMarkPaid, order.id]),
+  );
 
   const cancellable = order.status === 'pending' || order.status === 'paid';
 
@@ -171,7 +261,15 @@ function OrderCardImpl({
       // new order is most likely to be missed.
       // shrink-0: the lane is a flex column that scrolls, and without this the
       // cards compress to fit instead of overflowing.
-      className={`shrink-0 overflow-hidden ${isNew ? 'ring-2 ring-accent' : ''}`}
+      // The unpaid ring outranks the new-order ring: "do not make this" matters
+      // more than "you have not looked at this yet".
+      className={`shrink-0 overflow-hidden ${
+        awaitingPayment
+          ? 'ring-2 ring-danger'
+          : isNew
+            ? 'ring-2 ring-accent'
+            : ''
+      }`}
       onPointerDown={isNew ? () => onSeen(order.id) : undefined}
     >
       <div className="flex items-start justify-between gap-3 px-4 pt-4">
@@ -196,6 +294,8 @@ function OrderCardImpl({
         </div>
         <ElapsedTag order={order} now={now} />
       </div>
+
+      {awaitingPayment ? <AwaitingPaymentBanner order={order} /> : null}
 
       <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
         <PaymentTag order={order} />
@@ -280,19 +380,44 @@ function OrderCardImpl({
       <div className="mt-4 flex items-center gap-2 border-t border-border p-3">
         {cancellable ? (
           <Button
-            variant={confirmCancel ? 'danger' : 'ghost'}
+            variant={cancelConfirm.armed ? 'danger' : 'ghost'}
             size="lg"
-            onClick={handleCancel}
+            onClick={cancelConfirm.press}
             aria-label={
-              confirmCancel
+              cancelConfirm.armed
                 ? `Confirm cancelling order ${order.pickupCode ?? ''}`
                 : `Cancel order ${order.pickupCode ?? ''}`
             }
           >
-            {confirmCancel ? 'Tap to confirm' : 'Cancel'}
+            {cancelConfirm.armed ? 'Tap to confirm' : 'Cancel'}
           </Button>
         ) : null}
-        {config ? (
+        {awaitingPayment ? (
+          /*
+           * The escape hatch. A customer whose QR failed often just pays cash at
+           * the counter, and that order still has to be made — so the path
+           * cannot be removed, only made deliberate. It is `secondary`, not the
+           * green primary, so the thumb that reaches for "Start preparing" does
+           * not land on it, and it takes a second tap to fire. Marking the order
+           * `paid` (rather than jumping straight to preparing) keeps the money
+           * on the record and drops the ticket back into the normal
+           * pending -> preparing -> ready -> completed run.
+           */
+          <Button
+            variant={paidConfirm.armed ? 'success' : 'secondary'}
+            size="lg"
+            fullWidth
+            loading={updating}
+            onClick={paidConfirm.press}
+            aria-label={
+              paidConfirm.armed
+                ? `Confirm that order ${order.pickupCode ?? ''} was paid at the counter`
+                : `Mark order ${order.pickupCode ?? ''} as paid at the counter`
+            }
+          >
+            {paidConfirm.armed ? 'Tap to confirm payment' : 'Paid at counter'}
+          </Button>
+        ) : config ? (
           <Button
             variant={config.button}
             size="lg"

@@ -1,5 +1,5 @@
 import twa from '@twa-dev/sdk';
-import { API_BASE } from './api';
+import { apiFetch, ME } from './api';
 
 const WebApp = (twa as any)?.WebApp || twa || {};
 
@@ -51,11 +51,11 @@ export function requestPhoneFromTelegram(): Promise<PhoneRequestResult> {
  * After a 'sent' result the bot needs a moment to store the number, so re-read
  * the profile a few times. Returns the phone number, or null if it never arrived.
  */
-export async function pollForPhone(userId: string, tries = 5, delayMs = 1000): Promise<string | null> {
+export async function pollForPhone(tries = 5, delayMs = 1000): Promise<string | null> {
   for (let i = 0; i < tries; i++) {
     await new Promise((r) => setTimeout(r, delayMs));
     try {
-      const res = await fetch(`${API_BASE}/api/user/${userId}`);
+      const res = await apiFetch(ME.profile());
       if (res.ok) {
         const user = await res.json();
         if (user?.phoneNumber) return user.phoneNumber as string;

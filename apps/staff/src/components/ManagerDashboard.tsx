@@ -74,13 +74,12 @@ function displayName(user: User): string {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
 }
 
-export function ManagerDashboard({
-  managerPin,
-  onLock,
-}: {
-  managerPin: string;
-  onLock: () => void;
-}) {
+/**
+ * Manager tools. Every request is authorised by the staff session token that
+ * `apiFetch` attaches — the raw PIN is never kept in state or re-sent, so it
+ * cannot leak from memory or from a request header on every poll.
+ */
+export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'analytics' | 'loyalty'>('analytics');
   const [range, setRange] = useState<Range>('week');
@@ -88,7 +87,7 @@ export function ManagerDashboard({
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
-  const [analyticsError, setAnalyticsError] = useState<'pin' | 'network' | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<'session' | 'network' | null>(null);
   const [rewardsError, setRewardsError] = useState(false);
 
   // Loyalty: user lookup + points adjustment
@@ -121,7 +120,6 @@ export function ManagerDashboard({
     const [analyticsResult, rewardsResult, configResult] = await Promise.allSettled([
       apiFetch<AnalyticsData>(
         `/api/analytics/sales?days=${RANGES.find((r) => r.id === range)!.days}`,
-        { headers: { 'x-manager-pin': managerPin } },
       ),
       apiFetch<Reward[]>('/api/rewards?includeInactive=1'),
       apiFetch<{ key: string; value: string }[]>('/api/config'),
@@ -130,7 +128,7 @@ export function ManagerDashboard({
       setAnalytics(analyticsResult.value);
     } else {
       const status = (analyticsResult.reason as Error & { status?: number }).status;
-      setAnalyticsError(status === 401 ? 'pin' : 'network');
+      setAnalyticsError(status === 401 ? 'session' : 'network');
     }
     if (rewardsResult.status === 'fulfilled') {
       setRewards(rewardsResult.value);
@@ -145,7 +143,7 @@ export function ManagerDashboard({
       }));
     }
     setLoading(false);
-  }, [managerPin, range]);
+  }, [range]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -182,10 +180,7 @@ export function ManagerDashboard({
     setUserError(null);
     setFoundUser(null);
     try {
-      const user = await apiFetch<User>(
-        `/api/users/${encodeURIComponent(id)}`,
-        { headers: { 'x-manager-pin': managerPin } },
-      );
+      const user = await apiFetch<User>(`/api/users/${encodeURIComponent(id)}`);
       setFoundUser(user);
       setDeltaInput('');
       setReason('');
@@ -195,7 +190,7 @@ export function ManagerDashboard({
         status === 404
           ? 'No customer found with that ID.'
           : status === 401
-            ? 'Manager PIN rejected.'
+            ? 'Manager session expired — unlock again.'
             : 'Could not search right now.',
       );
     } finally {
@@ -209,10 +204,7 @@ export function ManagerDashboard({
     try {
       await apiFetch(`/api/users/${encodeURIComponent(foundUser.telegramUserId)}/points`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-manager-pin': managerPin,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ points: newBalance }),
       });
       const name = displayName(foundUser);
@@ -235,7 +227,7 @@ export function ManagerDashboard({
       const status = (err as Error & { status?: number }).status;
       toast({
         title: "Couldn't update points",
-        description: status === 401 ? 'Manager PIN rejected — lock and re-enter.' : 'Please try again.',
+        description: status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -261,10 +253,7 @@ export function ManagerDashboard({
     try {
       const created = await apiFetch<Reward>('/api/rewards', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-manager-pin': managerPin,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
           description: newDescription.trim() || undefined,
@@ -282,7 +271,7 @@ export function ManagerDashboard({
       const status = (err as Error & { status?: number }).status;
       toast({
         title: "Couldn't add reward",
-        description: status === 401 ? 'Manager PIN rejected.' : 'Please try again.',
+        description: status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -296,10 +285,7 @@ export function ManagerDashboard({
     try {
       const updated = await apiFetch<Reward>(`/api/rewards/${reward.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-manager-pin': managerPin,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: nextActive }),
       });
       setRewards((prev) =>
@@ -313,7 +299,7 @@ export function ManagerDashboard({
       const status = (err as Error & { status?: number }).status;
       toast({
         title: `Couldn't ${nextActive ? 'activate' : 'deactivate'} reward`,
-        description: status === 401 ? 'Manager PIN rejected.' : 'Please try again.',
+        description: status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -334,10 +320,7 @@ export function ManagerDashboard({
       for (const [key, value] of Object.entries(rates)) {
         await apiFetch('/api/config', {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-manager-pin': managerPin,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key, value }),
         });
       }
@@ -347,11 +330,11 @@ export function ManagerDashboard({
       toast({
         title: "Couldn't save rates",
         // The form has already validated the numbers, so a failure here is the
-        // connection or the PIN — never the input. Saying otherwise sends the
-        // manager hunting for a typo that does not exist.
+        // connection or the session — never the input. Saying otherwise sends
+        // the manager hunting for a typo that does not exist.
         description:
           status === 401
-            ? 'Manager PIN rejected — lock and re-enter.'
+            ? 'Manager session expired — unlock again.'
             : 'Check your connection and try again.',
         variant: 'error',
       });
@@ -414,21 +397,21 @@ export function ManagerDashboard({
           <Card padding="lg" className="text-center">
             <CircleAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
             <h2 className="mt-2 font-semibold text-ink">
-              {analyticsError === 'pin'
-                ? 'Manager PIN rejected'
+              {analyticsError === 'session'
+                ? 'Manager session expired'
                 : "Couldn't load analytics"}
             </h2>
             <p className="mt-1 text-sm text-ink-soft">
-              {analyticsError === 'pin'
-                ? 'Lock and re-enter your Manager PIN to view analytics.'
+              {analyticsError === 'session'
+                ? 'Unlock manager tools again to view analytics.'
                 : 'Check your connection and try again.'}
             </p>
             <Button
               variant="secondary"
               className="mt-4"
-              onClick={analyticsError === 'pin' ? onLock : fetchDashboardData}
+              onClick={analyticsError === 'session' ? onLock : fetchDashboardData}
             >
-              {analyticsError === 'pin' ? 'Re-enter PIN' : 'Try again'}
+              {analyticsError === 'session' ? 'Unlock again' : 'Try again'}
             </Button>
           </Card>
         ) : analytics ? (

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { asCustomer } from './helpers/customer';
 
 const app = createApp();
 const uid = `addr-${randomUUID()}`;
@@ -18,7 +19,7 @@ beforeAll(async () => {
 
 describe('PUT /api/user/:id/profile', () => {
   it('saves a valid Arakawa address', async () => {
-    const res = await request(app).put(`/api/user/${uid}/profile`).send(VALID);
+    const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send(VALID);
     expect(res.status).toBe(200);
     expect(res.body.building).toBe('G');
     expect(res.body.roomNumber).toBe('1110');
@@ -27,52 +28,52 @@ describe('PUT /api/user/:id/profile', () => {
   });
 
   it('upper-cases the building letter', async () => {
-    const res = await request(app).put(`/api/user/${uid}/profile`).send({ building: 'c' });
+    const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ building: 'c' });
     expect(res.status).toBe(200);
     expect(res.body.building).toBe('C');
-    await request(app).put(`/api/user/${uid}/profile`).send({ building: 'G' });
+    await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ building: 'G' });
   });
 
   it('rejects a building outside A-G', async () => {
-    const res = await request(app).put(`/api/user/${uid}/profile`).send({ ...VALID, building: 'H' });
+    const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ ...VALID, building: 'H' });
     expect(res.status).toBe(400);
   });
 
   it('rejects a floor above 22', async () => {
-    const res = await request(app).put(`/api/user/${uid}/profile`).send({ ...VALID, roomNumber: '2301' });
+    const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ ...VALID, roomNumber: '2301' });
     expect(res.status).toBe(400);
   });
 
   it('rejects a ground-floor room (there are none)', async () => {
-    const res = await request(app).put(`/api/user/${uid}/profile`).send({ ...VALID, roomNumber: '0010' });
+    const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ ...VALID, roomNumber: '0010' });
     expect(res.status).toBe(400);
   });
 
   it('rejects a room that is not 4 digits', async () => {
     for (const roomNumber of ['abc1', '111', '11101']) {
-      const res = await request(app).put(`/api/user/${uid}/profile`).send({ ...VALID, roomNumber });
+      const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ ...VALID, roomNumber });
       expect(res.status).toBe(400);
     }
   });
 
   it('rejects an empty name and a short phone number', async () => {
-    expect((await request(app).put(`/api/user/${uid}/profile`).send({ contactName: ' ' })).status).toBe(400);
-    expect((await request(app).put(`/api/user/${uid}/profile`).send({ phoneNumber: '12345' })).status).toBe(400);
+    expect((await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ contactName: ' ' })).status).toBe(400);
+    expect((await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ phoneNumber: '12345' })).status).toBe(400);
   });
 
   it('leaves untouched fields alone', async () => {
-    const res = await request(app).put(`/api/user/${uid}/profile`).send({ roomNumber: '0105' });
+    const res = await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ roomNumber: '0105' });
     expect(res.status).toBe(200);
     expect(res.body.roomNumber).toBe('0105');
     expect(res.body.phoneNumber).toBe('+85512345678'); // still there
-    await request(app).put(`/api/user/${uid}/profile`).send({ roomNumber: '1110' });
+    await request(app).put(`/api/user/${uid}/profile`).set(asCustomer(uid)).send({ roomNumber: '1110' });
   });
 });
 
 describe('POST /api/orders — delivery', () => {
   it('falls back to the saved profile when the body has no address', async () => {
-    const res = await request(app).post('/api/orders').send({
-      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery', telegramUserId: uid,
+    const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
+      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery',
     });
     expect(res.status).toBe(200);
     expect(res.body.deliveryAddress).toContain('G1110');
@@ -83,24 +84,23 @@ describe('POST /api/orders — delivery', () => {
   });
 
   it('rejects a delivery order with no address anywhere', async () => {
-    const res = await request(app).post('/api/orders').send({
+    const res = await request(app).post('/api/orders').set(asCustomer(`no-addr-${randomUUID()}`)).send({
       items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery',
-      telegramUserId: `no-addr-${randomUUID()}`,
     });
     expect(res.status).toBe(400);
   });
 
   it('rejects an invalid room sent in the body', async () => {
-    const res = await request(app).post('/api/orders').send({
-      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery', telegramUserId: uid,
+    const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
+      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery',
       building: 'G', roomNumber: '2301', contactName: 'Sok Dara', contactPhone: '+85512345678',
     });
     expect(res.status).toBe(400);
   });
 
   it('ignores a deliveryAddress string sent by the client', async () => {
-    const res = await request(app).post('/api/orders').send({
-      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery', telegramUserId: uid,
+    const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
+      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'delivery',
       deliveryAddress: 'Somewhere else entirely',
     });
     expect(res.status).toBe(200);
@@ -109,8 +109,8 @@ describe('POST /api/orders — delivery', () => {
   });
 
   it('keeps a pickup order free of delivery details', async () => {
-    const res = await request(app).post('/api/orders').send({
-      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'pickup', telegramUserId: uid,
+    const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
+      items: ORDER_ITEMS, paymentMethod: 'cash', orderType: 'pickup',
     });
     expect(res.status).toBe(200);
     expect(res.body.deliveryAddress).toBeNull();
