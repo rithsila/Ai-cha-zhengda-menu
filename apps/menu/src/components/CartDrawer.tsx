@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,16 @@ interface CartDrawerProps {
 export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, onEdit, onCheckout }: CartDrawerProps) {
   const { t } = useTranslation();
   const total = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   return (
     <AnimatePresence>

@@ -43,6 +43,17 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [branches, setBranches] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
 
+  // Lock background scroll when open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   // Fetch branches and user profile dynamically when open, reset on close
   useEffect(() => {
     if (!isOpen) {
@@ -162,10 +173,10 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           animate={shouldReduceMotion ? { opacity: 1 } : { y: 0 }}
           exit={shouldReduceMotion ? { opacity: 0 } : { y: '100%' }}
           transition={shouldReduceMotion ? { duration: 0.2 } : { type: 'spring', damping: 28, stiffness: 220 }}
-          className="fixed inset-0 z-50 bg-tg-bg/75 backdrop-blur-lg backdrop-brightness-200 flex flex-col overflow-hidden"
+          className="fixed inset-0 z-50 bg-tg-bg flex flex-col overflow-hidden"
         >
           {/* Sticky top navigation header */}
-          <div className="sticky top-0 bg-tg-bg/95 backdrop-blur-md border-b border-tg-hint/10 px-4 py-3 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-tg-bg border-b border-tg-hint/10 px-4 py-3 flex items-center justify-between z-10">
             <button
               onClick={step === 2 ? () => setStep(1) : onClose}
               className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-tg-hint/10 text-tg-text transition-colors"
@@ -412,7 +423,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           </div>
 
           {/* Bottom sticky action bar */}
-          <div className="sticky bottom-0 bg-tg-bg/90 backdrop-blur-md border-t border-tg-hint/10 w-full z-10">
+          <div className="sticky bottom-0 bg-tg-bg border-t border-tg-hint/10 w-full z-10">
             {step !== 3 && (
               <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
                 {step === 1 ? (

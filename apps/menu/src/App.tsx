@@ -551,7 +551,10 @@ export default function App() {
         onRemove={removeFromCart}
         onUpdateQuantity={handleUpdateQuantity}
         onEdit={handleEditItem}
-        onCheckout={() => setIsCheckoutOpen(true)}
+        onCheckout={() => {
+          setIsCartOpen(false);
+          setIsCheckoutOpen(true);
+        }}
       />
 
       <CheckoutModal

@@ -24,6 +24,16 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
     }
   }, [initialSelected]);
 
+  useEffect(() => {
+    if (item) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [item]);
+
   if (!item) return null;
 
   const handleToggle = (group: ModifierGroup, option: ModifierOption) => {
