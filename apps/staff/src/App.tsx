@@ -785,6 +785,10 @@ export default function App() {
             throw new Error('network');
           }
         }}
+        onTelegramLogin={() => {
+          const botUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined) || 'AiChaZhengda_bot';
+          window.location.href = `https://t.me/${botUsername}`;
+        }}
       />
     );
   }
