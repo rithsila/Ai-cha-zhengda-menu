@@ -1,44 +1,93 @@
-import { useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import twa from '@twa-dev/sdk';
 
 const WebApp = (twa as any)?.WebApp || twa || {};
 
-type ColorScheme = 'light' | 'dark';
+export type ColorScheme = 'light' | 'dark';
 
 const isTelegramWebApp = () =>
   typeof window !== 'undefined' && !!(window as any).Telegram?.WebApp?.initData;
 
+const getSystemTheme = (): ColorScheme => {
+  if (isTelegramWebApp() && WebApp?.colorScheme) {
+    return WebApp.colorScheme as ColorScheme;
+  }
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
+};
+
 const applyTheme = (scheme: ColorScheme) => {
-  document.documentElement.dataset.theme = scheme;
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.theme = scheme;
+  }
 };
 
 /**
- * Keeps <html data-theme="light|dark"> in sync with the environment.
- *
- * - Inside Telegram: follows WebApp.colorScheme and updates live on the
- *   'themeChanged' event. (Telegram also updates its --tg-theme-* CSS
- *   variables on its own, so token-based colors switch automatically.)
- * - Plain browser: follows the OS prefers-color-scheme setting.
- *
- * The attribute powers the Tailwind `dark:` variant and the CSS fallback
- * palette (see index.css). There is no user toggle — the app always
- * mirrors its host (Telegram or the OS).
+ * Keeps <html data-theme="light|dark"> in sync with user preference or environment.
  */
-export function useTelegramTheme() {
+export function useTheme() {
+  const [theme, setThemeState] = useState<ColorScheme>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('app_theme') as ColorScheme | null;
+      if (saved === 'light' || saved === 'dark') {
+        applyTheme(saved);
+        return saved;
+      }
+    }
+    const sys = getSystemTheme();
+    applyTheme(sys);
+    return sys;
+  });
+
+  const setTheme = useCallback((newTheme: ColorScheme) => {
+    setThemeState(newTheme);
+    localStorage.setItem('app_theme', newTheme);
+    applyTheme(newTheme);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  }, [theme, setTheme]);
+
   useEffect(() => {
     if (isTelegramWebApp() && WebApp?.colorScheme) {
-      applyTheme(WebApp.colorScheme as ColorScheme);
       const onThemeChanged = () => {
-        applyTheme((WebApp.colorScheme as ColorScheme) || 'light');
+        if (!localStorage.getItem('app_theme')) {
+          const sys = (WebApp.colorScheme as ColorScheme) || 'light';
+          setThemeState(sys);
+          applyTheme(sys);
+        }
       };
       WebApp.onEvent?.('themeChanged', onThemeChanged);
       return () => WebApp.offEvent?.('themeChanged', onThemeChanged);
     }
 
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    applyTheme(mq.matches ? 'dark' : 'light');
-    const onChange = (e: MediaQueryListEvent) => applyTheme(e.matches ? 'dark' : 'light');
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (mq) {
+      const onChange = (e: MediaQueryListEvent) => {
+        if (!localStorage.getItem('app_theme')) {
+          const sys = e.matches ? 'dark' : 'light';
+          setThemeState(sys);
+          applyTheme(sys);
+        }
+      };
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
   }, []);
+
+  return {
+    theme,
+    isDark: theme === 'dark',
+    setTheme,
+    toggleTheme,
+  };
 }
+
+export function useTelegramTheme() {
+  return useTheme();
+}
+

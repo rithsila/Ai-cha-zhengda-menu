@@ -4,6 +4,9 @@ export type { ButtonProps, ButtonVariant, ButtonSize } from './Button';
 export { Tabs } from './Tabs';
 export type { TabsProps, TabItem } from './Tabs';
 
+export { Segmented } from './Segmented';
+export type { SegmentedProps, SegmentedOption } from './Segmented';
+
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
 

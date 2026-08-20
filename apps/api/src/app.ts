@@ -196,7 +196,9 @@ export function createApp() {
 
   app.put('/api/catalog/:id/sold-out', requireStaff, async (req, res) => {
     try {
-      const { id } = req.params;
+      // Express 5 types a route param as string | string[]; these routes only
+      // ever match one segment. Same coercion the user routes below use.
+      const id = String(req.params.id);
       const { isSoldOut } = req.body;
       const item = await prisma.menuItem.update({
         where: { id },
@@ -355,13 +357,25 @@ export function createApp() {
   });
 
   // Staff Dashboard APIs
+  //
+  // `since` (ISO timestamp) bounds the board to the current shift. Without it the
+  // route returns every order ever placed, which the tablet then re-downloads every
+  // 5 seconds and paints red because every row is hours old. The param is optional
+  // so older clients keep working, but the staff dashboard always sends it.
   app.get('/api/orders', requireStaff, async (req, res) => {
     try {
-      const { branchId } = req.query;
+      const { branchId, since } = req.query;
 
       const whereClause: any = {};
       if (branchId) {
         whereClause.branchId = String(branchId);
+      }
+      if (since) {
+        const from = new Date(String(since));
+        if (Number.isNaN(from.getTime())) {
+          return res.status(400).json({ error: '`since` must be an ISO timestamp' });
+        }
+        whereClause.createdAt = { gte: from };
       }
 
       const orders = await prisma.order.findMany({
@@ -424,7 +438,7 @@ export function createApp() {
 
   app.put('/api/orders/:id/status', requireStaff, async (req, res) => {
     try {
-      const { id } = req.params;
+      const id = String(req.params.id);
       const { status } = req.body;
 
       const updatedOrder = await prisma.order.update({
@@ -747,9 +761,25 @@ export function createApp() {
   // Analytics API
   app.get('/api/analytics/sales', requireManager, async (req, res) => {
     try {
+      // `days` bounds the report to a recent window (1 = today). Omit for all time.
+      const rawDays = req.query.days;
+      let since: Date | null = null;
+      if (rawDays != null && String(rawDays) !== '' && String(rawDays) !== 'all') {
+        const days = Number(rawDays);
+        if (!Number.isInteger(days) || days < 1) {
+          return res.status(400).json({ error: '`days` must be a whole number of 1 or more' });
+        }
+        since = new Date();
+        since.setHours(0, 0, 0, 0);
+        since.setDate(since.getDate() - (days - 1));
+      }
+
       // Cash pickup orders never pass through "paid" — they end as "completed".
       const paidOrders = await prisma.order.findMany({
-        where: { status: { in: ['paid', 'completed'] } },
+        where: {
+          status: { in: ['paid', 'completed'] },
+          ...(since ? { createdAt: { gte: since } } : {})
+        },
         select: { totalAmount: true, createdAt: true }
       });
 

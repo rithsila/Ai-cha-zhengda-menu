@@ -16,6 +16,12 @@ export interface TabsProps {
   onChange: (id: string) => void;
   /** Accessible name for the tablist. */
   ariaLabel: string;
+  /**
+   * Id of the element that renders the active tab's content. Required for a
+   * screen reader to follow a tab to its panel; that element must carry
+   * `role="tabpanel"` and this id.
+   */
+  panelId: string;
   size?: 'md' | 'lg';
   className?: string;
 }
@@ -30,6 +36,7 @@ export function Tabs({
   active,
   onChange,
   ariaLabel,
+  panelId,
   size = 'md',
   className = '',
 }: TabsProps) {
@@ -68,6 +75,8 @@ export function Tabs({
       onKeyDown={handleKeyDown}
       className={[
         'inline-flex items-center gap-1 rounded-xl bg-surface-sunken p-1',
+        // Never let the bar push the page wide on a phone; scroll it instead.
+        'max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className,
       ]
         .filter(Boolean)
@@ -83,7 +92,9 @@ export function Tabs({
             }}
             type="button"
             role="tab"
+            id={`${panelId}-tab-${tab.id}`}
             aria-selected={isActive}
+            aria-controls={panelId}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onChange(tab.id)}
             className={[

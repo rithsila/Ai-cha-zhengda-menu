@@ -54,6 +54,10 @@ const resources = {
       ordersSubtitle: "Track your active and past orders",
       accountTitle: "My Account",
       accountSubtitle: "Manage your profile",
+      appearance: "Appearance",
+      theme: "Theme",
+      darkMode: "Dark Mode",
+      lightMode: "Light Mode",
 
       // Delivery address (Arakawa)
       deliveryAddress: "Delivery address",
@@ -285,6 +289,10 @@ const resources = {
       ordersSubtitle: "តាមដានការកុម្ម៉ង់បច្ចុប្បន្ន និងកន្លងមក",
       accountTitle: "គណនីរបស់ខ្ញុំ",
       accountSubtitle: "គ្រប់គ្រងប្រវត្តិរូបរបស់អ្នក",
+      appearance: "ផ្ទាំងបង្ហាញ",
+      theme: "រូបរាង",
+      darkMode: "មុខងារងងឹត",
+      lightMode: "មុខងារពន្លឺ",
 
       // Delivery address (Arakawa)
       deliveryAddress: "អាសយដ្ឋានដឹកជញ្ជូន",
@@ -516,6 +524,10 @@ const resources = {
       ordersSubtitle: "查看进行中和历史订单",
       accountTitle: "我的账户",
       accountSubtitle: "管理您的个人资料",
+      appearance: "外观设置",
+      theme: "主题",
+      darkMode: "深色模式",
+      lightMode: "浅色模式",
 
       // Delivery address (Arakawa)
       deliveryAddress: "送餐地址",

@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   EmptyState,
+  Segmented,
   Skeleton,
   Tabs,
   useToast,
@@ -42,6 +43,33 @@ type RecentAdjustment = {
 
 const REASONS = ['Correction', 'Promotion', 'Compensation', 'Other'];
 
+/*
+ * Analytics used to be all-time only, which cannot answer a manager's first
+ * question: how did today go? The range drives the API query, so the stat cards
+ * and the chart always describe the same window.
+ */
+type Range = 'today' | 'week' | 'month' | 'all';
+
+const RANGES: Array<{ id: Range; label: string; days: string; caption: string }> = [
+  { id: 'today', label: 'Today', days: '1', caption: 'Today' },
+  { id: 'week', label: '7 days', days: '7', caption: 'Last 7 days' },
+  { id: 'month', label: '30 days', days: '30', caption: 'Last 30 days' },
+  { id: 'all', label: 'All', days: 'all', caption: 'All time' },
+];
+
+const PANEL_ID = 'manager-panel';
+
+/** Points fields must be whole numbers of 1 or more; returns null when valid. */
+function rateError(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return 'Enter a number.';
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return 'Must be a whole number of 1 or more.';
+  }
+  return null;
+}
+
 function displayName(user: User): string {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
 }
@@ -55,6 +83,7 @@ export function ManagerDashboard({
 }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'analytics' | 'loyalty'>('analytics');
+  const [range, setRange] = useState<Range>('week');
 
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
@@ -90,9 +119,10 @@ export function ManagerDashboard({
     setAnalyticsError(null);
     setRewardsError(false);
     const [analyticsResult, rewardsResult, configResult] = await Promise.allSettled([
-      apiFetch<AnalyticsData>('/api/analytics/sales', {
-        headers: { 'x-manager-pin': managerPin },
-      }),
+      apiFetch<AnalyticsData>(
+        `/api/analytics/sales?days=${RANGES.find((r) => r.id === range)!.days}`,
+        { headers: { 'x-manager-pin': managerPin } },
+      ),
       apiFetch<Reward[]>('/api/rewards?includeInactive=1'),
       apiFetch<{ key: string; value: string }[]>('/api/config'),
     ]);
@@ -115,7 +145,7 @@ export function ManagerDashboard({
       }));
     }
     setLoading(false);
-  }, [managerPin]);
+  }, [managerPin, range]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -136,6 +166,9 @@ export function ManagerDashboard({
     newBalance >= 0 &&
     !saving;
 
+  /* Adds to whatever is already typed. The old set was [10, 50, 100, -50]:
+     three ways up, one way down, and nothing said whether a tap replaced the
+     field or added to it. */
   const applyQuick = (amount: number) => {
     const current = parsedDelta ?? 0;
     setDeltaInput(String(current + amount));
@@ -288,7 +321,14 @@ export function ManagerDashboard({
     }
   };
 
+  const rateErrors = {
+    pointsPerDollar: rateError(rates.pointsPerDollar),
+    earnPointsPerDollar: rateError(rates.earnPointsPerDollar),
+  };
+  const ratesValid = !rateErrors.pointsPerDollar && !rateErrors.earnPointsPerDollar;
+
   const handleSaveRates = async () => {
+    if (!ratesValid) return;
     setSavingRates(true);
     try {
       for (const [key, value] of Object.entries(rates)) {
@@ -306,10 +346,13 @@ export function ManagerDashboard({
       const status = (err as Error & { status?: number }).status;
       toast({
         title: "Couldn't save rates",
+        // The form has already validated the numbers, so a failure here is the
+        // connection or the PIN — never the input. Saying otherwise sends the
+        // manager hunting for a typo that does not exist.
         description:
           status === 401
-            ? 'Manager PIN rejected.'
-            : 'Values must be numbers greater than 0.',
+            ? 'Manager PIN rejected — lock and re-enter.'
+            : 'Check your connection and try again.',
         variant: 'error',
       });
     } finally {
@@ -317,6 +360,7 @@ export function ManagerDashboard({
     }
   };
 
+  const rangeCaption = RANGES.find((r) => r.id === range)!.caption;
   const entries = analytics
     ? Object.entries(analytics.byDate).sort(([a], [b]) => a.localeCompare(b))
     : [];
@@ -343,6 +387,7 @@ export function ManagerDashboard({
           active={activeTab}
           onChange={(id) => setActiveTab(id as 'analytics' | 'loyalty')}
           ariaLabel="Manager sections"
+          panelId={PANEL_ID}
         />
         <Button variant="ghost" size="md" onClick={onLock} aria-label="Lock manager mode">
           <Lock className="size-4" aria-hidden="true" />
@@ -350,21 +395,29 @@ export function ManagerDashboard({
         </Button>
       </div>
 
+      <div
+        id={PANEL_ID}
+        role="tabpanel"
+        aria-labelledby={`${PANEL_ID}-tab-${activeTab}`}
+        tabIndex={-1}
+        className="flex flex-col gap-6"
+      >
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Skeleton className="h-28 w-full" />
           <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-72 w-full md:col-span-2" />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-72 w-full md:col-span-3" />
         </div>
       ) : activeTab === 'analytics' ? (
         analyticsError ? (
           <Card padding="lg" className="text-center">
             <CircleAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
-            <h3 className="mt-2 font-semibold text-ink">
+            <h2 className="mt-2 font-semibold text-ink">
               {analyticsError === 'pin'
                 ? 'Manager PIN rejected'
                 : "Couldn't load analytics"}
-            </h3>
+            </h2>
             <p className="mt-1 text-sm text-ink-soft">
               {analyticsError === 'pin'
                 ? 'Lock and re-enter your Manager PIN to view analytics.'
@@ -379,26 +432,46 @@ export function ManagerDashboard({
             </Button>
           </Card>
         ) : analytics ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Card padding="lg">
-              <p className="text-sm text-ink-soft">Total revenue (paid)</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums text-ink">
-                ${analytics.totalRevenue.toFixed(2)}
-              </p>
-              <p className="mt-1 text-xs text-ink-faint">All time</p>
-            </Card>
-            <Card padding="lg">
-              <p className="text-sm text-ink-soft">Orders (paid)</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums text-ink">
-                {analytics.orderCount}
-              </p>
-              <p className="mt-1 text-xs text-ink-faint">All time</p>
-            </Card>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="md:col-span-3">
+              <Segmented
+                options={RANGES.map((r) => ({ id: r.id, label: r.label }))}
+                value={range}
+                onChange={setRange}
+                ariaLabel="Reporting period"
+              />
+            </div>
 
-            <Card padding="lg" className="md:col-span-2">
+            {[
+              {
+                label: 'Revenue',
+                value: `$${analytics.totalRevenue.toFixed(2)}`,
+              },
+              {
+                label: 'Paid orders',
+                value: String(analytics.orderCount),
+              },
+              {
+                label: 'Average order',
+                value:
+                  analytics.orderCount > 0
+                    ? `$${(analytics.totalRevenue / analytics.orderCount).toFixed(2)}`
+                    : '—',
+              },
+            ].map((stat) => (
+              <Card key={stat.label} padding="lg">
+                <p className="text-sm text-ink-soft">{stat.label}</p>
+                <p className="mt-1 text-3xl font-bold tabular-nums text-ink">
+                  {stat.value}
+                </p>
+                <p className="mt-1 text-xs text-ink-faint">{rangeCaption}</p>
+              </Card>
+            ))}
+
+            <Card padding="lg" className="md:col-span-3">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="font-semibold text-ink">Daily sales volume</h3>
-                <span className="text-sm text-ink-faint">All time</span>
+                <h2 className="font-semibold text-ink">Daily sales volume</h2>
+                <span className="text-sm text-ink-faint">{rangeCaption}</span>
               </div>
 
               {entries.length === 0 ? (
@@ -411,22 +484,24 @@ export function ManagerDashboard({
                 <div>
                   <div className="flex h-56 items-end gap-1.5" aria-hidden="true">
                     {entries.map(([date, amount], i) => {
-                      const pct = max > 0 ? Math.min((amount / max) * 100, 90) : 0;
+                      const pct = max > 0 ? (amount / max) * 100 : 0;
                       const showValue = i % valueLabelEvery === 0;
                       return (
                         <div
                           key={date}
                           className="group relative flex h-full flex-1 flex-col justify-end"
                         >
-                          {showValue && (
-                            <span className="mb-1 shrink-0 text-center text-[11px] font-medium tabular-nums text-ink-soft">
-                              ${amount.toFixed(0)}
-                            </span>
-                          )}
+                          {/* Always rendered, so every column reserves the same
+                              label row and the tallest bar can reach a true 100%.
+                              Clamping the height to 90% instead made the best day
+                              draw the same as a 92% day. */}
+                          <span className="mb-1 h-4 shrink-0 text-center text-[11px] font-medium tabular-nums text-ink-soft">
+                            {showValue ? `$${amount.toFixed(0)}` : ''}
+                          </span>
                           <div
                             className="w-full rounded-t-sm bg-accent transition-colors group-hover:bg-accent-strong"
                             style={{
-                              height: `${pct}%`,
+                              height: `calc((100% - 1.25rem) * ${pct / 100})`,
                               minHeight: amount > 0 ? '4px' : undefined,
                             }}
                           />
@@ -474,10 +549,10 @@ export function ManagerDashboard({
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Points adjustment */}
           <Card padding="lg">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-ink">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
               <Users className="size-5" aria-hidden="true" />
               Adjust user points
-            </h3>
+            </h2>
 
             <form onSubmit={handleSearchUser} className="mt-4 flex gap-2">
               <label className="sr-only" htmlFor="user-id-search">
@@ -528,23 +603,36 @@ export function ManagerDashboard({
                     className="h-11 w-28 rounded-xl border border-border bg-surface px-3 text-center font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
                     aria-describedby="delta-preview"
                   />
-                  {[10, 50, 100, -50].map((amount) => (
+                  {[-50, -10, 10, 50].map((amount) => (
                     <Button
                       key={amount}
                       variant="secondary"
                       size="md"
                       onClick={() => applyQuick(amount)}
+                      aria-label={`${amount > 0 ? 'Add' : 'Subtract'} ${Math.abs(amount)} points`}
                     >
                       {amount > 0 ? `+${amount}` : amount}
                     </Button>
                   ))}
+                  {parsedDelta != null && delta !== 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="md"
+                      onClick={() => setDeltaInput('')}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
                 </div>
+                <p className="mt-1.5 text-xs text-ink-faint">
+                  Each button adds to the box, it does not replace it.
+                </p>
 
                 <label
                   htmlFor="reason-select"
                   className="mt-4 block text-sm font-medium text-ink"
                 >
-                  Reason
+                  Reason <span className="text-danger">*</span>
                 </label>
                 <select
                   id="reason-select"
@@ -589,9 +677,21 @@ export function ManagerDashboard({
                   disabled={!canSave}
                   loading={saving}
                   onClick={handleSavePoints}
+                  aria-describedby="save-blocked"
                 >
                   Save adjustment
                 </Button>
+                {/* A dead button with no explanation is the single most common
+                    thing a new manager gets stuck on. */}
+                <p id="save-blocked" aria-live="polite" className="mt-2 text-sm text-ink-faint">
+                  {saving || canSave
+                    ? ''
+                    : parsedDelta == null || delta === 0
+                      ? 'Enter an adjustment above to enable Save.'
+                      : newBalance < 0
+                        ? 'That would take the balance below zero.'
+                        : 'Choose a reason to enable Save.'}
+                </p>
               </div>
             )}
 
@@ -633,7 +733,7 @@ export function ManagerDashboard({
           {/* Reward catalog */}
           <Card padding="lg">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-ink">Reward catalog</h3>
+              <h2 className="text-lg font-semibold text-ink">Reward catalog</h2>
               <Button
                 variant="secondary"
                 size="md"
@@ -791,57 +891,67 @@ export function ManagerDashboard({
 
           {/* Loyalty rates */}
           <Card padding="lg" className="lg:col-span-2">
-            <h3 className="flex items-center gap-2 text-lg font-semibold text-ink">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
               <Sliders className="size-5" aria-hidden="true" />
               Loyalty rates
-            </h3>
+            </h2>
             <p className="mt-1 text-sm text-ink-soft">
               Configure points required for discounts and points earned per dollar spent.
             </p>
 
-            <div className="mt-4 flex flex-wrap items-end gap-4">
-              <div className="w-56">
-                <label
-                  htmlFor="points-per-dollar"
-                  className="mb-1 block text-sm font-medium text-ink"
-                >
-                  Points for a $1 discount
-                </label>
-                <input
-                  id="points-per-dollar"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={rates.pointsPerDollar}
-                  onChange={(e) =>
-                    setRates((prev) => ({ ...prev, pointsPerDollar: e.target.value }))
-                  }
-                  className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
-                />
-              </div>
-
-              <div className="w-56">
-                <label
-                  htmlFor="earn-points-per-dollar"
-                  className="mb-1 block text-sm font-medium text-ink"
-                >
-                  Points earned per $1 spent
-                </label>
-                <input
-                  id="earn-points-per-dollar"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={rates.earnPointsPerDollar}
-                  onChange={(e) =>
-                    setRates((prev) => ({ ...prev, earnPointsPerDollar: e.target.value }))
-                  }
-                  className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
-                />
-              </div>
+            <div className="mt-4 flex flex-wrap items-start gap-4">
+              {(
+                [
+                  {
+                    key: 'pointsPerDollar' as const,
+                    id: 'points-per-dollar',
+                    label: 'Points for a $1 discount',
+                  },
+                  {
+                    key: 'earnPointsPerDollar' as const,
+                    id: 'earn-points-per-dollar',
+                    label: 'Points earned per $1 spent',
+                  },
+                ]
+              ).map((field) => {
+                const error = rateErrors[field.key];
+                return (
+                  <div key={field.key} className="w-56">
+                    <label
+                      htmlFor={field.id}
+                      className="mb-1 block text-sm font-medium text-ink"
+                    >
+                      {field.label}
+                    </label>
+                    <input
+                      id={field.id}
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={rates[field.key]}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? `${field.id}-error` : undefined}
+                      onChange={(e) =>
+                        setRates((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      }
+                      className={`h-11 w-full rounded-xl border bg-surface px-3 text-base font-bold tabular-nums text-ink transition-colors ${
+                        error ? 'border-danger' : 'border-border focus:border-accent'
+                      }`}
+                    />
+                    <p
+                      id={`${field.id}-error`}
+                      className="mt-1 min-h-5 text-sm font-medium text-danger"
+                    >
+                      {error ?? ''}
+                    </p>
+                  </div>
+                );
+              })}
 
               <Button
                 variant="primary"
+                className="mt-6"
+                disabled={!ratesValid}
                 loading={savingRates}
                 onClick={handleSaveRates}
               >
@@ -851,6 +961,7 @@ export function ManagerDashboard({
           </Card>
         </div>
       )}
+      </div>
     </div>
   );
 }

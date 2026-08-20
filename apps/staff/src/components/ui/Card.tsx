@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
-export interface CardProps {
+export interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   className?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg';
@@ -23,6 +23,7 @@ export function Card({
   className = '',
   padding = 'md',
   raised = false,
+  ...rest
 }: CardProps) {
   return (
     <div
@@ -34,6 +35,7 @@ export function Card({
       ]
         .filter(Boolean)
         .join(' ')}
+      {...rest}
     >
       {children}
     </div>
