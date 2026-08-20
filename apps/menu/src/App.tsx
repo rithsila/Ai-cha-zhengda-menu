@@ -152,13 +152,8 @@ export default function App() {
     }));
   }, [activeBrand, catalogOverrides]);
   const categories = useMemo(() => {
-    const cats = ['All', ...new Set(brandItems.map(i => i.category))];
-    const hasBrandFavorites = brandItems.some(i => favorites.includes(i.id));
-    if (hasBrandFavorites) {
-      cats.unshift('Favorites');
-    }
-    return cats;
-  }, [brandItems, favorites]);
+    return ['All', ...new Set(brandItems.map(i => i.category))];
+  }, [brandItems]);
   
   // Filtered items
   const visibleItems = useMemo(() => {
@@ -167,15 +162,21 @@ export default function App() {
       isSoldOut: catalogOverrides[item.id]?.isSoldOut || false
     }));
 
+    let items: typeof brandItems;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      return allMapped.filter(i => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
+      items = allMapped.filter(i => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
+    } else if (activeCategory === 'All') {
+      items = brandItems;
+    } else {
+      items = brandItems.filter(i => i.category === activeCategory);
     }
-    if (activeCategory === 'Favorites') {
-      return brandItems.filter(i => favorites.includes(i.id));
-    }
-    if (activeCategory === 'All') return brandItems;
-    return brandItems.filter(i => i.category === activeCategory);
+
+    return [...items].sort((a, b) => {
+      const aFav = favorites.includes(a.id) ? 1 : 0;
+      const bFav = favorites.includes(b.id) ? 1 : 0;
+      return bFav - aFav;
+    });
   }, [brandItems, activeCategory, searchQuery, favorites, catalogOverrides]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);

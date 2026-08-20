@@ -1,6 +1,5 @@
 import type { Brand } from '../../types';
 import { useTranslation } from 'react-i18next';
-import { Heart } from '@phosphor-icons/react';
 
 interface CategoryScrollerProps {
   categories: string[];
@@ -26,13 +25,7 @@ export function CategoryScroller({ categories, activeCategory, onChange, brand }
                 : 'bg-tg-secondary-bg text-tg-text'
             }`}
           >
-            {cat === 'Favorites' ? (
-              <span className="flex items-center gap-1.5">
-                <Heart weight={activeCategory === cat ? 'fill' : 'regular'} /> {t('Favorites')}
-              </span>
-            ) : (
-              t(cat)
-            )}
+            {t(cat)}
           </button>
         ))}
       </div>
