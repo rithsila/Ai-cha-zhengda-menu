@@ -14,6 +14,26 @@ const sessions = new Map<string, { role: StaffRole; expiresAt: number }>();
 export const staffPin = () => process.env.STAFF_PIN || '1234';
 export const managerPin = () => process.env.MANAGER_PIN || '9999';
 
+export const staffTelegramIds = () =>
+  (process.env.STAFF_TELEGRAM_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+export const managerTelegramIds = () =>
+  (process.env.MANAGER_TELEGRAM_IDS || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+export function roleForTelegramId(telegramUserId: string): StaffRole | null {
+  const managers = managerTelegramIds();
+  if (managers.includes(telegramUserId)) return 'manager';
+  const staff = staffTelegramIds();
+  if (staff.includes(telegramUserId)) return 'staff';
+  return null;
+}
+
 export function issueToken(role: StaffRole) {
   const token = randomUUID();
   const expiresAt = Date.now() + SESSION_TTL_MS;

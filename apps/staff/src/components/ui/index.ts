@@ -19,6 +19,8 @@ export type { CardProps } from './Card';
 export { PinScreen } from './PinScreen';
 export type { PinScreenProps } from './PinScreen';
 
+export { TelegramAuthScreen } from './TelegramAuthScreen';
+
 export { ToastProvider, useToast } from './Toast';
 export type { ToastOptions, ToastContextValue } from './Toast';
 

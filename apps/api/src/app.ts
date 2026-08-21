@@ -11,6 +11,7 @@ import {
 import {
   issueToken, requireStaff, requireManager, staffPin, managerPin,
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
+  roleForTelegramId,
 } from './auth';
 import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
@@ -111,6 +112,90 @@ export function createApp() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  // Staff and Manager login via Telegram Auth Callback or Direct Telegram verification
+  app.get('/api/auth/staff-telegram/callback', async (req, res) => {
+    try {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      const params: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.query)) {
+        if (typeof v === 'string') params[k] = v;
+      }
+
+      let telegramId = params.id;
+      // In production, strictly verify Telegram signature
+      if (token) {
+        if (!verifyTelegramLogin(params, token)) {
+          return res.status(401).json({ error: 'Invalid Telegram login data' });
+        }
+        if (!isLoginFresh(params.auth_date)) {
+          return res.status(401).json({ error: 'Login expired, please try again' });
+        }
+      } else if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Telegram login is not configured on this server' });
+      }
+
+      if (!telegramId) {
+        return res.status(400).json({ error: 'Missing Telegram user ID' });
+      }
+
+      const role = roleForTelegramId(telegramId);
+      if (!role) {
+        return res.status(403).json({ error: 'Access denied: You are not authorized as staff or manager' });
+      }
+
+      const { token: staffAuthToken, expiresAt } = issueToken(role);
+      const target = process.env.STAFF_APP_URL || 'http://localhost:5174';
+      res.redirect(`${target}#staff_token=${encodeURIComponent(staffAuthToken)}&role=${encodeURIComponent(role)}&expiresAt=${expiresAt}`);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Staff Telegram login failed' });
+    }
+  });
+
+  // Direct Staff/Manager Login endpoint via Telegram ID
+  app.post('/api/auth/staff-telegram-login', loginRateLimit, async (req, res) => {
+    try {
+      const { telegramUserId, initData } = req.body || {};
+      let verifiedTelegramId: string | null = null;
+
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (initData && botToken) {
+        const { verifyInitData } = await import('./telegram-initdata');
+        const verified = verifyInitData(initData, botToken);
+        if (verified) verifiedTelegramId = String(verified.id);
+      }
+
+      // If in dev mode with ALLOW_UNVERIFIED_TELEGRAM or plain telegramUserId
+      if (!verifiedTelegramId && (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' || !botToken)) {
+        verifiedTelegramId = typeof telegramUserId === 'string' ? telegramUserId.trim() : null;
+      }
+
+      if (!verifiedTelegramId) {
+        recordFailedLogin(req);
+        return res.status(401).json({ error: 'Telegram authentication failed' });
+      }
+
+      // If no managers/staff explicitly defined in dev, default to manager role for quick dev testing
+      let role = roleForTelegramId(verifiedTelegramId);
+      if (!role && process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && process.env.NODE_ENV !== 'production') {
+        // Fallback role in dev if ID not explicitly listed
+        role = 'manager';
+      }
+
+      if (!role) {
+        recordFailedLogin(req);
+        return res.status(403).json({ error: 'Access denied: Telegram ID is not authorized' });
+      }
+
+      clearFailedLogins(req);
+      const { token, expiresAt } = issueToken(role);
+      res.json({ ok: true, token, role, expiresAt, telegramUserId: verifiedTelegramId });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Login error' });
     }
   });
 

@@ -31,6 +31,7 @@ import {
   Card,
   EmptyState,
   PinScreen,
+  TelegramAuthScreen,
   Skeleton,
   ThemeToggle,
   ToastProvider,
@@ -45,7 +46,7 @@ import {
   onUnauthorized,
   saveSession,
 } from './lib/api';
-import { isMuted, playNewOrderAlert, setMuted, unlockAlerts } from './lib/alert';
+import { isMuted, playNewOrderAlert, setMuted } from './lib/alert';
 import type { BadgeVariant } from './components/ui';
 import type { Branch, ConnectionState, Order } from './types';
 
@@ -195,7 +196,7 @@ function BoardLegend() {
 function StaffApp() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
-  const [managerUnlocked, setManagerUnlocked] = useState(false);
+  const [managerUnlocked, setManagerUnlocked] = useState(() => loadSession()?.role === 'manager');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -999,42 +1000,7 @@ export default function App() {
   }, [isAuthenticated]);
 
   if (!isAuthenticated) {
-    return (
-      <PinScreen
-        title="Staff &amp; Admin Access"
-        subtitle="Enter staff PIN to access dashboard"
-        buttonLabel="Unlock Terminal"
-        onSubmit={async (pin) => {
-          unlockAlerts();
-          try {
-            const res = await fetch(`${API_BASE}/api/auth/staff-login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pin, role: 'staff' }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              saveSession({
-                token: data.token,
-                role: 'staff',
-                expiresAt: data.expiresAt,
-              });
-              setIsAuthenticated(true);
-              return true;
-            }
-            return false;
-          } catch {
-            throw new Error('network');
-          }
-        }}
-        onTelegramLogin={() => {
-          const botUsername =
-            (import.meta.env.VITE_TELEGRAM_BOT_USERNAME as string | undefined) ||
-            'AiChaZhengda_bot';
-          window.location.href = `https://t.me/${botUsername}`;
-        }}
-      />
-    );
+    return <TelegramAuthScreen onSuccess={() => setIsAuthenticated(true)} />;
   }
 
   return (
