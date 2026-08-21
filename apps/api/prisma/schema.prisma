@@ -37,6 +37,7 @@ model MenuItem {
   basePrice   Float
   image       String?
   isSoldOut   Boolean         @default(false)
+  isActive    Boolean         @default(true)
   modifiers   ModifierGroup[]
   orderItems  OrderItem[]
 }

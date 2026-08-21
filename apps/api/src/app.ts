@@ -16,6 +16,9 @@ import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
 } from './telegram-initdata';
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 
 // The tuned SQLite client lives in db.ts; re-exported here because every
 // caller (and every test) already imports it from this module.
@@ -238,9 +241,42 @@ export function createApp() {
     }
   });
 
+  // Static folder for uploaded menu images
+  const uploadDir = path.resolve(process.cwd(), 'public/uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadDir));
+
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || '.png';
+      cb(null, `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+    },
+  });
+  const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) cb(null, true);
+      else cb(new Error('Only image files are allowed'));
+    },
+  });
+
+  app.post('/api/upload', requireStaff, upload.single('image'), (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file uploaded' });
+    }
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: imageUrl });
+  });
+
   app.get('/api/catalog', async (req, res) => {
     try {
+      const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
       const catalog = await prisma.menuItem.findMany({
+        where: includeInactive ? undefined : { isActive: true },
         include: {
           modifiers: {
             include: {
@@ -253,6 +289,185 @@ export function createApp() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch catalog' });
+    }
+  });
+
+  app.post('/api/catalog', requireManager, async (req, res) => {
+    try {
+      const { brand, category, name, description, basePrice, image, modifiers } = req.body || {};
+      if (!name || typeof name !== 'string' || !brand || typeof brand !== 'string' || !category || typeof category !== 'string') {
+        return res.status(400).json({ error: 'Name, brand, and category are required' });
+      }
+      const parsedPrice = Number(basePrice);
+      if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ error: 'Valid basePrice is required' });
+      }
+
+      const item = await prisma.menuItem.create({
+        data: {
+          brand: brand.trim().toLowerCase(),
+          category: category.trim(),
+          name: name.trim(),
+          description: typeof description === 'string' ? description.trim() : null,
+          basePrice: parsedPrice,
+          image: typeof image === 'string' && image.trim() ? image.trim() : null,
+          isActive: true,
+          isSoldOut: false,
+          modifiers: Array.isArray(modifiers) && modifiers.length > 0 ? {
+            create: modifiers.map((group: any) => ({
+              key: group.key || group.id || randomUUID(),
+              name: group.name,
+              type: group.type || 'single',
+              required: Boolean(group.required),
+              options: {
+                create: (group.options || []).map((opt: any) => ({
+                  key: opt.key || opt.id || randomUUID(),
+                  name: opt.name,
+                  priceDelta: Number(opt.priceDelta) || 0,
+                }))
+              }
+            }))
+          } : undefined
+        },
+        include: {
+          modifiers: {
+            include: {
+              options: true
+            }
+          }
+        }
+      });
+
+      res.status(201).json(item);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to create menu item' });
+    }
+  });
+
+  app.put('/api/catalog/:id', requireManager, async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const { brand, category, name, description, basePrice, image, isActive, isSoldOut, modifiers } = req.body || {};
+
+      const existing = await prisma.menuItem.findUnique({
+        where: { id },
+        include: { modifiers: { include: { options: true } } }
+      });
+      if (!existing) {
+        return res.status(404).json({ error: 'Menu item not found' });
+      }
+
+      const data: any = {};
+      if (brand !== undefined) data.brand = String(brand).trim().toLowerCase();
+      if (category !== undefined) data.category = String(category).trim();
+      if (name !== undefined) data.name = String(name).trim();
+      if (description !== undefined) data.description = description ? String(description).trim() : null;
+      if (basePrice !== undefined) {
+        const parsed = Number(basePrice);
+        if (Number.isNaN(parsed) || parsed < 0) return res.status(400).json({ error: 'Invalid base price' });
+        data.basePrice = parsed;
+      }
+      if (image !== undefined) data.image = image ? String(image).trim() : null;
+      if (isActive !== undefined) data.isActive = Boolean(isActive);
+      if (isSoldOut !== undefined) data.isSoldOut = Boolean(isSoldOut);
+
+      // If modifiers are supplied, sync them (delete removed, create new)
+      if (Array.isArray(modifiers)) {
+        await prisma.$transaction(async (tx) => {
+          // Delete existing modifier groups & options for this item
+          const groupIds = existing.modifiers.map(g => g.id);
+          if (groupIds.length > 0) {
+            await tx.modifierOption.deleteMany({
+              where: { modifierGroupId: { in: groupIds } }
+            });
+            await tx.modifierGroup.deleteMany({
+              where: { menuItemId: id }
+            });
+          }
+
+          // Create new groups & options
+          for (const group of modifiers) {
+            await tx.modifierGroup.create({
+              data: {
+                key: group.key || group.id || randomUUID(),
+                name: group.name,
+                type: group.type || 'single',
+                required: Boolean(group.required),
+                menuItemId: id,
+                options: {
+                  create: (group.options || []).map((opt: any) => ({
+                    key: opt.key || opt.id || randomUUID(),
+                    name: opt.name,
+                    priceDelta: Number(opt.priceDelta) || 0,
+                  }))
+                }
+              }
+            });
+          }
+
+          await tx.menuItem.update({
+            where: { id },
+            data
+          });
+        }, WRITE_TX_OPTIONS);
+      } else {
+        await prisma.menuItem.update({
+          where: { id },
+          data
+        });
+      }
+
+      const updated = await prisma.menuItem.findUnique({
+        where: { id },
+        include: { modifiers: { include: { options: true } } }
+      });
+      res.json(updated);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to update menu item' });
+    }
+  });
+
+  app.delete('/api/catalog/:id', requireManager, async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const item = await prisma.menuItem.findUnique({
+        where: { id },
+        include: { orderItems: true }
+      });
+      if (!item) {
+        return res.status(404).json({ error: 'Menu item not found' });
+      }
+
+      // If it was ordered before, soft delete to preserve receipts
+      if (item.orderItems && item.orderItems.length > 0) {
+        await prisma.menuItem.update({
+          where: { id },
+          data: { isActive: false }
+        });
+        return res.json({ ok: true, softDeleted: true });
+      }
+
+      // Otherwise clean delete with modifiers
+      await prisma.$transaction(async (tx) => {
+        const groups = await tx.modifierGroup.findMany({ where: { menuItemId: id } });
+        const groupIds = groups.map(g => g.id);
+        if (groupIds.length > 0) {
+          await tx.modifierOption.deleteMany({
+            where: { modifierGroupId: { in: groupIds } }
+          });
+          await tx.modifierGroup.deleteMany({
+            where: { menuItemId: id }
+          });
+        }
+        await tx.menuItem.delete({ where: { id } });
+      }, WRITE_TX_OPTIONS);
+
+      res.json({ ok: true, deleted: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to delete menu item' });
     }
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, CornerDownLeft, Search, X } from 'lucide-react';
+import { CircleAlert, CornerDownLeft, Edit, Plus, Search, X } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import {
   Badge,
@@ -10,21 +10,14 @@ import {
   Skeleton,
   useToast,
 } from './ui';
-
-type MenuItem = {
-  id: string;
-  brand: string;
-  category: string;
-  name: string;
-  isSoldOut: boolean;
-};
+import { MenuItemEditModal, type MenuItemFull } from './MenuItemEditModal';
 
 type AvailabilityFilter = 'all' | 'available' | 'soldout';
 type BrandFilter = 'all' | 'ai-cha' | 'zhengda';
 
 export function MenuManagement() {
   const { toast } = useToast();
-  const [items, setItems] = useState<MenuItem[]>([]);
+  const [items, setItems] = useState<MenuItemFull[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
@@ -33,11 +26,15 @@ export function MenuManagement() {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Modal State
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<MenuItemFull | null>(null);
+
   const fetchCatalog = async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const data = await apiFetch<MenuItem[]>('/api/catalog');
+      const data = await apiFetch<MenuItemFull[]>('/api/catalog?includeInactive=false');
       setItems(data);
     } catch {
       setLoadError(true);
@@ -56,8 +53,9 @@ export function MenuManagement() {
     if (!loading && !loadError) searchRef.current?.focus();
   }, [loading, loadError]);
 
-  const setSoldOut = async (item: MenuItem, nextSoldOut: boolean) => {
-    setPendingIds((prev) => new Set(prev).add(item.id));
+  const setSoldOut = async (item: MenuItemFull, nextSoldOut: boolean) => {
+    if (!item.id) return;
+    setPendingIds((prev) => new Set(prev).add(item.id!));
     // Optimistic update
     setItems((prev) =>
       prev.map((i) => (i.id === item.id ? { ...i, isSoldOut: nextSoldOut } : i)),
@@ -88,11 +86,13 @@ export function MenuManagement() {
         action: { label: 'Retry', onClick: () => setSoldOut(item, nextSoldOut) },
       });
     } finally {
-      setPendingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(item.id);
-        return next;
-      });
+      if (item.id) {
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id!);
+          return next;
+        });
+      }
     }
   };
 
@@ -153,7 +153,7 @@ export function MenuManagement() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && soleMatch && !pendingIds.has(soleMatch.id)) {
+              if (e.key === 'Enter' && soleMatch && soleMatch.id && !pendingIds.has(soleMatch.id)) {
                 e.preventDefault();
                 setSoldOut(soleMatch, !soleMatch.isSoldOut);
               }
@@ -184,6 +184,18 @@ export function MenuManagement() {
           onChange={setBrand}
           ariaLabel="Filter by brand"
         />
+
+        <Button
+          variant="primary"
+          onClick={() => {
+            setEditingItem(null);
+            setModalOpen(true);
+          }}
+          className="font-bold text-xs"
+        >
+          <Plus className="size-4" />
+          Add Item
+        </Button>
 
         {isFiltered ? (
           <Button variant="ghost" onClick={clearFilters}>
@@ -254,16 +266,22 @@ export function MenuManagement() {
                   </th>
                   <th
                     scope="col"
+                    className="hidden p-3.5 text-sm font-semibold text-ink-soft sm:table-cell"
+                  >
+                    Price
+                  </th>
+                  <th
+                    scope="col"
                     className="p-3.5 text-right text-sm font-semibold text-ink-soft"
                   >
-                    Availability
+                    Actions
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((item) => {
                   const zhengda = item.brand.toLowerCase() === 'zhengda';
-                  const busy = pendingIds.has(item.id);
+                  const busy = pendingIds.has(item.id!);
                   return (
                     <tr
                       key={item.id}
@@ -294,21 +312,30 @@ export function MenuManagement() {
                       <td className="hidden p-3.5 text-sm text-ink-soft sm:table-cell">
                         {item.category}
                       </td>
+                      <td className="hidden p-3.5 text-sm font-bold tabular-nums text-ink sm:table-cell">
+                        ${Number(item.basePrice ?? 0).toFixed(2)}
+                      </td>
                       <td className="p-3.5">
-                        <span className="flex items-center justify-end gap-3">
-                          {/* Available is the default for 48 of 48 items, so only
-                              the exception is labelled. */}
+                        <span className="flex items-center justify-end gap-2 sm:gap-3">
                           {item.isSoldOut ? (
                             <Badge variant="danger" dot>
                               Sold out
                             </Badge>
                           ) : null}
-                          {/*
-                           * The control names the action, not the state. The old
-                           * switch was labelled "<item> is available" and had to be
-                           * turned OFF to mark something sold out — a double negative
-                           * that is easy to flip the wrong way mid-rush.
-                           */}
+
+                          <Button
+                            variant="secondary"
+                            size="md"
+                            onClick={() => {
+                              setEditingItem(item);
+                              setModalOpen(true);
+                            }}
+                            className="font-bold text-xs"
+                          >
+                            <Edit className="size-3.5" />
+                            Edit
+                          </Button>
+
                           <Button
                             variant={item.isSoldOut ? 'success' : 'secondary'}
                             loading={busy}
@@ -326,6 +353,17 @@ export function MenuManagement() {
           </div>
         </Card>
       )}
+
+      {/* Item Create / Edit Modal */}
+      <MenuItemEditModal
+        isOpen={modalOpen}
+        item={editingItem}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingItem(null);
+        }}
+        onSaved={fetchCatalog}
+      />
     </div>
   );
 }

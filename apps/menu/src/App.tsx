@@ -108,7 +108,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('menu');
-  const [catalogOverrides, setCatalogOverrides] = useState<Record<string, { isSoldOut: boolean }>>({});
   
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeModalItem, setActiveModalItem] = useState<MenuItem | null>(null);
@@ -136,57 +135,75 @@ export default function App() {
     refreshOnlinePaymentState();
   }, []);
 
-  // Simulate initial data loading and fetch catalog overrides
+  const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
   const [isLoading, setIsLoading] = useState(true);
-  useEffect(() => {
-    const fetchCatalog = async () => {
-      try {
-        const res = await apiFetch('/api/catalog');
-        if (res.ok) {
-          const data = await res.json();
-          const overrides: Record<string, { isSoldOut: boolean }> = {};
-          data.forEach((item: any) => {
-            overrides[item.id] = { isSoldOut: item.isSoldOut };
-          });
-          setCatalogOverrides(overrides);
+
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/catalog');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: MenuItem[] = data.map((item: any) => ({
+            id: item.id,
+            brand: item.brand,
+            category: item.category,
+            name: item.name,
+            description: item.description,
+            basePrice: item.basePrice,
+            imageFallback: item.image,
+            isSoldOut: Boolean(item.isSoldOut),
+            modifiers: item.modifiers?.map((g: any) => ({
+              id: g.key || g.id,
+              name: g.name,
+              type: g.type,
+              required: g.required,
+              options: g.options?.map((o: any) => ({
+                id: o.key || o.id,
+                name: o.name,
+                priceDelta: o.priceDelta,
+              })) || [],
+            })),
+          }));
+          setDynamicCatalog(mapped);
         }
-      } catch (error) {
-        console.error('Failed to fetch catalog overrides', error);
-      } finally {
-        setIsLoading(false);
       }
-    };
-    fetchCatalog();
-    const interval = setInterval(fetchCatalog, 10000); // Check for sold-out status every 10s
-    return () => clearInterval(interval);
+    } catch (error) {
+      console.error('Failed to fetch dynamic catalog', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchCatalog();
+    const interval = setInterval(fetchCatalog, 5000); // Poll catalog updates every 5s
+    return () => clearInterval(interval);
+  }, [fetchCatalog]);
 
   // Derived state for current brand's items
   const brandItems = useMemo(() => {
-    return CATALOG.filter(i => i.brand === activeBrand).map(item => ({
-      ...item,
-      isSoldOut: catalogOverrides[item.id]?.isSoldOut || false
-    }));
-  }, [activeBrand, catalogOverrides]);
+    return dynamicCatalog.filter((i) => i.brand === activeBrand);
+  }, [activeBrand, dynamicCatalog]);
+
   const categories = useMemo(() => {
-    return ['All', ...new Set(brandItems.map(i => i.category))];
+    return ['All', ...new Set(brandItems.map((i) => i.category))];
   }, [brandItems]);
-  
+
   // Filtered items
   const visibleItems = useMemo(() => {
-    const allMapped = CATALOG.map(item => ({
-      ...item,
-      isSoldOut: catalogOverrides[item.id]?.isSoldOut || false
-    }));
-
     let items: typeof brandItems;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      items = allMapped.filter(i => i.name.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q));
+      items = dynamicCatalog.filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          i.description?.toLowerCase().includes(q)
+      );
     } else if (activeCategory === 'All') {
       items = brandItems;
     } else {
-      items = brandItems.filter(i => i.category === activeCategory);
+      items = brandItems.filter((i) => i.category === activeCategory);
     }
 
     return [...items].sort((a, b) => {
@@ -194,7 +211,7 @@ export default function App() {
       const bFav = favorites.includes(b.id) ? 1 : 0;
       return bFav - aFav;
     });
-  }, [brandItems, activeCategory, searchQuery, favorites, catalogOverrides]);
+  }, [dynamicCatalog, brandItems, activeCategory, searchQuery, favorites]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
 
@@ -298,7 +315,7 @@ export default function App() {
   };
 
   const handleEditItem = (cartItem: CartItem) => {
-    const menuItem = CATALOG.find(i => i.id === cartItem.menuItemId);
+    const menuItem = dynamicCatalog.find((i) => i.id === cartItem.menuItemId) || CATALOG.find((i) => i.id === cartItem.menuItemId);
     if (menuItem) {
       setActiveModalItem(menuItem);
       setModalInitialSelected(cartItem.selectedModifiers);
