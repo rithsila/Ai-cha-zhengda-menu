@@ -7,8 +7,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "concurrently -n api,menu,staff -c blue,magenta,green \"npm --prefix apps/api run dev\" \"npm --prefix apps/menu run dev\" \"npm --prefix apps/staff run dev\"",
     "build": "npm run build --workspaces --if-present",
     "start": "npm run start --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  },
+  "dependencies": {
+    "lucide-react": "^1.33.0"
   }
 }

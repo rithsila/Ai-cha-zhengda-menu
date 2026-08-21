@@ -3,12 +3,15 @@ import {
   BarChart3,
   Bell,
   BellOff,
+  Building2,
   ChevronDown,
   LayoutDashboard,
   ListPlus,
+  Menu as MenuIcon,
   Package,
   QrCode,
   RefreshCw,
+  Sparkles,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -29,7 +32,6 @@ import {
   EmptyState,
   PinScreen,
   Skeleton,
-  Tabs,
   ThemeToggle,
   ToastProvider,
   useToast,
@@ -47,17 +49,9 @@ import { isMuted, playNewOrderAlert, setMuted, unlockAlerts } from './lib/alert'
 import type { BadgeVariant } from './components/ui';
 import type { Branch, ConnectionState, Order } from './types';
 
-/**
- * How far back the board looks. Bounds the payload the tablet re-downloads every
- * 5 seconds, while staying wide enough that a genuinely open order can never
- * silently disappear from the board. Anything older reads as history, not alarm.
- */
 const BOARD_WINDOW_MS = 24 * 60 * 60 * 1000;
-
 const POLL_MS = 5000;
-/** Elapsed labels are minute-resolution, so a 1s tick would re-render 59 times for nothing. */
 const CLOCK_MS = 15000;
-
 const PANEL_ID = 'staff-panel';
 
 type TabId = 'orders' | 'menu' | 'manager';
@@ -71,11 +65,6 @@ const LANES: Array<{ key: string; title: string; statuses: string[] }> = [
 const LANE_STATUSES = new Set(LANES.flatMap((lane) => lane.statuses));
 const CLOSED_STATUSES = new Set(['completed', 'cancelled']);
 
-/**
- * Oldest first, because that is the order the counter should work in — except
- * for leftovers from an earlier shift, which sink to the bottom instead of
- * burying today's real queue.
- */
 function boardOrder(a: Order, b: Order, now: number): number {
   const aStale = now - new Date(a.createdAt).getTime() >= STALE_AFTER_MS;
   const bStale = now - new Date(b.createdAt).getTime() >= STALE_AFTER_MS;
@@ -83,19 +72,7 @@ function boardOrder(a: Order, b: Order, now: number): number {
   return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 }
 
-/* -------------------------------------------------------------------------- */
-/* Header pieces                                                               */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Connection status and manual refresh, merged into one control.
- *
- * They used to be two separate elements sitting beside each other: a Refresh
- * button next to a readout saying "updated 3s ago". One was admitting the other
- * was not trusted. Now the readout *is* the button, and it owns its own one-second
- * tick so the seconds counter never re-renders the order board.
- */
-function ConnectionButton({
+function ConnectionStatusBadge({
   state,
   lastSuccessAt,
   refreshing,
@@ -114,8 +91,8 @@ function ConnectionButton({
   }, []);
 
   const meta = {
-    live: { dot: 'bg-success', label: 'Live' },
-    retrying: { dot: 'bg-status-pending', label: 'Retrying' },
+    live: { dot: 'bg-success', label: 'Live Server' },
+    retrying: { dot: 'bg-status-pending', label: 'Retrying...' },
     offline: { dot: 'bg-danger', label: 'Offline' },
   }[state];
 
@@ -126,48 +103,35 @@ function ConnectionButton({
     <button
       type="button"
       onClick={onRefresh}
-      aria-label={`Refresh orders now. Connection ${meta.label}${
-        seconds == null ? '' : `, updated ${seconds} seconds ago`
-      }`}
-      className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl px-2.5 text-sm font-semibold text-ink-soft transition-colors duration-150 hover:bg-surface-sunken hover:text-ink"
+      aria-label={`Refresh orders now. Status: ${meta.label}`}
+      className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink-soft transition-all hover:border-border-strong hover:bg-surface-sunken hover:text-ink"
     >
-      <span className={`size-2 shrink-0 rounded-full ${meta.dot}`} aria-hidden="true" />
-      <span className="hidden sm:inline" aria-hidden="true">
-        {meta.label}
-      </span>
+      <span className={`size-2 shrink-0 rounded-full ${meta.dot} ring-2 ring-surface`} />
+      <span>{meta.label}</span>
       {seconds != null ? (
-        <span className="hidden tabular-nums text-ink-faint md:inline" aria-hidden="true">
-          {seconds}s
-        </span>
+        <span className="tabular-nums text-ink-faint">({seconds}s)</span>
       ) : null}
       <RefreshCw
-        className={`size-4 shrink-0 ${refreshing ? 'motion-safe:animate-spin' : ''}`}
-        aria-hidden="true"
+        className={`size-3.5 shrink-0 text-ink-faint ${
+          refreshing ? 'motion-safe:animate-spin text-accent' : ''
+        }`}
       />
     </button>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Board pieces                                                                */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The one piece of documentation in the app. Staff had no way to learn what amber
- * versus red meant, and no way to discover the keyboard accelerators.
- */
 function BoardLegend() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-border">
+    <div className="rounded-2xl border border-border bg-surface">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm font-semibold text-ink-soft"
+        className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-bold text-ink"
       >
-        What the colours mean · keyboard shortcuts
+        <span>Color Meanings &amp; Keyboard Shortcuts</span>
         <ChevronDown
           className={`size-4 shrink-0 transition-transform duration-150 ${
             open ? 'rotate-180' : ''
@@ -176,72 +140,51 @@ function BoardLegend() {
         />
       </button>
       {open ? (
-        <div className="grid gap-6 border-t border-border px-4 py-4 text-sm sm:grid-cols-2">
+        <div className="grid gap-6 border-t border-border px-4 py-4 text-xs sm:grid-cols-2">
           <div>
-            <h4 className="font-semibold text-ink">Waiting time</h4>
+            <h4 className="font-bold text-ink">Order Waiting Status</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
-                <span className="inline-block size-3 shrink-0 rounded-full bg-surface-sunken" />
-                On time, or from an earlier shift
+                <span className="inline-block size-2.5 shrink-0 rounded-full bg-surface-sunken" />
+                On time / newly placed
               </li>
               <li className="flex items-center gap-2">
-                <span className="inline-block size-3 shrink-0 rounded-full bg-status-pending-soft" />
+                <span className="inline-block size-2.5 shrink-0 rounded-full bg-status-pending" />
                 Getting close — pending {TONE_THRESHOLDS.pending.warn}m, preparing{' '}
                 {TONE_THRESHOLDS.preparing.warn}m, ready {TONE_THRESHOLDS.ready.warn}m
               </li>
               <li className="flex items-center gap-2">
-                <span className="inline-block size-3 shrink-0 rounded-full bg-danger-soft" />
+                <span className="inline-block size-2.5 shrink-0 rounded-full bg-danger" />
                 Over target — pending {TONE_THRESHOLDS.pending.late}m, preparing{' '}
                 {TONE_THRESHOLDS.preparing.late}m, ready {TONE_THRESHOLDS.ready.late}m
               </li>
             </ul>
-            <h4 className="mt-4 font-semibold text-ink">Waiting for payment</h4>
+            <h4 className="mt-4 font-bold text-ink">QR Payment Verification</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
-                <span className="inline-block size-3 shrink-0 rounded-full bg-danger" />
-                Red card, red band — the QR payment has not landed. Do not make
-                it. It clears itself when the customer pays, or is cancelled once
-                the QR expires.
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="inline-block size-3 shrink-0 rounded-full bg-status-pending-soft" />
-                A Cash ticket in Pending <em>is</em> paid for at the counter —
-                start it as normal.
-              </li>
-            </ul>
-
-            <h4 className="mt-4 font-semibold text-ink">Item dots</h4>
-            <ul className="mt-2 space-y-1.5 text-ink-soft">
-              <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-accent" />
-                Ai-Cha — drinks and ice cream
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-zhengda" />
-                Zhengda — chicken steak
+                <span className="inline-block size-2.5 shrink-0 rounded-full bg-danger" />
+                Red border ticket: QR payment still pending. Do not serve until paid.
               </li>
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-ink">Keyboard</h4>
+            <h4 className="font-bold text-ink">Keyboard Quick Keys</h4>
             <dl className="mt-2 space-y-1.5 text-ink-soft">
               {[
-                ['1 2 3', 'Switch between Live Orders, Menu and Manager'],
-                ['R', 'Refresh now'],
-                ['M', 'Mute or unmute the new-order chime'],
-                ['Tab', 'Step through order buttons in queue order'],
+                ['1', 'Switch to Orders Board'],
+                ['2', 'Switch to Menu Stock'],
+                ['3', 'Switch to Manager Hub'],
+                ['R', 'Force Refresh data'],
+                ['M', 'Toggle Alert Chime'],
               ].map(([key, what]) => (
-                <div key={key} className="flex gap-3">
-                  <dt className="w-16 shrink-0 font-semibold text-ink tabular-nums">
+                <div key={key} className="flex items-center gap-3">
+                  <kbd className="flex h-5 w-6 items-center justify-center rounded bg-surface-sunken font-mono text-[10px] font-bold text-ink shadow-sm">
                     {key}
-                  </dt>
+                  </kbd>
                   <dd>{what}</dd>
                 </div>
               ))}
             </dl>
-            <p className="mt-4 text-ink-faint">
-              Orders older than 24 hours are not shown. Find them under Completed.
-            </p>
           </div>
         </div>
       ) : null}
@@ -249,16 +192,9 @@ function BoardLegend() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* App                                                                         */
-/* -------------------------------------------------------------------------- */
-
 function StaffApp() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
-  // Only "are manager tools unlocked?" — the PIN itself is never kept. The
-  // login below swaps the stored session for a manager token, and apiFetch
-  // sends that instead.
   const [managerUnlocked, setManagerUnlocked] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,8 +211,8 @@ function StaffApp() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [muted, setMutedState] = useState(() => isMuted());
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const headerRef = useRef<HTMLElement>(null);
   const failuresRef = useRef(0);
   const knownIdsRef = useRef<Set<string> | null>(null);
   const focusAfterRef = useRef<string | null>(null);
@@ -284,22 +220,6 @@ function StaffApp() {
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), CLOCK_MS);
     return () => clearInterval(id);
-  }, []);
-
-  /* The header is one row on a tablet and two on a phone, so the offset the lane
-     headers stick to cannot be a hardcoded number. */
-  useEffect(() => {
-    const el = headerRef.current;
-    if (!el) return;
-    const apply = () =>
-      document.documentElement.style.setProperty(
-        '--app-header-h',
-        `${el.offsetHeight}px`,
-      );
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(el);
-    return () => observer.disconnect();
   }, []);
 
   const fetchBranches = useCallback(async () => {
@@ -419,10 +339,8 @@ function StaffApp() {
             title:
               status === 'cancelled'
                 ? `${code} cancelled`
-                : `${code} handed over`,
+                : `${code} completed & handed over`,
             variant: status === 'cancelled' ? 'info' : 'success',
-            // The only escape hatch used to be "Reopen", buried in a collapsed
-            // accordion. A mis-tap during a rush needs the undo right here.
             action: {
               label: 'Undo',
               onClick: () => setStatus(id, previous.status, { silent: true }),
@@ -455,13 +373,6 @@ function StaffApp() {
     [orders],
   );
 
-  /*
-   * Unpaid KHQR tickets are pulled out of the lanes entirely. They used to sit
-   * in Pending next to cash orders wearing the same amber tag and the same green
-   * "Start preparing" button, so staff made drinks nobody had paid for. They are
-   * not queue work until the money lands, so they are not in the queue — and
-   * "Pending N" now counts only tickets that really are ready to make.
-   */
   const awaitingPaymentOrders = useMemo(
     () => openOrders.filter(isAwaitingPayment).sort((a, b) => boardOrder(a, b, now)),
     [openOrders, now],
@@ -478,11 +389,6 @@ function StaffApp() {
     [openOrders, now],
   );
 
-  /*
-   * Any open order whose status no lane claims. Previously these were counted in
-   * the header badge and then rendered nowhere, so the count and the board
-   * disagreed. Now an unknown status interrupts instead of vanishing.
-   */
   const strandedOrders = useMemo(
     () => openOrders.filter((o) => !LANE_STATUSES.has(o.status)),
     [openOrders],
@@ -497,7 +403,6 @@ function StaffApp() {
   );
   const shownClosed = closedOrders.slice(0, 20);
 
-  /** Advance the queue and keep the keyboard where the work is. */
   const advance = useCallback(
     (id: string, status: string) => {
       const lane = laneOrders.find((l) => l.orders.some((o) => o.id === id));
@@ -513,11 +418,6 @@ function StaffApp() {
     [setStatus],
   );
 
-  /*
-   * The QR failed and the customer handed over cash instead. `paid` rather than
-   * `preparing` so the money is recorded (the API settles loyalty points on
-   * `paid`) and the ticket rejoins the normal lane run at Pending.
-   */
   const markPaidAtCounter = useCallback(
     (id: string) => setStatus(id, 'paid'),
     [setStatus],
@@ -539,8 +439,6 @@ function StaffApp() {
     });
   }, []);
 
-  // Keyboard accelerators. Skipped whenever a field has focus so typing a "1"
-  // into the menu search never jumps tabs.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -567,369 +465,507 @@ function StaffApp() {
   const openCount = openOrders.length;
   const showBranch = selectedBranch === '' && branches.length > 1;
 
-  const tabs = [
+  const currentBranchName =
+    branches.find((b) => b.id === selectedBranch)?.name || 'All Branches';
+
+  const navItems = [
     {
-      id: 'orders',
-      label: 'Orders',
-      icon: <LayoutDashboard className="size-4" />,
-      badge: openCount > 0 ? openCount : undefined,
+      id: 'orders' as TabId,
+      label: 'Live Orders',
+      icon: <LayoutDashboard className="size-5" />,
+      badge: openCount > 0 ? String(openCount) : undefined,
+      shortcut: '1',
     },
-    { id: 'menu', label: 'Menu', icon: <ListPlus className="size-4" /> },
-    { id: 'manager', label: 'Manager', icon: <BarChart3 className="size-4" /> },
+    {
+      id: 'menu' as TabId,
+      label: 'Menu & Stock',
+      icon: <ListPlus className="size-5" />,
+      shortcut: '2',
+    },
+    {
+      id: 'manager' as TabId,
+      label: 'Manager Hub',
+      icon: <BarChart3 className="size-5" />,
+      badge: managerUnlocked ? 'Unlocked' : undefined,
+      badgeVariant: managerUnlocked ? 'ready' : undefined,
+      shortcut: '3',
+    },
   ];
 
-  // Rendered in the header on tablets and on its own row on a phone, so each
-  // mount point needs its own id for the label to point at.
-  const renderBranchSelect = (id: string) =>
-    branches.length === 0 ? null : (
-      <>
-        <label className="sr-only" htmlFor={id}>
-          Filter by branch
-        </label>
-        <select
-          id={id}
-          value={selectedBranch}
-          onChange={(e) => setSelectedBranch(e.target.value)}
-          className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-ink transition-colors focus:border-accent md:w-auto"
-        >
-          <option value="">All branches</option>
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </>
-    );
-
   return (
-    <div className="min-h-dvh bg-surface-page text-ink">
-      <header
-        ref={headerRef}
-        className="sticky top-0 z-30 border-b border-border bg-surface-raised/95 backdrop-blur-sm"
+    <div className="flex min-h-dvh bg-surface-page text-ink">
+      {/* Mobile Drawer Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Modern Dashboard Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-surface transition-transform duration-200 lg:static lg:w-68 lg:translate-x-0 ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
       >
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-6 lg:px-8">
-          <div className="flex shrink-0 items-center gap-2.5">
-            <div className="flex items-center gap-1" aria-hidden="true">
-              <span className="size-2.5 rounded-full bg-accent" />
-              <span className="size-2.5 rounded-full bg-zhengda" />
+        {/* Sidebar Brand Header */}
+        <div className="flex h-18 items-center justify-between border-b border-border px-5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-accent text-on-accent shadow-sm">
+              <Sparkles className="size-5" />
             </div>
-            <h1 className="hidden text-base font-bold whitespace-nowrap text-ink sm:block">
-              Ai-Cha &amp; Zhengda
-            </h1>
+            <div>
+              <h1 className="text-sm font-black tracking-tight text-ink">
+                Ai-Cha <span className="text-zhengda">&amp;</span> Zhengda
+              </h1>
+              <p className="text-[10px] font-semibold tracking-wider uppercase text-ink-faint">
+                Staff &amp; Admin Hub
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(false)}
+            className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        {/* Branch Selector Card */}
+        {branches.length > 0 && (
+          <div className="border-b border-border p-4">
+            <div className="flex items-center gap-2 text-xs font-semibold text-ink-soft mb-1.5">
+              <Building2 className="size-3.5" />
+              <span>Store Branch</span>
+            </div>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="h-10 w-full rounded-xl border border-border bg-surface-sunken/50 px-3 text-xs font-bold text-ink outline-none transition-colors focus:border-accent"
+            >
+              <option value="">All Branches</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Navigation Menu */}
+        <nav className="flex-1 space-y-1.5 p-4" aria-label="Main navigation">
+          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+            Operations
+          </p>
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-sm font-bold transition-all duration-150 ${
+                  isActive
+                    ? 'bg-accent text-on-accent shadow-sm'
+                    : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon}
+                  <span>{item.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {item.badge ? (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-black tabular-nums ${
+                        isActive
+                          ? 'bg-white/25 text-on-accent'
+                          : 'bg-accent/15 text-accent'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  ) : null}
+                  <kbd
+                    className={`hidden rounded px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
+                      isActive
+                        ? 'bg-white/20 text-on-accent'
+                        : 'bg-surface-sunken text-ink-faint'
+                    }`}
+                  >
+                    {item.shortcut}
+                  </kbd>
+                </div>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Sidebar Footer Controls */}
+        <div className="border-t border-border p-4 space-y-3">
+          <div className="flex items-center justify-between rounded-xl bg-surface-sunken/40 p-2 text-xs">
+            <div className="flex items-center gap-2 font-medium text-ink-soft">
+              <span
+                className={`size-2 rounded-full ${
+                  connState === 'live'
+                    ? 'bg-success'
+                    : connState === 'retrying'
+                      ? 'bg-status-pending'
+                      : 'bg-danger'
+                }`}
+              />
+              <span className="capitalize">{connState}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchOrders(true)}
+              className="font-bold text-accent hover:underline"
+            >
+              Refresh
+            </button>
           </div>
 
-          {/* On a phone the tab bar takes its own row; from md it sits inline. */}
-          <Tabs
-            tabs={tabs}
-            active={activeTab}
-            onChange={(id) => setActiveTab(id as TabId)}
-            ariaLabel="Main navigation"
-            panelId={PANEL_ID}
-            className="order-last w-full md:order-2 md:ml-auto md:w-auto"
-          />
-
-          <div className="ml-auto flex shrink-0 items-center gap-1 md:order-3 md:ml-0">
-            <div className="hidden md:block">
-              {renderBranchSelect('branch-select-wide')}
-            </div>
+          <div className="flex items-center justify-between gap-2">
             <Button
               variant="ghost"
-              size="icon"
+              size="md"
               onClick={toggleMute}
-              aria-label={
-                muted ? 'Unmute new-order chime' : 'Mute new-order chime'
-              }
-              title={muted ? 'Chime is off' : 'Chime is on'}
+              className="flex-1 justify-start gap-2 text-xs font-bold"
+              aria-label={muted ? 'Unmute chime' : 'Mute chime'}
             >
               {muted ? (
-                <BellOff className="size-5 text-ink-faint" aria-hidden="true" />
+                <>
+                  <BellOff className="size-4 text-ink-faint" />
+                  <span>Muted</span>
+                </>
               ) : (
-                <Bell className="size-5" aria-hidden="true" />
+                <>
+                  <Bell className="size-4 text-accent" />
+                  <span>Chime On</span>
+                </>
               )}
             </Button>
-            <ConnectionButton
+
+            <ThemeToggle />
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Top Header Bar */}
+        <header className="sticky top-0 z-30 flex h-18 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="rounded-xl border border-border p-2 text-ink-soft hover:bg-surface-sunken lg:hidden"
+              aria-label="Open sidebar"
+            >
+              <MenuIcon className="size-5" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-extrabold text-ink sm:text-lg">
+                  {activeTab === 'orders'
+                    ? 'Live Order Queue'
+                    : activeTab === 'menu'
+                      ? 'Menu & Stock Inventory'
+                      : 'Manager Portal'}
+                </h2>
+                <Badge variant="default">{currentBranchName}</Badge>
+              </div>
+              <p className="hidden text-xs text-ink-soft sm:block">
+                {activeTab === 'orders'
+                  ? `${openCount} active tickets in queue`
+                  : activeTab === 'menu'
+                    ? 'Quick toggle out-of-stock items'
+                    : 'Sales data, customer loyalty, and catalog perks'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <ConnectionStatusBadge
               state={connState}
               lastSuccessAt={lastSuccessAt}
               refreshing={refreshing}
               onRefresh={() => fetchOrders(true)}
             />
-            <ThemeToggle />
           </div>
-        </div>
+        </header>
 
-        {branches.length > 0 ? (
-          <div className="border-t border-border px-4 py-2 md:hidden">
-            {renderBranchSelect('branch-select-narrow')}
+        {/* Offline Banner */}
+        {connState === 'offline' && !bannerDismissed ? (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 border-b border-border bg-danger-soft px-4 py-2.5 text-xs font-semibold text-danger sm:px-8"
+          >
+            <span>
+              ⚠️ Server connection lost. Orders may be outdated. Retrying automatically...
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Dismiss banner"
+              onClick={() => setBannerDismissed(true)}
+            >
+              <X className="size-4" />
+            </Button>
           </div>
         ) : null}
-      </header>
 
-      {connState === 'offline' && !bannerDismissed ? (
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-3 border-b border-border bg-danger-soft px-4 py-2.5 text-sm font-medium text-danger"
+        {/* Main Body */}
+        <main
+          id={PANEL_ID}
+          role="tabpanel"
+          className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8"
         >
-          <span>
-            Connection lost — these orders may be out of date. Retrying
-            automatically.
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Dismiss"
-            onClick={() => setBannerDismissed(true)}
-          >
-            <X className="size-4" aria-hidden="true" />
-          </Button>
-        </div>
-      ) : null}
-
-      <main
-        id={PANEL_ID}
-        role="tabpanel"
-        aria-labelledby={`${PANEL_ID}-tab-${activeTab}`}
-        tabIndex={-1}
-        className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8"
-      >
-        {activeTab === 'menu' ? (
-          <MenuManagement />
-        ) : activeTab === 'manager' ? (
-          managerUnlocked ? (
-            <ManagerDashboard onLock={() => setManagerUnlocked(false)} />
-          ) : (
-            <PinScreen
-              title="Manager Mode"
-              subtitle="Enter the Manager PIN to open analytics and loyalty tools."
-              buttonLabel="Unlock manager tools"
-              onSubmit={async (pin) => {
-                try {
-                  const res = await fetch(`${API_BASE}/api/auth/staff-login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin, role: 'manager' }),
-                  });
-                  if (res.ok) {
-                    // Keep the manager token, not the PIN. A manager token also
-                    // passes every staff route, so the dashboard keeps working.
-                    const data = await res.json();
-                    saveSession({ token: data.token, role: 'manager', expiresAt: data.expiresAt });
-                    setManagerUnlocked(true);
-                    return true;
-                  }
-                  return false;
-                } catch {
-                  throw new Error('network');
-                }
-              }}
-            />
-          )
-        ) : loading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i} padding="none" className="overflow-hidden">
-                <div className="space-y-3 p-4">
-                  <Skeleton className="h-8 w-28" />
-                  <Skeleton className="h-8 w-40" />
-                  <Skeleton className="h-14 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : openOrders.length === 0 && closedOrders.length === 0 ? (
-          <EmptyState
-            icon={<Package className="size-10" />}
-            title="No orders in the last 24 hours"
-            description="New orders land here on their own, with a chime. No need to refresh."
-          />
-        ) : (
-          <div className="space-y-5">
-            {strandedOrders.length > 0 ? (
-              <section
-                aria-label="Orders needing attention"
-                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-danger bg-danger-soft px-4 py-2.5"
-              >
-                <h2 className="flex items-center gap-2 font-bold text-danger">
-                  <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
-                  {strandedOrders.length} order
-                  {strandedOrders.length > 1 ? 's' : ''} in an unexpected state
-                </h2>
-                <p className="text-sm tabular-nums text-danger">
-                  {strandedOrders
-                    .map((order) => `${order.pickupCode || order.id} (${order.status})`)
-                    .join(' · ')}
-                </p>
-              </section>
-            ) : null}
-
-            {awaitingPaymentOrders.length > 0 ? (
-              /*
-               * Above the board and outside the lane grid, on purpose. Physical
-               * separation is what stops a reflex tap: these tickets are not in
-               * the column staff work down.
-               */
-              <section
-                aria-labelledby="awaiting-payment-heading"
-                className="overflow-hidden rounded-2xl border-2 border-danger"
-              >
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 bg-danger-soft px-4 py-2.5">
-                  <h2
-                    id="awaiting-payment-heading"
-                    className="flex items-center gap-2 font-bold text-danger"
-                  >
-                    <QrCode className="size-5 shrink-0" aria-hidden="true" />
-                    Waiting for payment
-                    <span className="tabular-nums">
-                      {awaitingPaymentOrders.length}
-                    </span>
-                  </h2>
-                  <p className="text-sm font-medium text-danger">
-                    Not paid yet — do not make these. They clear on their own when
-                    the QR payment lands.
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 items-start gap-3 p-3 md:grid-cols-3">
-                  {awaitingPaymentOrders.map((order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      now={now}
-                      updating={updatingIds.has(order.id)}
-                      isNew={newIds.has(order.id)}
-                      showBranch={showBranch}
-                      onAction={advance}
-                      onCancel={cancelOrder}
-                      onMarkPaid={markPaidAtCounter}
-                      onSeen={markSeen}
-                    />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-3">
-              {laneOrders.map((lane) => {
-                const oldest = lane.orders[0];
-                return (
-                  <section
-                    key={lane.key}
-                    aria-labelledby={`lane-${lane.key}`}
-                    className="flex min-w-0 flex-col"
-                  >
-                    <div className="sticky top-[var(--app-header-h,4rem)] z-10 mb-2 flex items-center gap-2 rounded-xl bg-surface-page/90 px-1 py-1.5 backdrop-blur-sm">
-                      <Badge variant={lane.key as BadgeVariant} dot>
-                        {/* h2 so the document never jumps h1 -> h3. */}
-                        <h2 id={`lane-${lane.key}`} className="text-xs font-semibold">
-                          {lane.title}
-                        </h2>
-                      </Badge>
-                      <span className="text-sm font-semibold tabular-nums text-ink-soft">
-                        {lane.orders.length}
-                      </span>
-                      {oldest ? (
-                        <span className="ml-auto text-xs tabular-nums text-ink-faint">
-                          oldest {formatElapsed(oldest.createdAt, now).label}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {lane.orders.length === 0 ? (
-                      <p className="px-1 text-sm text-ink-faint">
-                        Nothing {lane.title.toLowerCase()}
-                      </p>
-                    ) : (
-                      /* Each lane scrolls on its own so a long queue in one column
-                         never pushes the other two off the screen. */
-                      <div className="flex flex-col gap-3 md:max-h-[calc(100dvh-var(--app-header-h,4rem)-7rem)] md:overflow-y-auto md:pr-1 md:pb-1">
-                        {lane.orders.map((order) => (
-                          <OrderCard
-                            key={order.id}
-                            order={order}
-                            now={now}
-                            updating={updatingIds.has(order.id)}
-                            isNew={newIds.has(order.id)}
-                            showBranch={showBranch}
-                            onAction={advance}
-                            onCancel={cancelOrder}
-                            onMarkPaid={markPaidAtCounter}
-                            onSeen={markSeen}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                );
-              })}
+          {activeTab === 'menu' ? (
+            <MenuManagement />
+          ) : activeTab === 'manager' ? (
+            managerUnlocked ? (
+              <ManagerDashboard onLock={() => setManagerUnlocked(false)} />
+            ) : (
+              <div className="mx-auto max-w-md pt-8">
+                <PinScreen
+                  title="Manager Access"
+                  subtitle="Enter your 4-digit Manager PIN to unlock reports and loyalty controls."
+                  buttonLabel="Unlock Manager Hub"
+                  onSubmit={async (pin) => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/auth/staff-login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pin, role: 'manager' }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        saveSession({
+                          token: data.token,
+                          role: 'manager',
+                          expiresAt: data.expiresAt,
+                        });
+                        setManagerUnlocked(true);
+                        return true;
+                      }
+                      return false;
+                    } catch {
+                      throw new Error('network');
+                    }
+                  }}
+                />
+              </div>
+            )
+          ) : loading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} padding="none" className="overflow-hidden">
+                  <div className="space-y-3 p-4">
+                    <Skeleton className="h-8 w-28" />
+                    <Skeleton className="h-8 w-40" />
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                </Card>
+              ))}
             </div>
-
-            {closedOrders.length > 0 ? (
-              <Card padding="none" className="overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setArchiveOpen((v) => !v)}
-                  aria-expanded={archiveOpen}
-                  className="flex min-h-11 w-full items-center justify-between gap-3 p-4 text-left"
+          ) : openOrders.length === 0 && closedOrders.length === 0 ? (
+            <EmptyState
+              icon={<Package className="size-10" />}
+              title="No orders in the last 24 hours"
+              description="New orders land here on their own with a chime. No need to refresh."
+            />
+          ) : (
+            <div className="space-y-6">
+              {/* Stranded Orders Alert */}
+              {strandedOrders.length > 0 ? (
+                <section
+                  aria-label="Orders needing attention"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-danger bg-danger-soft px-4 py-3"
                 >
-                  <span className="font-semibold text-ink">
-                    Finished today
-                    <span className="ml-2 font-normal text-ink-faint tabular-nums">
-                      {shownClosed.length < closedOrders.length
-                        ? `${shownClosed.length} of ${closedOrders.length}`
-                        : closedOrders.length}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    className={`size-5 shrink-0 text-ink-soft transition-transform duration-150 ${
-                      archiveOpen ? 'rotate-180' : ''
-                    }`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {archiveOpen ? (
-                  <ul className="divide-y divide-border border-t border-border">
-                    {shownClosed.map((order) => (
-                      <li
-                        key={order.id}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
-                      >
-                        <span className="font-semibold text-ink">
-                          {order.pickupCode || '—'}
-                        </span>
-                        <span className="text-xs tabular-nums text-ink-faint">
-                          {new Date(order.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                        {order.status === 'cancelled' ? (
-                          <Badge variant="danger">Cancelled</Badge>
-                        ) : PAID_STATUSES.has(order.status) ? (
-                          <Badge variant="completed">Paid</Badge>
-                        ) : null}
-                        <span className="ml-auto tabular-nums text-ink-soft">
-                          ${order.totalAmount.toFixed(2)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="md"
-                          loading={updatingIds.has(order.id)}
-                          onClick={() => setStatus(order.id, 'ready')}
-                          aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
-                        >
-                          Reopen
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </Card>
-            ) : null}
+                  <h2 className="flex items-center gap-2 font-bold text-danger">
+                    <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
+                    {strandedOrders.length} order
+                    {strandedOrders.length > 1 ? 's' : ''} in unexpected status
+                  </h2>
+                  <p className="text-sm tabular-nums text-danger">
+                    {strandedOrders
+                      .map((order) => `${order.pickupCode || order.id} (${order.status})`)
+                      .join(' · ')}
+                  </p>
+                </section>
+              ) : null}
 
-            <BoardLegend />
-          </div>
-        )}
-      </main>
+              {/* Unpaid KHQR Payment Orders */}
+              {awaitingPaymentOrders.length > 0 ? (
+                <section
+                  aria-labelledby="awaiting-payment-heading"
+                  className="overflow-hidden rounded-2xl border-2 border-danger bg-surface shadow-sm"
+                >
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 bg-danger-soft px-4 py-3">
+                    <h2
+                      id="awaiting-payment-heading"
+                      className="flex items-center gap-2 font-bold text-danger"
+                    >
+                      <QrCode className="size-5 shrink-0" aria-hidden="true" />
+                      Waiting for Payment Verification
+                      <span className="rounded-full bg-danger px-2 py-0.5 text-xs text-white tabular-nums">
+                        {awaitingPaymentOrders.length}
+                      </span>
+                    </h2>
+                    <p className="text-xs font-semibold text-danger">
+                      Not paid yet — do not prepare yet. Automatically moves when payment completes.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 items-start gap-4 p-4 md:grid-cols-3">
+                    {awaitingPaymentOrders.map((order) => (
+                      <OrderCard
+                        key={order.id}
+                        order={order}
+                        now={now}
+                        updating={updatingIds.has(order.id)}
+                        isNew={newIds.has(order.id)}
+                        showBranch={showBranch}
+                        onAction={advance}
+                        onCancel={cancelOrder}
+                        onMarkPaid={markPaidAtCounter}
+                        onSeen={markSeen}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {/* 3-Column Kanban Board */}
+              <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-3">
+                {laneOrders.map((lane) => {
+                  const oldest = lane.orders[0];
+                  return (
+                    <section
+                      key={lane.key}
+                      aria-labelledby={`lane-${lane.key}`}
+                      className="flex min-w-0 flex-col rounded-2xl border border-border bg-surface-sunken/30 p-3"
+                    >
+                      <div className="mb-3 flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={lane.key as BadgeVariant} dot>
+                            <h2 id={`lane-${lane.key}`} className="text-xs font-bold uppercase tracking-wider">
+                              {lane.title}
+                            </h2>
+                          </Badge>
+                          <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-black tabular-nums text-ink shadow-xs">
+                            {lane.orders.length}
+                          </span>
+                        </div>
+                        {oldest ? (
+                          <span className="text-[11px] font-semibold tabular-nums text-ink-faint">
+                            Oldest: {formatElapsed(oldest.createdAt, now).label}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {lane.orders.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-border py-8 text-center text-xs font-medium text-ink-faint">
+                          No {lane.title.toLowerCase()} orders
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3 md:max-h-[calc(100dvh-14rem)] md:overflow-y-auto md:pr-1">
+                          {lane.orders.map((order) => (
+                            <OrderCard
+                              key={order.id}
+                              order={order}
+                              now={now}
+                              updating={updatingIds.has(order.id)}
+                              isNew={newIds.has(order.id)}
+                              showBranch={showBranch}
+                              onAction={advance}
+                              onCancel={cancelOrder}
+                              onMarkPaid={markPaidAtCounter}
+                              onSeen={markSeen}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+
+              {/* Finished Today Drawer */}
+              {closedOrders.length > 0 ? (
+                <Card padding="none" className="overflow-hidden border-border bg-surface">
+                  <button
+                    type="button"
+                    onClick={() => setArchiveOpen((v) => !v)}
+                    aria-expanded={archiveOpen}
+                    className="flex min-h-12 w-full items-center justify-between gap-3 p-4 text-left hover:bg-surface-sunken/40"
+                  >
+                    <span className="font-bold text-ink">
+                      Completed &amp; Finished Today
+                      <span className="ml-2 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-bold text-ink-soft tabular-nums">
+                        {shownClosed.length < closedOrders.length
+                          ? `${shownClosed.length} of ${closedOrders.length}`
+                          : closedOrders.length}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`size-5 shrink-0 text-ink-soft transition-transform duration-150 ${
+                        archiveOpen ? 'rotate-180' : ''
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  {archiveOpen ? (
+                    <ul className="divide-y divide-border border-t border-border">
+                      {shownClosed.map((order) => (
+                        <li
+                          key={order.id}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm"
+                        >
+                          <span className="font-bold text-ink">
+                            {order.pickupCode || '—'}
+                          </span>
+                          <span className="text-xs tabular-nums text-ink-faint">
+                            {new Date(order.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {order.status === 'cancelled' ? (
+                            <Badge variant="danger">Cancelled</Badge>
+                          ) : PAID_STATUSES.has(order.status) ? (
+                            <Badge variant="completed">Paid &amp; Done</Badge>
+                          ) : null}
+                          <span className="ml-auto font-bold tabular-nums text-ink">
+                            ${order.totalAmount.toFixed(2)}
+                          </span>
+                          <Button
+                            variant="secondary"
+                            size="md"
+                            loading={updatingIds.has(order.id)}
+                            onClick={() => setStatus(order.id, 'ready')}
+                            aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
+                          >
+                            Reopen Ticket
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </Card>
+              ) : null}
+
+              <BoardLegend />
+            </div>
+          )}
+        </main>
+      </div>
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -939,7 +975,6 @@ function StaffApp() {
 }
 
 export default function App() {
-  // Restore the saved session so a reload does not send staff back to the PIN screen.
   const [isAuthenticated, setIsAuthenticated] = useState(() => loadSession() !== null);
 
   useEffect(() => {
@@ -949,7 +984,6 @@ export default function App() {
     };
   }, []);
 
-  // Lock the dashboard the moment the 12-hour session expires.
   useEffect(() => {
     if (!isAuthenticated) return;
     const session = loadSession();
@@ -967,12 +1001,10 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <PinScreen
-        title="Staff Access"
-        subtitle="Enter your PIN to open the dashboard"
-        buttonLabel="Unlock"
+        title="Staff &amp; Admin Access"
+        subtitle="Enter staff PIN to access dashboard"
+        buttonLabel="Unlock Terminal"
         onSubmit={async (pin) => {
-          // The one guaranteed tap before any order can arrive — the only moment
-          // a browser will let us start audio for the new-order chime.
           unlockAlerts();
           try {
             const res = await fetch(`${API_BASE}/api/auth/staff-login`, {
@@ -1011,3 +1043,4 @@ export default function App() {
     </ToastProvider>
   );
 }
+

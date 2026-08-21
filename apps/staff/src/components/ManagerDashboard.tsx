@@ -1,14 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { BarChart3, CircleAlert, Lock, Plus, Sliders, Users } from 'lucide-react';
+import {
+  Award,
+  BarChart3,
+  CircleAlert,
+  Coins,
+  DollarSign,
+  History,
+  Lock,
+  Plus,
+  Receipt,
+  Search,
+  Settings2,
+  Sliders,
+  Sparkles,
+  TrendingUp,
+  Users,
+  X,
+} from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import {
+  Badge,
   Button,
   Card,
   EmptyState,
   Segmented,
   Skeleton,
-  Tabs,
   useToast,
 } from './ui';
 
@@ -43,23 +60,19 @@ type RecentAdjustment = {
 
 const REASONS = ['Correction', 'Promotion', 'Compensation', 'Other'];
 
-/*
- * Analytics used to be all-time only, which cannot answer a manager's first
- * question: how did today go? The range drives the API query, so the stat cards
- * and the chart always describe the same window.
- */
 type Range = 'today' | 'week' | 'month' | 'all';
 
 const RANGES: Array<{ id: Range; label: string; days: string; caption: string }> = [
   { id: 'today', label: 'Today', days: '1', caption: 'Today' },
   { id: 'week', label: '7 days', days: '7', caption: 'Last 7 days' },
   { id: 'month', label: '30 days', days: '30', caption: 'Last 30 days' },
-  { id: 'all', label: 'All', days: 'all', caption: 'All time' },
+  { id: 'all', label: 'All Time', days: 'all', caption: 'All time' },
 ];
 
 const PANEL_ID = 'manager-panel';
 
-/** Points fields must be whole numbers of 1 or more; returns null when valid. */
+type ManagerSubTab = 'analytics' | 'loyalty' | 'rewards' | 'settings';
+
 function rateError(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed === '') return 'Enter a number.';
@@ -74,14 +87,9 @@ function displayName(user: User): string {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
 }
 
-/**
- * Manager tools. Every request is authorised by the staff session token that
- * `apiFetch` attaches — the raw PIN is never kept in state or re-sent, so it
- * cannot leak from memory or from a request header on every poll.
- */
 export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'analytics' | 'loyalty'>('analytics');
+  const [activeTab, setActiveTab] = useState<ManagerSubTab>('analytics');
   const [range, setRange] = useState<Range>('week');
 
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -149,7 +157,7 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // ---- Loyalty handlers ----
+  // Loyalty calculation
   const parsedDelta =
     deltaInput.trim() === '' || deltaInput.trim() === '-'
       ? null
@@ -164,9 +172,6 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     newBalance >= 0 &&
     !saving;
 
-  /* Adds to whatever is already typed. The old set was [10, 50, 100, -50]:
-     three ways up, one way down, and nothing said whether a tap replaced the
-     field or added to it. */
   const applyQuick = (amount: number) => {
     const current = parsedDelta ?? 0;
     setDeltaInput(String(current + amount));
@@ -227,7 +232,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       const status = (err as Error & { status?: number }).status;
       toast({
         title: "Couldn't update points",
-        description: status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
+        description:
+          status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -235,7 +241,6 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     }
   };
 
-  // ---- Reward handlers ----
   const handleAddReward = async (e: FormEvent) => {
     e.preventDefault();
     const name = newName.trim();
@@ -271,7 +276,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       const status = (err as Error & { status?: number }).status;
       toast({
         title: "Couldn't add reward",
-        description: status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
+        description:
+          status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -288,9 +294,7 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: nextActive }),
       });
-      setRewards((prev) =>
-        prev.map((r) => (r.id === reward.id ? updated : r)),
-      );
+      setRewards((prev) => prev.map((r) => (r.id === reward.id ? updated : r)));
       toast({
         title: nextActive ? 'Reward activated' : 'Reward deactivated',
         variant: 'success',
@@ -299,7 +303,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       const status = (err as Error & { status?: number }).status;
       toast({
         title: `Couldn't ${nextActive ? 'activate' : 'deactivate'} reward`,
-        description: status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
+        description:
+          status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
         variant: 'error',
       });
     } finally {
@@ -324,14 +329,11 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
           body: JSON.stringify({ key, value }),
         });
       }
-      toast({ title: 'Rates saved', variant: 'success' });
+      toast({ title: 'Rates saved successfully', variant: 'success' });
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
       toast({
         title: "Couldn't save rates",
-        // The form has already validated the numbers, so a failure here is the
-        // connection or the session — never the input. Saying otherwise sends
-        // the manager hunting for a typo that does not exist.
         description:
           status === 401
             ? 'Manager session expired — unlock again.'
@@ -351,600 +353,729 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const valueLabelEvery = entries.length <= 14 ? 1 : Math.ceil(entries.length / 14);
   const dateLabelEvery = Math.max(1, Math.ceil(entries.length / 10));
 
+  const activeRewardsCount = rewards.filter((r) => r.isActive).length;
+
+  const subTabs: Array<{ id: ManagerSubTab; label: string; icon: React.ReactNode; badge?: string | number }> = [
+    { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
+    { id: 'loyalty', label: 'Customer Points', icon: <Users className="size-4" /> },
+    { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
+    { id: 'settings', label: 'Loyalty Rates', icon: <Settings2 className="size-4" /> },
+  ];
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs
-          tabs={[
-            {
-              id: 'analytics',
-              label: 'Analytics',
-              icon: <BarChart3 className="size-4" />,
-            },
-            {
-              id: 'loyalty',
-              label: 'Loyalty & Rewards',
-              icon: <Users className="size-4" />,
-            },
-          ]}
-          active={activeTab}
-          onChange={(id) => setActiveTab(id as 'analytics' | 'loyalty')}
-          ariaLabel="Manager sections"
-          panelId={PANEL_ID}
-        />
-        <Button variant="ghost" size="md" onClick={onLock} aria-label="Lock manager mode">
-          <Lock className="size-4" aria-hidden="true" />
-          Lock
-        </Button>
+      {/* Top Banner / Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-ink">Manager Control Center</h2>
+              <Badge variant="ready" dot>Admin Verified</Badge>
+            </div>
+            <p className="text-xs text-ink-soft">
+              Real-time store performance, customer loyalty point administration, and menu reward rules.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={fetchDashboardData}
+            loading={loading}
+            aria-label="Refresh manager data"
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={onLock}
+            className="text-danger hover:bg-danger-soft hover:text-danger-strong"
+            aria-label="Lock manager mode"
+          >
+            <Lock className="size-4" aria-hidden="true" />
+            Lock Panel
+          </Button>
+        </div>
+      </div>
+
+      {/* Sub navigation bar */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+        {subTabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
+                isActive
+                  ? 'bg-accent text-on-accent shadow-sm'
+                  : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+              {tab.badge !== undefined ? (
+                <span
+                  className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                    isActive
+                      ? 'bg-white/20 text-on-accent'
+                      : 'bg-surface-sunken text-ink-soft'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
 
       <div
         id={PANEL_ID}
         role="tabpanel"
-        aria-labelledby={`${PANEL_ID}-tab-${activeTab}`}
         tabIndex={-1}
         className="flex flex-col gap-6"
       >
-      {loading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-28 w-full" />
-          <Skeleton className="h-72 w-full md:col-span-3" />
-        </div>
-      ) : activeTab === 'analytics' ? (
-        analyticsError ? (
-          <Card padding="lg" className="text-center">
-            <CircleAlert className="mx-auto size-8 text-danger" aria-hidden="true" />
-            <h2 className="mt-2 font-semibold text-ink">
-              {analyticsError === 'session'
-                ? 'Manager session expired'
-                : "Couldn't load analytics"}
-            </h2>
-            <p className="mt-1 text-sm text-ink-soft">
-              {analyticsError === 'session'
-                ? 'Unlock manager tools again to view analytics.'
-                : 'Check your connection and try again.'}
-            </p>
-            <Button
-              variant="secondary"
-              className="mt-4"
-              onClick={analyticsError === 'session' ? onLock : fetchDashboardData}
-            >
-              {analyticsError === 'session' ? 'Unlock again' : 'Try again'}
-            </Button>
-          </Card>
-        ) : analytics ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="md:col-span-3">
-              <Segmented
-                options={RANGES.map((r) => ({ id: r.id, label: r.label }))}
-                value={range}
-                onChange={setRange}
-                ariaLabel="Reporting period"
-              />
-            </div>
-
-            {[
-              {
-                label: 'Revenue',
-                value: `$${analytics.totalRevenue.toFixed(2)}`,
-              },
-              {
-                label: 'Paid orders',
-                value: String(analytics.orderCount),
-              },
-              {
-                label: 'Average order',
-                value:
-                  analytics.orderCount > 0
-                    ? `$${(analytics.totalRevenue / analytics.orderCount).toFixed(2)}`
-                    : '—',
-              },
-            ].map((stat) => (
-              <Card key={stat.label} padding="lg">
-                <p className="text-sm text-ink-soft">{stat.label}</p>
-                <p className="mt-1 text-3xl font-bold tabular-nums text-ink">
-                  {stat.value}
-                </p>
-                <p className="mt-1 text-xs text-ink-faint">{rangeCaption}</p>
-              </Card>
-            ))}
-
-            <Card padding="lg" className="md:col-span-3">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-semibold text-ink">Daily sales volume</h2>
-                <span className="text-sm text-ink-faint">{rangeCaption}</span>
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-80 w-full rounded-2xl sm:col-span-2 lg:col-span-4" />
+          </div>
+        ) : activeTab === 'analytics' ? (
+          analyticsError ? (
+            <Card padding="lg" className="text-center">
+              <CircleAlert className="mx-auto size-10 text-danger" aria-hidden="true" />
+              <h2 className="mt-3 text-lg font-bold text-ink">
+                {analyticsError === 'session'
+                  ? 'Manager session expired'
+                  : "Couldn't load analytics data"}
+              </h2>
+              <p className="mt-1 text-sm text-ink-soft">
+                {analyticsError === 'session'
+                  ? 'Your manager authentication has expired. Unlock again to view statistics.'
+                  : 'Check your server connection and retry.'}
+              </p>
+              <Button
+                variant="secondary"
+                className="mt-5"
+                onClick={analyticsError === 'session' ? onLock : fetchDashboardData}
+              >
+                {analyticsError === 'session' ? 'Unlock Again' : 'Try Again'}
+              </Button>
+            </Card>
+          ) : analytics ? (
+            <div className="space-y-6">
+              {/* Range Selector & Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-ink">Performance Overview</h3>
+                  <p className="text-xs text-ink-soft">Metrics filtered by chosen date window</p>
+                </div>
+                <Segmented
+                  options={RANGES.map((r) => ({ id: r.id, label: r.label }))}
+                  value={range}
+                  onChange={setRange}
+                  ariaLabel="Reporting period"
+                />
               </div>
 
-              {entries.length === 0 ? (
-                <EmptyState
-                  icon={<BarChart3 className="size-10" />}
-                  title="No paid orders yet"
-                  description="Sales will appear here once orders are paid."
-                />
-              ) : (
-                <div>
-                  <div className="flex h-56 items-end gap-1.5" aria-hidden="true">
-                    {entries.map(([date, amount], i) => {
-                      const pct = max > 0 ? (amount / max) * 100 : 0;
-                      const showValue = i % valueLabelEvery === 0;
-                      return (
-                        <div
-                          key={date}
-                          className="group relative flex h-full flex-1 flex-col justify-end"
-                        >
-                          {/* Always rendered, so every column reserves the same
-                              label row and the tallest bar can reach a true 100%.
-                              Clamping the height to 90% instead made the best day
-                              draw the same as a 92% day. */}
-                          <span className="mb-1 h-4 shrink-0 text-center text-[11px] font-medium tabular-nums text-ink-soft">
-                            {showValue ? `$${amount.toFixed(0)}` : ''}
-                          </span>
-                          <div
-                            className="w-full rounded-t-sm bg-accent transition-colors group-hover:bg-accent-strong"
-                            style={{
-                              height: `calc((100% - 1.25rem) * ${pct / 100})`,
-                              minHeight: amount > 0 ? '4px' : undefined,
-                            }}
-                          />
-                          <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-surface-raised px-2 py-1 text-xs text-ink opacity-0 shadow-raised transition-opacity group-hover:opacity-100">
-                            ${amount.toFixed(2)}
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* 4 Executive KPI Cards */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card padding="lg" className="relative overflow-hidden border-border bg-surface">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                        Gross Revenue
+                      </p>
+                      <p className="mt-2 text-3xl font-extrabold tabular-nums text-ink">
+                        ${analytics.totalRevenue.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-success-soft text-success">
+                      <DollarSign className="size-5" />
+                    </div>
                   </div>
-                  <div className="mt-2 flex gap-1.5">
-                    {entries.map(([date], i) => (
-                      <div key={date} className="flex-1 text-center">
-                        {i % dateLabelEvery === 0 && (
-                          <span className="text-[11px] tabular-nums text-ink-faint">
-                            {date.slice(5)}
+                  <div className="mt-3 flex items-center gap-1.5 text-xs text-ink-faint">
+                    <TrendingUp className="size-3.5 text-success" />
+                    <span>Calculated for {rangeCaption}</span>
+                  </div>
+                </Card>
+
+                <Card padding="lg" className="relative overflow-hidden border-border bg-surface">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                        Paid Orders
+                      </p>
+                      <p className="mt-2 text-3xl font-extrabold tabular-nums text-ink">
+                        {analytics.orderCount}
+                      </p>
+                    </div>
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-preparing-soft text-status-preparing">
+                      <Receipt className="size-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-ink-faint">
+                    Total completed &amp; paid tickets
+                  </div>
+                </Card>
+
+                <Card padding="lg" className="relative overflow-hidden border-border bg-surface">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                        Average Ticket
+                      </p>
+                      <p className="mt-2 text-3xl font-extrabold tabular-nums text-ink">
+                        {analytics.orderCount > 0
+                          ? `$${(analytics.totalRevenue / analytics.orderCount).toFixed(2)}`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-pending-soft text-status-pending">
+                      <BarChart3 className="size-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-ink-faint">
+                    Revenue per completed order
+                  </div>
+                </Card>
+
+                <Card padding="lg" className="relative overflow-hidden border-border bg-surface">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                        Active Rewards
+                      </p>
+                      <p className="mt-2 text-3xl font-extrabold tabular-nums text-ink">
+                        {activeRewardsCount} <span className="text-sm font-normal text-ink-faint">/ {rewards.length}</span>
+                      </p>
+                    </div>
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                      <Award className="size-5" />
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs text-ink-faint">
+                    Redeemable catalog perks
+                  </div>
+                </Card>
+              </div>
+
+              {/* Sales Chart Card */}
+              <Card padding="lg" className="border-border bg-surface">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-base font-bold text-ink">Daily Sales Trajectory</h4>
+                    <p className="text-xs text-ink-soft">Revenue distribution per day across {rangeCaption}</p>
+                  </div>
+                  <Badge variant="default">{entries.length} data points</Badge>
+                </div>
+
+                {entries.length === 0 ? (
+                  <EmptyState
+                    icon={<BarChart3 className="size-10" />}
+                    title="No paid sales recorded"
+                    description="When orders are marked paid or completed, sales appear here automatically."
+                  />
+                ) : (
+                  <div>
+                    <div className="flex h-64 items-end gap-2 pt-4" aria-hidden="true">
+                      {entries.map(([date, amount], i) => {
+                        const pct = max > 0 ? (amount / max) * 100 : 0;
+                        const showValue = i % valueLabelEvery === 0;
+                        return (
+                          <div
+                            key={date}
+                            className="group relative flex h-full flex-1 flex-col justify-end"
+                          >
+                            <span className="mb-1.5 h-4 shrink-0 text-center text-[10px] font-semibold tabular-nums text-ink-soft">
+                              {showValue && amount > 0 ? `$${amount.toFixed(0)}` : ''}
+                            </span>
+                            <div
+                              className="w-full rounded-t-md bg-accent/85 transition-all duration-200 group-hover:bg-accent group-hover:shadow-md"
+                              style={{
+                                height: `calc((100% - 1.5rem) * ${pct / 100})`,
+                                minHeight: amount > 0 ? '6px' : '2px',
+                              }}
+                            />
+                            {/* Hover Tooltip */}
+                            <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                              <p className="text-[10px] font-medium text-ink-soft">{date}</p>
+                              <p className="text-sm font-bold text-accent">${amount.toFixed(2)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 flex gap-2 border-t border-border pt-2">
+                      {entries.map(([date], i) => (
+                        <div key={date} className="flex-1 text-center">
+                          {i % dateLabelEvery === 0 && (
+                            <span className="text-[10px] font-semibold tabular-nums text-ink-faint">
+                              {date.slice(5)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
+          ) : null
+        ) : activeTab === 'loyalty' ? (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            {/* User Search and Point Adjuster */}
+            <div className="space-y-6 lg:col-span-7">
+              <Card padding="lg" className="border-border bg-surface">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                    <Search className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-ink">Find Customer Account</h3>
+                    <p className="text-xs text-ink-soft">Search user by numeric Telegram User ID</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSearchUser} className="mt-4 flex gap-2">
+                  <label className="sr-only" htmlFor="user-id-search">
+                    Telegram user ID
+                  </label>
+                  <input
+                    id="user-id-search"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter Telegram User ID (e.g. 123456789)"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="h-11 flex-1 rounded-xl border border-border bg-surface-sunken/40 px-4 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent focus:bg-surface"
+                  />
+                  <Button type="submit" variant="primary" loading={searching}>
+                    Search User
+                  </Button>
+                </form>
+
+                {userError && (
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-danger-soft p-3 text-xs font-semibold text-danger">
+                    <CircleAlert className="size-4 shrink-0" />
+                    <span>{userError}</span>
+                  </div>
+                )}
+
+                {foundUser && (
+                  <div className="mt-5 rounded-2xl border border-accent/20 bg-accent-soft/40 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-12 items-center justify-center rounded-2xl bg-accent font-bold text-on-accent">
+                          {(foundUser.firstName?.[0] || 'U').toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-base font-bold text-ink">{displayName(foundUser)}</p>
+                          <p className="text-xs font-mono text-ink-soft">ID: {foundUser.telegramUserId}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-surface px-3 py-1.5 text-right shadow-sm">
+                        <p className="text-[10px] uppercase font-semibold text-ink-faint">Current Points</p>
+                        <p className="text-lg font-black tabular-nums text-accent">
+                          {foundUser.loyaltyPoints} <span className="text-xs font-medium">pts</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <label htmlFor="delta-input" className="block text-xs font-bold uppercase tracking-wider text-ink">
+                          Adjust Points (+ / -)
+                        </label>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            id="delta-input"
+                            type="number"
+                            step="1"
+                            value={deltaInput}
+                            onChange={(e) => setDeltaInput(e.target.value)}
+                            placeholder="0"
+                            className="h-11 w-32 rounded-xl border border-border bg-surface px-3 text-center text-lg font-black tabular-nums text-ink outline-none focus:border-accent"
+                          />
+                          {[
+                            { val: 50, label: '+50' },
+                            { val: 20, label: '+20' },
+                            { val: 10, label: '+10' },
+                            { val: -10, label: '-10' },
+                            { val: -20, label: '-20' },
+                            { val: -50, label: '-50' },
+                          ].map((item) => (
+                            <Button
+                              key={item.val}
+                              variant="secondary"
+                              size="md"
+                              onClick={() => applyQuick(item.val)}
+                              className="font-bold text-xs"
+                            >
+                              {item.label}
+                            </Button>
+                          ))}
+                          {parsedDelta != null && delta !== 0 ? (
+                            <Button variant="ghost" size="md" onClick={() => setDeltaInput('')}>
+                              Clear
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label htmlFor="reason-select" className="block text-xs font-bold uppercase tracking-wider text-ink">
+                          Adjustment Reason <span className="text-danger">*</span>
+                        </label>
+                        <select
+                          id="reason-select"
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink outline-none focus:border-accent"
+                        >
+                          <option value="">Select a reason...</option>
+                          {REASONS.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Live Calculation Preview */}
+                      <div className="rounded-xl bg-surface p-3 text-sm font-medium">
+                        {delta !== 0 ? (
+                          newBalance < 0 ? (
+                            <span className="font-semibold text-danger">
+                              ⚠️ Warning: New balance would be negative ({newBalance} pts).
+                            </span>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <span className="text-ink-soft">Resulting Balance:</span>
+                              <span className="font-bold text-ink">
+                                {foundUser.loyaltyPoints} →{' '}
+                                <span className="text-accent">{newBalance} pts</span>{' '}
+                                ({delta > 0 ? `+${delta}` : delta})
+                              </span>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-xs text-ink-faint">
+                            Type points or click + / - to calculate new balance preview.
                           </span>
                         )}
                       </div>
-                    ))}
-                  </div>
-                  <table className="sr-only">
-                    <caption>Daily sales</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entries.map(([date, amount]) => (
-                        <tr key={date}>
-                          <td>{date}</td>
-                          <td>${amount.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-          </div>
-        ) : null
-      ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {/* Points adjustment */}
-          <Card padding="lg">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-              <Users className="size-5" aria-hidden="true" />
-              Adjust user points
-            </h2>
 
-            <form onSubmit={handleSearchUser} className="mt-4 flex gap-2">
-              <label className="sr-only" htmlFor="user-id-search">
-                Telegram user ID
-              </label>
-              <input
-                id="user-id-search"
-                type="text"
-                inputMode="numeric"
-                placeholder="Telegram user ID"
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                className="h-11 flex-1 rounded-xl border border-border bg-surface px-4 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
-              />
-              <Button type="submit" variant="secondary" loading={searching}>
-                Search
-              </Button>
-            </form>
-
-            <p aria-live="polite" className="mt-2 min-h-5 text-sm font-medium text-danger">
-              {userError ?? ''}
-            </p>
-
-            {foundUser && (
-              <div className="mt-3 rounded-xl bg-accent-soft/60 p-4">
-                <p className="font-semibold text-ink">{displayName(foundUser)}</p>
-                <p className="mt-1 text-sm text-ink-soft">
-                  Current balance:{' '}
-                  <span className="font-bold tabular-nums text-ink">
-                    {foundUser.loyaltyPoints}
-                  </span>{' '}
-                  pts
-                </p>
-
-                <label
-                  htmlFor="delta-input"
-                  className="mt-4 block text-sm font-medium text-ink"
-                >
-                  Adjustment (points, +/-)
-                </label>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    id="delta-input"
-                    type="number"
-                    step="1"
-                    value={deltaInput}
-                    onChange={(e) => setDeltaInput(e.target.value)}
-                    className="h-11 w-28 rounded-xl border border-border bg-surface px-3 text-center font-bold tabular-nums text-ink outline-none transition-colors focus:border-accent"
-                    aria-describedby="delta-preview"
-                  />
-                  {[-50, -10, 10, 50].map((amount) => (
-                    <Button
-                      key={amount}
-                      variant="secondary"
-                      size="md"
-                      onClick={() => applyQuick(amount)}
-                      aria-label={`${amount > 0 ? 'Add' : 'Subtract'} ${Math.abs(amount)} points`}
-                    >
-                      {amount > 0 ? `+${amount}` : amount}
-                    </Button>
-                  ))}
-                  {parsedDelta != null && delta !== 0 ? (
-                    <Button
-                      variant="ghost"
-                      size="md"
-                      onClick={() => setDeltaInput('')}
-                    >
-                      Clear
-                    </Button>
-                  ) : null}
-                </div>
-                <p className="mt-1.5 text-xs text-ink-faint">
-                  Each button adds to the box, it does not replace it.
-                </p>
-
-                <label
-                  htmlFor="reason-select"
-                  className="mt-4 block text-sm font-medium text-ink"
-                >
-                  Reason <span className="text-danger">*</span>
-                </label>
-                <select
-                  id="reason-select"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
-                >
-                  <option value="">Choose a reason…</option>
-                  {REASONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-
-                <p
-                  id="delta-preview"
-                  aria-live="polite"
-                  className="mt-3 text-sm tabular-nums"
-                >
-                  {delta !== 0 && foundUser ? (
-                    newBalance < 0 ? (
-                      <span className="font-medium text-danger">
-                        Would take the balance below zero
-                      </span>
-                    ) : (
-                      <span className="text-ink-soft">
-                        {foundUser.loyaltyPoints} → {newBalance} ({delta > 0 ? '+' : ''}
-                        {delta})
-                      </span>
-                    )
-                  ) : (
-                    <span className="text-ink-faint">
-                      Enter an adjustment to preview the new balance.
-                    </span>
-                  )}
-                </p>
-
-                <Button
-                  variant="success"
-                  className="mt-4"
-                  disabled={!canSave}
-                  loading={saving}
-                  onClick={handleSavePoints}
-                  aria-describedby="save-blocked"
-                >
-                  Save adjustment
-                </Button>
-                {/* A dead button with no explanation is the single most common
-                    thing a new manager gets stuck on. */}
-                <p id="save-blocked" aria-live="polite" className="mt-2 text-sm text-ink-faint">
-                  {saving || canSave
-                    ? ''
-                    : parsedDelta == null || delta === 0
-                      ? 'Enter an adjustment above to enable Save.'
-                      : newBalance < 0
-                        ? 'That would take the balance below zero.'
-                        : 'Choose a reason to enable Save.'}
-                </p>
-              </div>
-            )}
-
-            {recent.length > 0 && (
-              <div className="mt-5">
-                <h4 className="text-sm font-semibold text-ink">
-                  Adjusted this session
-                </h4>
-                <ul className="mt-2 divide-y divide-border">
-                  {recent.map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center justify-between gap-3 py-2 text-sm"
-                    >
-                      <span className="min-w-0 truncate text-ink-soft">
-                        <span className="tabular-nums text-ink-faint">
-                          {new Date(r.time).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>{' '}
-                        {r.name}
-                      </span>
-                      <span
-                        className={`font-semibold tabular-nums ${
-                          r.delta > 0 ? 'text-success' : 'text-danger'
-                        }`}
+                      <Button
+                        variant="success"
+                        size="lg"
+                        className="w-full font-bold"
+                        disabled={!canSave}
+                        loading={saving}
+                        onClick={handleSavePoints}
                       >
-                        {r.delta > 0 ? '+' : ''}
-                        {r.delta}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </Card>
+                        Confirm &amp; Apply Adjustment
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </div>
 
-          {/* Reward catalog */}
-          <Card padding="lg">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-ink">Reward catalog</h2>
+            {/* Recent Adjustments Log */}
+            <div className="space-y-6 lg:col-span-5">
+              <Card padding="lg" className="border-border bg-surface">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-surface-sunken text-ink">
+                    <History className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-ink">Recent Session Actions</h3>
+                    <p className="text-xs text-ink-soft">Points updated in this session</p>
+                  </div>
+                </div>
+
+                {recent.length === 0 ? (
+                  <p className="mt-6 text-center text-xs text-ink-faint">
+                    No points adjustments applied in this session yet.
+                  </p>
+                ) : (
+                  <ul className="mt-4 divide-y divide-border">
+                    {recent.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between py-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-ink">{r.name}</p>
+                          <p className="text-xs text-ink-faint">
+                            {new Date(r.time).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-lg px-2 py-1 font-mono text-xs font-bold ${
+                            r.delta > 0
+                              ? 'bg-success-soft text-success'
+                              : 'bg-danger-soft text-danger'
+                          }`}
+                        >
+                          {r.delta > 0 ? `+${r.delta}` : r.delta} pts
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </div>
+          </div>
+        ) : activeTab === 'rewards' ? (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-ink">Rewards Catalog</h3>
+                <p className="text-xs text-ink-soft">Manage loyalty prizes customer can redeem</p>
+              </div>
               <Button
-                variant="secondary"
+                variant="primary"
                 size="md"
-                onClick={() => setAddOpen((v) => !v)}
-                aria-expanded={addOpen}
+                onClick={() => setAddOpen(true)}
               >
-                <Plus className="size-4" aria-hidden="true" />
-                Add reward
+                <Plus className="size-4" />
+                Add New Reward
               </Button>
             </div>
 
             {addOpen && (
-              <form
-                onSubmit={handleAddReward}
-                className="mt-3 flex flex-col gap-3 rounded-xl border border-border bg-surface-sunken/50 p-3"
-              >
-                <div className="flex flex-wrap gap-2">
-                  <div className="min-w-40 flex-1">
-                    <label
-                      htmlFor="reward-name"
-                      className="mb-1 block text-sm font-medium text-ink"
-                    >
-                      Name
-                    </label>
-                    <input
-                      id="reward-name"
-                      type="text"
-                      placeholder="e.g. Free Milk Tea"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
-                    />
-                  </div>
-                  <div className="w-32">
-                    <label
-                      htmlFor="reward-cost"
-                      className="mb-1 block text-sm font-medium text-ink"
-                    >
-                      Points cost
-                    </label>
-                    <input
-                      id="reward-cost"
-                      type="number"
-                      min="1"
-                      step="1"
-                      placeholder="100"
-                      value={newCost}
-                      onChange={(e) => setNewCost(e.target.value)}
-                      className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label
-                    htmlFor="reward-description"
-                    className="mb-1 block text-sm font-medium text-ink"
-                  >
-                    Description <span className="text-xs text-ink-faint">(optional)</span>
-                  </label>
-                  <input
-                    id="reward-description"
-                    type="text"
-                    placeholder="e.g. Medium size, any sugar/ice level"
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="submit" variant="primary" loading={adding}>
-                    Save reward
-                  </Button>
-                  <Button
+              <Card padding="lg" className="border-2 border-accent bg-surface shadow-md">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <h4 className="font-bold text-ink">Create New Reward</h4>
+                  <button
                     type="button"
-                    variant="ghost"
                     onClick={() => {
                       setAddOpen(false);
                       setAddError(null);
                     }}
+                    className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
                   >
-                    Cancel
-                  </Button>
-                  {addError && (
-                    <p className="text-sm font-medium text-danger">{addError}</p>
-                  )}
+                    <X className="size-4" />
+                  </button>
                 </div>
-              </form>
+
+                <form onSubmit={handleAddReward} className="mt-4 space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="sm:col-span-2">
+                      <label htmlFor="reward-name" className="block text-xs font-bold uppercase text-ink">
+                        Reward Name <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        id="reward-name"
+                        type="text"
+                        placeholder="e.g. Free Passion Fruit Tea (M)"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="reward-cost" className="block text-xs font-bold uppercase text-ink">
+                        Points Cost <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        id="reward-cost"
+                        type="number"
+                        min="1"
+                        step="1"
+                        placeholder="100"
+                        value={newCost}
+                        onChange={(e) => setNewCost(e.target.value)}
+                        className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="reward-description" className="block text-xs font-bold uppercase text-ink">
+                      Description <span className="text-xs font-normal text-ink-faint">(optional)</span>
+                    </label>
+                    <input
+                      id="reward-description"
+                      type="text"
+                      placeholder="e.g. Medium size cup, choice of toppings"
+                      value={newDescription}
+                      onChange={(e) => setNewDescription(e.target.value)}
+                      className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
+                    />
+                  </div>
+
+                  {addError && (
+                    <p className="text-xs font-semibold text-danger">{addError}</p>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setAddOpen(false);
+                        setAddError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" variant="primary" loading={adding}>
+                      Save &amp; Publish Reward
+                    </Button>
+                  </div>
+                </form>
+              </Card>
             )}
 
             {rewardsError ? (
-              <p className="mt-4 text-sm text-danger">
-                Couldn't load rewards.{' '}
-                <button
-                  type="button"
-                  onClick={fetchDashboardData}
-                  className="font-semibold text-accent hover:text-accent-strong"
-                >
-                  Try again
-                </button>
-              </p>
+              <Card padding="lg" className="text-center">
+                <CircleAlert className="mx-auto size-8 text-danger" />
+                <p className="mt-2 text-sm text-danger">Failed to load rewards list.</p>
+                <Button variant="secondary" className="mt-3" onClick={fetchDashboardData}>
+                  Retry
+                </Button>
+              </Card>
             ) : rewards.length === 0 ? (
-              <p className="mt-6 text-center text-sm text-ink-faint">
-                No rewards yet — add the first one.
-              </p>
+              <EmptyState
+                icon={<Award className="size-10" />}
+                title="No Rewards Configured"
+                description="Click 'Add New Reward' to create redemption prizes."
+              />
             ) : (
-              <ul className="mt-4 divide-y divide-border">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {rewards.map((reward) => (
-                  <li
+                  <Card
                     key={reward.id}
-                    className="flex items-center justify-between gap-3 py-3"
+                    padding="lg"
+                    className={`flex flex-col justify-between transition-all ${
+                      reward.isActive ? 'border-border bg-surface' : 'border-border/60 bg-surface-sunken/40 opacity-75'
+                    }`}
                   >
-                    <div className="min-w-0">
-                      <p
-                        className={`font-medium ${
-                          reward.isActive ? 'text-ink' : 'text-ink-faint'
-                        }`}
-                      >
-                        {reward.name}
-                        {!reward.isActive && (
-                          <span className="ml-1.5 text-xs font-normal text-ink-faint">
-                            (inactive)
-                          </span>
-                        )}
-                      </p>
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                          <Coins className="size-4" />
+                        </div>
+                        <Badge variant={reward.isActive ? 'success' : 'default'} dot>
+                          {reward.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+
+                      <h4 className="mt-3 font-bold text-ink">{reward.name}</h4>
                       {reward.description && (
-                        <p
-                          className={`truncate text-xs ${
-                            reward.isActive ? 'text-ink-soft' : 'text-ink-faint'
-                          }`}
-                        >
-                          {reward.description}
-                        </p>
+                        <p className="mt-1 text-xs text-ink-soft line-clamp-2">{reward.description}</p>
                       )}
-                      <p
-                        className={`text-sm tabular-nums ${
-                          reward.isActive ? 'text-ink-soft' : 'text-ink-faint'
-                        }`}
-                      >
-                        {reward.pointsCost} pts
-                      </p>
                     </div>
-                    <Button
-                      variant={reward.isActive ? 'secondary' : 'success'}
-                      size="md"
-                      loading={togglingId === reward.id}
-                      onClick={() => handleToggleReward(reward)}
-                    >
-                      {reward.isActive ? 'Deactivate' : 'Activate'}
-                    </Button>
-                  </li>
+
+                    <div className="mt-5 flex items-center justify-between border-t border-border pt-3">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-ink-faint">Redeem For</span>
+                        <p className="text-base font-extrabold text-accent">{reward.pointsCost} pts</p>
+                      </div>
+                      <Button
+                        variant={reward.isActive ? 'secondary' : 'success'}
+                        size="md"
+                        loading={togglingId === reward.id}
+                        onClick={() => handleToggleReward(reward)}
+                      >
+                        {reward.isActive ? 'Disable' : 'Enable'}
+                      </Button>
+                    </div>
+                  </Card>
                 ))}
-              </ul>
+              </div>
             )}
-          </Card>
+          </div>
+        ) : (
+          <div className="max-w-2xl space-y-6">
+            <Card padding="lg" className="border-border bg-surface">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                  <Sliders className="size-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-ink">Loyalty Conversion Rules</h3>
+                  <p className="text-xs text-ink-soft">Set how customer points translate into currency discounts</p>
+                </div>
+              </div>
 
-          {/* Loyalty rates */}
-          <Card padding="lg" className="lg:col-span-2">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-              <Sliders className="size-5" aria-hidden="true" />
-              Loyalty rates
-            </h2>
-            <p className="mt-1 text-sm text-ink-soft">
-              Configure points required for discounts and points earned per dollar spent.
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-start gap-4">
-              {(
-                [
+              <div className="mt-6 space-y-5">
+                {[
                   {
                     key: 'pointsPerDollar' as const,
                     id: 'points-per-dollar',
-                    label: 'Points for a $1 discount',
+                    label: 'Points required for $1 Discount',
+                    desc: 'How many loyalty points a customer must redeem to save $1.00',
                   },
                   {
                     key: 'earnPointsPerDollar' as const,
                     id: 'earn-points-per-dollar',
-                    label: 'Points earned per $1 spent',
+                    label: 'Points Earned per $1 Spent',
+                    desc: 'Points credited to customer account for every $1 spent in store',
                   },
-                ]
-              ).map((field) => {
-                const error = rateErrors[field.key];
-                return (
-                  <div key={field.key} className="w-56">
-                    <label
-                      htmlFor={field.id}
-                      className="mb-1 block text-sm font-medium text-ink"
-                    >
-                      {field.label}
-                    </label>
-                    <input
-                      id={field.id}
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={rates[field.key]}
-                      aria-invalid={error ? true : undefined}
-                      aria-describedby={error ? `${field.id}-error` : undefined}
-                      onChange={(e) =>
-                        setRates((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }
-                      className={`h-11 w-full rounded-xl border bg-surface px-3 text-base font-bold tabular-nums text-ink transition-colors ${
-                        error ? 'border-danger' : 'border-border focus:border-accent'
-                      }`}
-                    />
-                    <p
-                      id={`${field.id}-error`}
-                      className="mt-1 min-h-5 text-sm font-medium text-danger"
-                    >
-                      {error ?? ''}
-                    </p>
-                  </div>
-                );
-              })}
+                ].map((field) => {
+                  const error = rateErrors[field.key];
+                  return (
+                    <div key={field.key} className="rounded-xl border border-border bg-surface-sunken/30 p-4">
+                      <label htmlFor={field.id} className="block text-sm font-bold text-ink">
+                        {field.label}
+                      </label>
+                      <p className="mt-0.5 text-xs text-ink-soft">{field.desc}</p>
+                      <div className="mt-3 flex items-center gap-3">
+                        <input
+                          id={field.id}
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={rates[field.key]}
+                          aria-invalid={error ? true : undefined}
+                          onChange={(e) =>
+                            setRates((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          }
+                          className={`h-11 w-40 rounded-xl border bg-surface px-3 text-center text-lg font-bold tabular-nums text-ink outline-none ${
+                            error ? 'border-danger' : 'border-border focus:border-accent'
+                          }`}
+                        />
+                        <span className="text-xs font-semibold text-ink-soft">points</span>
+                      </div>
+                      {error && (
+                        <p className="mt-2 text-xs font-semibold text-danger">{error}</p>
+                      )}
+                    </div>
+                  );
+                })}
 
-              <Button
-                variant="primary"
-                className="mt-6"
-                disabled={!ratesValid}
-                loading={savingRates}
-                onClick={handleSaveRates}
-              >
-                Save rates
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+                <div className="flex justify-end pt-2">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    disabled={!ratesValid}
+                    loading={savingRates}
+                    onClick={handleSaveRates}
+                  >
+                    Save &amp; Update Rules
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+

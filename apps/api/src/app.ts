@@ -30,6 +30,25 @@ function allowedOrigins(): string[] {
   return raw.split(',').map((o) => o.trim()).filter(Boolean);
 }
 
+function isOriginAllowed(origin?: string): boolean {
+  if (!origin) return true;
+  const list = allowedOrigins();
+  if (list.includes(origin) || list.includes('*')) return true;
+  try {
+    const parsed = new URL(origin);
+    if (
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname.endsWith('.localhost')
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export function createApp() {
   const app = express();
 
@@ -46,7 +65,7 @@ export function createApp() {
   // with no Origin (the ABA webhook, curl, the bot) are not browser requests
   // and are left alone; the routes' own auth still applies to them.
   app.use(cors({
-    origin: (origin, callback) => callback(null, !origin || allowedOrigins().includes(origin)),
+    origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     credentials: true,
   }));
 

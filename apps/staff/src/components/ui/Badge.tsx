@@ -8,7 +8,9 @@ export type BadgeVariant =
   | 'neutral'
   | 'danger'
   | 'delivery'
-  | 'pickup';
+  | 'pickup'
+  | 'success'
+  | 'default';
 
 export interface BadgeProps {
   variant: BadgeVariant;
@@ -35,6 +37,8 @@ const variantClasses: Record<BadgeVariant, string> = {
   danger: 'bg-danger-soft text-danger',
   delivery: 'bg-status-preparing-soft text-status-preparing',
   pickup: 'bg-accent-soft text-accent-strong',
+  success: 'bg-success-soft text-success',
+  default: 'bg-surface-sunken text-ink-soft',
 };
 
 export function Badge({

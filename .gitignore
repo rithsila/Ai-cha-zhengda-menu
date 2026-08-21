@@ -19,6 +19,12 @@ dist/
 # MacOS
 .DS_Store
 
+# Databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Tooling
 .cursor/
 .vscode/
