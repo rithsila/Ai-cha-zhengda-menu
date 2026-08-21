@@ -1,28 +1,41 @@
 # Proxmox LXC UAT Deployment Guide
 
-Complete step-by-step guide to deploy **Ai-Cha & Zhengda Menu** to a Proxmox LXC Container (Debian / Ubuntu).
+Complete step-by-step guide to deploy **Ai-Cha & Zhengda Menu** to your Proxmox LXC container using your domain: `aichazhengdaarakawa.com`.
 
 ---
 
-## 1. Create Telegram Bot with @BotFather
+## 1. Cloudflare DNS Setup
+
+In your Cloudflare Dashboard for `aichazhengdaarakawa.com`:
+Add 3 **A Records** pointing to your Proxmox LXC public IP address:
+
+| Type | Name | Content / Target | Proxy status |
+|---|---|---|---|
+| A | `api` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
+| A | `menu` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
+| A | `staff` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
+
+---
+
+## 2. Create & Configure Telegram Bot with @BotFather
 
 1. Open Telegram and message `@BotFather`.
 2. Send `/newbot`.
-3. Set Name: `Ai-Cha Zhengda Menu UAT`.
-4. Set Username: e.g. `aicha_zhengda_uat_bot`.
+3. Set Bot Name: `Ai-Cha & Zhengda Arakawa`.
+4. Set Username: e.g. `aicha_zhengda_arakawa_bot`.
 5. Copy your **Bot Token** (e.g. `123456789:ABCdef...`).
-6. Enable Web Login Domain:
+6. Set Web Login Domain:
    - Send `/setdomain` to `@BotFather`.
    - Select your bot.
-   - Enter your domain (e.g. `menu.yourdomain.com`).
+   - Enter: `menu.aichazhengdaarakawa.com`.
 7. Set Menu Button (Telegram Mini App):
-   - Send `/setmenubutton` -> pick your bot -> enter URL `https://menu.yourdomain.com`.
+   - Send `/setmenubutton` -> pick your bot -> enter URL: `https://menu.aichazhengdaarakawa.com`.
 
 ---
 
-## 2. Prepare Proxmox LXC Container
+## 3. Prepare Proxmox LXC Container
 
-In your LXC shell (Ubuntu 22.04 / 24.04 or Debian 12):
+In your LXC terminal (Ubuntu 22.04 / 24.04 or Debian 12):
 
 ```bash
 apt update && apt upgrade -y
@@ -33,7 +46,7 @@ npm install -g pm2
 
 ---
 
-## 3. Clone Repository & Install Dependencies
+## 4. Clone Repository & Install Dependencies
 
 ```bash
 mkdir -p /var/www
@@ -49,43 +62,46 @@ npm --prefix packages/aba-payway-sdk-unofficial run build
 
 ---
 
-## 4. Configure Environment Variables
+## 5. Configure Production Environment Files
 
-### 4.1 Backend (`apps/api/.env`)
+### 5.1 Backend (`apps/api/.env`)
 ```bash
 DATABASE_URL="file:./prod.db"
 PORT=4000
 NODE_ENV="production"
 TELEGRAM_BOT_TOKEN="YOUR_BOT_TOKEN_FROM_BOTFATHER"
-WEBAPP_URL="https://menu.yourdomain.com"
-STAFF_APP_URL="https://staff.yourdomain.com"
+WEBAPP_URL="https://menu.aichazhengdaarakawa.com"
+STAFF_APP_URL="https://staff.aichazhengdaarakawa.com"
 
-# Telegram IDs allowed to access Staff/Manager portal (comma-separated)
+# Set your Telegram User ID here for Manager Access (comma-separated for multiple)
 MANAGER_TELEGRAM_IDS="YOUR_TELEGRAM_USER_ID"
 STAFF_TELEGRAM_IDS=""
 
-# ABA PayWay Integration (Optional in sandbox/cash-only)
+# CORS Allowed Origins
+CORS_ORIGINS="https://menu.aichazhengdaarakawa.com,https://staff.aichazhengdaarakawa.com"
+
+# ABA PayWay Integration (Optional if sandbox or cash-only)
 ABA_MERCHANT_ID=""
 ABA_API_KEY=""
 ABA_BASE_URL="https://checkout-sandbox.payway.com.kh"
 ABA_WEBHOOK_SECRET=""
 ```
 
-### 4.2 Customer Menu App (`apps/menu/.env.production`)
+### 5.2 Customer Menu App (`apps/menu/.env.production`)
 ```bash
-VITE_API_URL="https://api.yourdomain.com"
-VITE_BOT_NAME="aicha_zhengda_uat_bot"
+VITE_API_URL="https://api.aichazhengdaarakawa.com"
+VITE_BOT_NAME="aicha_zhengda_arakawa_bot"
 ```
 
-### 4.3 Staff Portal (`apps/staff/.env.production`)
+### 5.3 Staff & Manager Portal (`apps/staff/.env.production`)
 ```bash
-VITE_API_URL="https://api.yourdomain.com"
-VITE_BOT_NAME="aicha_zhengda_uat_bot"
+VITE_API_URL="https://api.aichazhengdaarakawa.com"
+VITE_BOT_NAME="aicha_zhengda_arakawa_bot"
 ```
 
 ---
 
-## 5. Database Initialization & Build
+## 6. Database Initialization & Production Build
 
 ```bash
 # Push Prisma SQLite database and seed 48 items
@@ -100,7 +116,7 @@ npm run build --workspaces
 
 ---
 
-## 6. Run API Backend with PM2
+## 7. Run API Backend with PM2
 
 ```bash
 cd /var/www/aicha-uat/apps/api
@@ -111,7 +127,7 @@ pm2 startup
 
 ---
 
-## 7. Setup Nginx Reverse Proxy & Static Hosting
+## 8. Configure Nginx Reverse Proxy & Static Hosting
 
 Create `/etc/nginx/sites-available/aicha.conf`:
 
@@ -119,7 +135,7 @@ Create `/etc/nginx/sites-available/aicha.conf`:
 # 1. API Server
 server {
     listen 80;
-    server_name api.yourdomain.com;
+    server_name api.aichazhengdaarakawa.com;
     client_max_body_size 10M;
 
     location / {
@@ -135,7 +151,7 @@ server {
 # 2. Customer Menu WebApp
 server {
     listen 80;
-    server_name menu.yourdomain.com;
+    server_name menu.aichazhengdaarakawa.com;
     root /var/www/aicha-uat/apps/menu/dist;
     index index.html;
 
@@ -147,7 +163,7 @@ server {
 # 3. Staff & Manager Portal
 server {
     listen 80;
-    server_name staff.yourdomain.com;
+    server_name staff.aichazhengdaarakawa.com;
     root /var/www/aicha-uat/apps/staff/dist;
     index index.html;
 
@@ -166,18 +182,18 @@ systemctl reload nginx
 
 ---
 
-## 8. Generate Free SSL Certificates (HTTPS)
+## 9. Generate SSL Certificates with Certbot (HTTPS)
 
 ```bash
-certbot --nginx -d api.yourdomain.com -d menu.yourdomain.com -d staff.yourdomain.com
+certbot --nginx -d api.aichazhengdaarakawa.com -d menu.aichazhengdaarakawa.com -d staff.aichazhengdaarakawa.com
 ```
+
+*(Note: In Cloudflare, set SSL/TLS encryption mode to **Full** or **Full (strict)**).*
 
 ---
 
-## 9. Verification Checklist
+## 10. Verification & Live URLs
 
-- [ ] `https://api.yourdomain.com/` returns `{"status":"ok"}`
-- [ ] `https://menu.yourdomain.com/` opens the customer menu with real items
-- [ ] `https://staff.yourdomain.com/` opens the Staff portal with Telegram login
-- [ ] Manager can add/edit menu items and toppings
-- [ ] Telegram Bot Mini App opens cleanly from Telegram app
+- **Customer Menu**: `https://menu.aichazhengdaarakawa.com`
+- **Staff & Manager Hub**: `https://staff.aichazhengdaarakawa.com`
+- **Backend API**: `https://api.aichazhengdaarakawa.com`
