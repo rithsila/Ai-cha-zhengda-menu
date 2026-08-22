@@ -9,11 +9,11 @@ Complete step-by-step guide to deploy **Ai-Cha & Zhengda Menu** to your Proxmox 
 In your Cloudflare Dashboard for `aichazhengdaarakawa.com`:
 Add 3 **A Records** pointing to your Proxmox LXC public IP address:
 
-| Type | Name | Content / Target | Proxy status |
-|---|---|---|---|
-| A | `api` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
-| A | `menu` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
-| A | `staff` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
+| Type | Name      | Content / Target           | Proxy status                                                         |
+| ---- | --------- | -------------------------- | -------------------------------------------------------------------- |
+| A    | `api`   | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
+| A    | `menu`  | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
+| A    | `staff` | `YOUR_PROXMOX_PUBLIC_IP` | DNS only (grey cloud) initially for SSL, then Proxied (orange cloud) |
 
 ---
 
@@ -39,7 +39,7 @@ In your LXC terminal (Ubuntu 22.04 / 24.04 or Debian 12):
 
 ```bash
 apt update && apt upgrade -y
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt install -y nodejs git nginx build-essential certbot python3-certbot-nginx
 npm install -g pm2
 ```
@@ -65,6 +65,7 @@ npm --prefix packages/aba-payway-sdk-unofficial run build
 ## 5. Configure Production Environment Files
 
 ### 5.1 Backend (`apps/api/.env`)
+
 ```bash
 DATABASE_URL="file:./prod.db"
 PORT=4000
@@ -88,12 +89,14 @@ ABA_WEBHOOK_SECRET=""
 ```
 
 ### 5.2 Customer Menu App (`apps/menu/.env.production`)
+
 ```bash
 VITE_API_URL="https://api.aichazhengdaarakawa.com"
 VITE_BOT_NAME="aicha_zhengda_arakawa_bot"
 ```
 
 ### 5.3 Staff & Manager Portal (`apps/staff/.env.production`)
+
 ```bash
 VITE_API_URL="https://api.aichazhengdaarakawa.com"
 VITE_BOT_NAME="aicha_zhengda_arakawa_bot"
@@ -174,6 +177,7 @@ server {
 ```
 
 Enable site configuration:
+
 ```bash
 ln -s /etc/nginx/sites-available/aicha.conf /etc/nginx/sites-enabled/
 nginx -t

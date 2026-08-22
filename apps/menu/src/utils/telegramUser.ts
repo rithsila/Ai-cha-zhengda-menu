@@ -56,8 +56,27 @@ export function clearWebLoginToken(): void {
  * its signature, so this is the only trustworthy proof of who the caller is.
  */
 export function getInitData(): string | null {
+  const globalTg = (window as any)?.Telegram?.WebApp;
+  if (typeof globalTg?.initData === 'string' && globalTg.initData.length > 0) {
+    return globalTg.initData;
+  }
   const raw = WebApp?.initData;
-  return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  if (typeof raw === 'string' && raw.length > 0) {
+    return raw;
+  }
+  try {
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+    const params = new URLSearchParams(hash);
+    const fromHash = params.get('tgWebAppData');
+    if (fromHash) return fromHash;
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const fromSearch = searchParams.get('tgWebAppData');
+    if (fromSearch) return fromSearch;
+  } catch {
+    // ignore parsing errors
+  }
+  return null;
 }
 
 /**
@@ -66,23 +85,47 @@ export function getInitData(): string | null {
  * to the API as an identity.
  */
 export function getTelegramDisplayUser(): { firstName?: string; lastName?: string } | null {
-  const user = WebApp?.initDataUnsafe?.user;
-  if (!user) return null;
-  return { firstName: user.first_name, lastName: user.last_name };
+  const globalTg = (window as any)?.Telegram?.WebApp;
+  const user = globalTg?.initDataUnsafe?.user || WebApp?.initDataUnsafe?.user;
+  if (user) return { firstName: user.first_name, lastName: user.last_name };
+
+  const initData = getInitData();
+  if (initData) {
+    try {
+      const p = new URLSearchParams(initData);
+      const userRaw = p.get('user');
+      if (userRaw) {
+        const parsed = JSON.parse(userRaw);
+        return { firstName: parsed.first_name, lastName: parsed.last_name };
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
 }
 
 /**
  * The caller's own Telegram id, used **only** to fill in a URL path segment.
- *
- * It reads the unsigned `initDataUnsafe`, so on its own it proves nothing. The
- * server verifies the signed header on the same request and refuses a path id
- * that is not the caller's own, which makes this a routing hint and never an
- * identity. A browser login holds only an opaque token and has no id to give,
- * so those requests ask the server for "me" instead.
  */
 export function getSelfIdHint(): string | null {
-  const fromTelegram = WebApp?.initDataUnsafe?.user?.id?.toString();
+  const globalTg = (window as any)?.Telegram?.WebApp;
+  const fromTelegram = (globalTg?.initDataUnsafe?.user?.id || WebApp?.initDataUnsafe?.user?.id)?.toString();
   if (fromTelegram && getInitData()) return fromTelegram;
+
+  const initData = getInitData();
+  if (initData) {
+    try {
+      const p = new URLSearchParams(initData);
+      const userRaw = p.get('user');
+      if (userRaw) {
+        const parsed = JSON.parse(userRaw);
+        if (parsed?.id) return String(parsed.id);
+      }
+    } catch {
+      // ignore
+    }
+  }
   return getDevUserId();
 }
 
@@ -93,7 +136,8 @@ export function getSelfIdHint(): string | null {
  */
 export function getDevUserId(): string | null {
   if (!import.meta.env.DEV) return null;
-  const fromTelegram = WebApp?.initDataUnsafe?.user?.id?.toString();
+  const globalTg = (window as any)?.Telegram?.WebApp;
+  const fromTelegram = (globalTg?.initDataUnsafe?.user?.id || WebApp?.initDataUnsafe?.user?.id)?.toString();
   if (fromTelegram) return fromTelegram;
   return (import.meta.env.VITE_DEV_TELEGRAM_USER_ID as string | undefined) || null;
 }

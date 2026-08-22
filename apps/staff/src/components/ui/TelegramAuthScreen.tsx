@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
 import { API_BASE, saveSession } from '../../lib/api';
-import { ShieldCheck, AlertCircle, Send } from 'lucide-react';
+import { ShieldCheck, AlertCircle, KeyRound, Send } from 'lucide-react';
 
 interface TelegramAuthScreenProps {
   onSuccess: () => void;
@@ -11,12 +11,12 @@ interface TelegramAuthScreenProps {
 export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [selectedRole, setSelectedRole] = useState<'staff' | 'manager'>('staff');
   const [devTelegramId, setDevTelegramId] = useState('');
-  const widgetContainerRef = useRef<HTMLDivElement>(null);
+  const [showTelegramId, setShowTelegramId] = useState(false);
 
-  const botName = import.meta.env.VITE_BOT_NAME || import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'AiChaZhengda_bot';
-
-  // Check URL hash for token from redirect
+  // Check URL hash for token from Telegram redirect if any
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.includes('staff_token=')) {
@@ -33,21 +33,59 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
     }
   }, [onSuccess]);
 
-  // Render official Telegram login widget
-  useEffect(() => {
-    if (widgetContainerRef.current && !widgetContainerRef.current.hasChildNodes()) {
-      const script = document.createElement('script');
-      script.src = 'https://telegram.org/js/telegram-widget.js?22';
-      script.setAttribute('data-telegram-login', botName);
-      script.setAttribute('data-size', 'large');
-      script.setAttribute('data-auth-url', `${API_BASE}/api/auth/staff-telegram/callback`);
-      script.setAttribute('data-request-access', 'write');
-      widgetContainerRef.current.appendChild(script);
+  // PIN Login (Staff 1234, Manager 9999)
+  const handlePinLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPin = pin.trim();
+    if (!cleanPin) {
+      setError('Please enter your PIN.');
+      return;
     }
-  }, [botName]);
+    setLoading(true);
+    setError(null);
+    try {
+      let role = selectedRole;
+      let res = await fetch(`${API_BASE}/api/auth/staff-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: cleanPin, role }),
+      });
 
-  // Dev mode direct login
-  const handleDevLogin = async (e: React.FormEvent) => {
+      // Auto-fallback: If role was staff and failed, try manager
+      if (!res.ok) {
+        const altRole = role === 'staff' ? 'manager' : 'staff';
+        const altRes = await fetch(`${API_BASE}/api/auth/staff-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: cleanPin, role: altRole }),
+        });
+        if (altRes.ok) {
+          res = altRes;
+          role = altRole;
+        }
+      }
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Invalid PIN');
+      }
+
+      const data = await res.json();
+      saveSession({
+        token: data.token,
+        role: data.role,
+        expiresAt: data.expiresAt,
+      });
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Incorrect PIN. Try 1234 for Staff or 9999 for Manager.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Direct Telegram ID login
+  const handleTelegramIdLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const id = devTelegramId.trim();
     if (!id) {
@@ -64,7 +102,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Authentication failed');
+        throw new Error(data.error || 'Telegram ID not authorized.');
       }
       const data = await res.json();
       saveSession({
@@ -74,7 +112,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       });
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Failed to authenticate via Telegram');
+      setError(err.message || 'Failed to authenticate via Telegram ID');
     } finally {
       setLoading(false);
     }
@@ -89,7 +127,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
           </div>
           <h1 className="text-2xl font-bold text-ink">Staff &amp; Admin Access</h1>
           <p className="mt-1 text-xs text-ink-soft">
-            Authorized Telegram Account Required
+            Enter PIN or Authorized Account
           </p>
         </div>
 
@@ -100,36 +138,88 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
           </div>
         )}
 
-        <div className="space-y-4">
-          {/* Telegram Login Widget */}
-          <div className="flex flex-col items-center justify-center rounded-xl border border-border/70 bg-surface-sunken/40 p-4">
-            <p className="mb-3 text-xs font-bold text-ink-soft">Sign in with Telegram</p>
-            <div ref={widgetContainerRef} className="flex min-h-[44px] justify-center items-center" />
+        {/* PIN Login Form */}
+        <form onSubmit={handlePinLogin} className="space-y-4">
+          <div className="flex rounded-xl bg-surface-sunken p-1 border border-border">
+            <button
+              type="button"
+              onClick={() => setSelectedRole('staff')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                selectedRole === 'staff'
+                  ? 'bg-surface text-ink shadow-sm'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              Staff Portal
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRole('manager')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                selectedRole === 'manager'
+                  ? 'bg-surface text-ink shadow-sm'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              Manager Mode
+            </button>
           </div>
 
-          {/* Dev Telegram ID Login */}
-          <div className="border-t border-border pt-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint">
-                Dev Telegram User ID
-              </span>
-              <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
-                Dev Mode
-              </span>
-            </div>
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-faint mb-1.5">
+              Access PIN (Staff: 1234 | Manager: 9999)
+            </label>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              autoFocus
+              placeholder="••••"
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value.replace(/\D/g, '').slice(0, 6));
+                if (error) setError(null);
+              }}
+              className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-center text-2xl font-bold tracking-widest text-ink focus:border-accent outline-none"
+            />
+          </div>
 
-            <form onSubmit={handleDevLogin} className="space-y-2">
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={loading}
+            className="gap-2 font-bold text-sm"
+          >
+            <KeyRound className="size-4" />
+            Unlock Dashboard
+          </Button>
+        </form>
+
+        {/* Optional Telegram ID Toggle */}
+        <div className="border-t border-border mt-6 pt-4">
+          <button
+            type="button"
+            onClick={() => setShowTelegramId(!showTelegramId)}
+            className="text-[11px] font-bold text-ink-soft hover:text-accent flex items-center justify-center w-full"
+          >
+            {showTelegramId ? 'Hide Telegram ID Login' : 'Login with Telegram User ID'}
+          </button>
+
+          {showTelegramId && (
+            <form onSubmit={handleTelegramIdLogin} className="space-y-2 mt-3">
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="Enter Telegram ID (e.g. 123456789)"
+                placeholder="Telegram User ID (e.g. 715714775)"
                 value={devTelegramId}
                 onChange={(e) => setDevTelegramId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs font-mono font-medium text-ink focus:border-accent outline-none"
+                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs font-mono text-ink focus:border-accent outline-none"
               />
               <Button
                 type="submit"
-                variant="primary"
+                variant="secondary"
                 size="md"
                 fullWidth
                 loading={loading}
@@ -139,7 +229,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
                 Authenticate Telegram ID
               </Button>
             </form>
-          </div>
+          )}
         </div>
       </Card>
     </div>
