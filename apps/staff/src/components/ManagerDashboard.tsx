@@ -14,7 +14,6 @@ import {
   Settings2,
   Shield,
   Sliders,
-  Sparkles,
   Trash2,
   TrendingUp,
   UserCheck,
@@ -476,21 +475,38 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Top Banner / Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
-            <Sparkles className="size-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-ink">Manager Control Center</h2>
-              <Badge variant="ready" dot>Admin Verified</Badge>
-            </div>
-            <p className="text-xs text-ink-soft">
-              Real-time store performance, customer loyalty point administration, and menu reward rules.
-            </p>
-          </div>
+      {/* Sub navigation bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+        <div className="flex flex-wrap gap-2">
+          {subTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
+                  isActive
+                    ? 'bg-accent text-on-accent shadow-sm'
+                    : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {tab.badge !== undefined ? (
+                  <span
+                    className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                      isActive
+                        ? 'bg-white/20 text-on-accent'
+                        : 'bg-surface-sunken text-ink-soft'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2">
@@ -514,39 +530,6 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
             Lock Panel
           </Button>
         </div>
-      </div>
-
-      {/* Sub navigation bar */}
-      <div className="flex flex-wrap gap-2 border-b border-border pb-3">
-        {subTabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
-                isActive
-                  ? 'bg-accent text-on-accent shadow-sm'
-                  : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-              {tab.badge !== undefined ? (
-                <span
-                  className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-                    isActive
-                      ? 'bg-white/20 text-on-accent'
-                      : 'bg-surface-sunken text-ink-soft'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
       </div>
 
       <div

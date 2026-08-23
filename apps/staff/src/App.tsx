@@ -724,14 +724,16 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             </button>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-ink sm:text-lg">
+                <h2 className="text-sm font-extrabold text-ink sm:text-lg whitespace-nowrap">
                   {activeTab === 'orders'
-                    ? 'Live Order Queue'
+                    ? 'Live Orders'
                     : activeTab === 'menu'
-                      ? 'Menu & Stock Inventory'
+                      ? 'Menu & Stock'
                       : 'Manager Portal'}
                 </h2>
-                <Badge variant="default">{currentBranchName}</Badge>
+                <Badge variant="default" className="hidden sm:inline-flex">
+                  {currentBranchName}
+                </Badge>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
                 {activeTab === 'orders'
