@@ -249,7 +249,7 @@ export function MenuManagement() {
         />
       ) : (
         <Card padding="none" className="overflow-hidden">
-          <div className="max-h-[calc(100dvh-16rem)] overflow-auto">
+          <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left">
               <caption className="sr-only">Menu items and availability</caption>
               <thead>
