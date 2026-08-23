@@ -128,7 +128,11 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
 
           {/* Primary CTA - Open in Telegram App */}
           <a
-            href={`https://t.me/${botName}`}
+            href={`https://t.me/${botName}?start=menu`}
+            onClick={() => {
+              // Try direct tg:// deep link protocol first for installed desktop/mobile app
+              window.location.href = `tg://resolve?domain=${botName}&start=menu`;
+            }}
             target="_blank"
             rel="noopener noreferrer"
             className="group relative flex items-center justify-center gap-3 w-full py-3.5 px-5 bg-gradient-to-r from-[#2AABEE] to-[#229ED9] hover:from-[#32b2f5] hover:to-[#25a5e3] text-white text-sm font-bold rounded-2xl transition-all duration-300 shadow-[0_8px_24px_rgba(42,171,238,0.35)] hover:shadow-[0_12px_28px_rgba(42,171,238,0.45)] active:scale-[0.98]"
