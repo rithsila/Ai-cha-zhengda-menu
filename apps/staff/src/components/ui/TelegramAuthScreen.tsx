@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
 import { API_BASE, saveSession } from '../../lib/api';
-import { AlertCircle, Send, Sparkles, KeyRound } from 'lucide-react';
+import { AlertCircle, Send, Sparkles } from 'lucide-react';
 
 interface TelegramAuthScreenProps {
   onSuccess: () => void;
@@ -12,7 +12,6 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [telegramUserId, setTelegramUserId] = useState('');
-  const [showManualInput, setShowManualInput] = useState(false);
 
   // Authenticate using Telegram ID or initData
   const authenticate = useCallback(async (payload: { telegramUserId?: string; initData?: string }) => {
@@ -109,67 +108,52 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
           </div>
         )}
 
-        {/* Primary Action: Open Telegram App Button */}
-        <div className="space-y-3">
+        {/* Direct Telegram ID Login Form */}
+        <form onSubmit={handleManualLogin} className="space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-faint mb-1.5">
+              Telegram User ID
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              placeholder="Enter Telegram ID (e.g. 715714775)"
+              value={telegramUserId}
+              onChange={(e) => {
+                setTelegramUserId(e.target.value);
+                if (error) setError(null);
+              }}
+              className="h-12 w-full rounded-xl border border-border bg-surface px-4 font-mono text-center text-base font-bold tracking-wider text-ink focus:border-accent outline-none"
+            />
+          </div>
+
           <Button
-            type="button"
+            type="submit"
             variant="primary"
             size="lg"
             fullWidth
             loading={loading}
-            onClick={handleOpenTelegram}
             className="gap-2 font-bold text-sm h-12 shadow-sm"
           >
             <Send className="size-4" />
-            Open in Telegram App
+            Sign in with Telegram ID
           </Button>
+        </form>
 
+        <div className="mt-4 pt-4 border-t border-border">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             size="md"
             fullWidth
-            onClick={() => setShowManualInput(!showManualInput)}
-            className="text-xs text-ink-soft hover:text-ink gap-1.5"
+            onClick={handleOpenTelegram}
+            className="gap-2 font-bold text-xs h-10 text-ink-soft hover:text-ink"
           >
-            <KeyRound className="size-3.5" />
-            {showManualInput ? 'Hide Telegram ID input' : 'Log in with Telegram ID'}
+            <Send className="size-3.5" />
+            Open in Telegram App
           </Button>
         </div>
-
-        {/* Optional Manual ID Input */}
-        {showManualInput && (
-          <form onSubmit={handleManualLogin} className="mt-4 pt-4 border-t border-border space-y-3">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-faint mb-1.5">
-                Telegram User ID
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoFocus
-                placeholder="e.g. 715714775"
-                value={telegramUserId}
-                onChange={(e) => {
-                  setTelegramUserId(e.target.value);
-                  if (error) setError(null);
-                }}
-                className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-center text-base font-bold tracking-wider text-ink focus:border-accent outline-none"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              variant="secondary"
-              size="md"
-              fullWidth
-              loading={loading}
-              className="font-bold text-xs h-10"
-            >
-              Authenticate ID
-            </Button>
-          </form>
-        )}
       </Card>
     </div>
   );
