@@ -289,7 +289,19 @@ function OrderCardImpl({
             ) : null}
           </p>
         </div>
-        <ElapsedTag order={order} now={now} />
+        <div className="flex items-center gap-2">
+          {cancellable ? (
+            <button
+              type="button"
+              onClick={() => onCancel(order)}
+              className="rounded-lg px-2 py-1 text-xs font-bold text-danger/70 hover:bg-danger-soft hover:text-danger transition-colors"
+              aria-label={`Cancel order ${order.pickupCode ?? ''}`}
+            >
+              Cancel
+            </button>
+          ) : null}
+          <ElapsedTag order={order} now={now} />
+        </div>
       </div>
 
       {awaitingPayment ? <AwaitingPaymentBanner order={order} /> : null}
@@ -399,17 +411,7 @@ function OrderCardImpl({
         })}
       </ul>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-border p-2.5">
-        {cancellable ? (
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={() => onCancel(order)}
-            aria-label={`Cancel order ${order.pickupCode ?? ''}`}
-          >
-            Cancel
-          </Button>
-        ) : null}
+      <div className="mt-4 border-t border-border p-3">
         {awaitingPayment ? (
           /*
            * The escape hatch. A customer whose QR failed often just pays cash at
