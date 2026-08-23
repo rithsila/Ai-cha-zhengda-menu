@@ -155,10 +155,10 @@ export function createApp() {
     }
   });
 
-  // Direct Staff/Manager Login endpoint via Telegram ID / WebApp
+  // Direct Staff/Manager Login endpoint via Telegram ID / WebApp / Widget
   app.post('/api/auth/staff-telegram-login', loginRateLimit, async (req, res) => {
     try {
-      const { telegramUserId, initData } = req.body || {};
+      const { telegramUserId, initData, telegramAuth } = req.body || {};
       let verifiedTelegramId: string | null = null;
 
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -166,6 +166,16 @@ export function createApp() {
         const { verifyInitData } = await import('./telegram-initdata');
         const verified = verifyInitData(initData, botToken);
         if (verified) verifiedTelegramId = String(verified.id);
+      }
+
+      if (telegramAuth && typeof telegramAuth === 'object' && botToken && !verifiedTelegramId) {
+        const strFields: Record<string, string> = {};
+        for (const [k, v] of Object.entries(telegramAuth)) {
+          strFields[k] = String(v);
+        }
+        if (verifyTelegramLogin(strFields, botToken)) {
+          verifiedTelegramId = String(strFields.id);
+        }
       }
 
       // If user provided Telegram User ID directly from browser
