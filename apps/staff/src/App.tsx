@@ -5,14 +5,21 @@ import {
   BellOff,
   Building2,
   ChevronDown,
+  Clock,
   LayoutDashboard,
   ListPlus,
+  LogOut,
   Menu as MenuIcon,
   Package,
+  Phone,
   QrCode,
   RefreshCw,
+  ShieldAlert,
+  ShoppingBag,
   Sparkles,
   TriangleAlert,
+  Truck,
+  User,
   X,
 } from 'lucide-react';
 import { MenuManagement } from './components/MenuManagement';
@@ -30,7 +37,6 @@ import {
   Button,
   Card,
   EmptyState,
-  PinScreen,
   TelegramAuthScreen,
   Skeleton,
   ThemeToggle,
@@ -44,7 +50,6 @@ import {
   handleUnauthorized,
   loadSession,
   onUnauthorized,
-  saveSession,
 } from './lib/api';
 import { isMuted, playNewOrderAlert, setMuted } from './lib/alert';
 import type { BadgeVariant } from './components/ui';
@@ -193,10 +198,12 @@ function BoardLegend() {
   );
 }
 
-function StaffApp() {
+function StaffApp({ onLogout }: { onLogout: () => void }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
-  const [managerUnlocked, setManagerUnlocked] = useState(() => loadSession()?.role === 'manager');
+  const sessionRole = loadSession()?.role;
+  const isManager = sessionRole === 'manager';
+  const [managerUnlocked, setManagerUnlocked] = useState(() => isManager);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -654,6 +661,17 @@ function StaffApp() {
 
             <ThemeToggle />
           </div>
+
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={onLogout}
+            className="w-full justify-start gap-2 text-xs font-bold text-danger hover:bg-danger-soft hover:text-danger"
+            aria-label="Log out"
+          >
+            <LogOut className="size-4" />
+            <span>Sign out</span>
+          </Button>
         </div>
       </aside>
 
@@ -730,37 +748,30 @@ function StaffApp() {
           {activeTab === 'menu' ? (
             <MenuManagement />
           ) : activeTab === 'manager' ? (
-            managerUnlocked ? (
+            isManager || managerUnlocked ? (
               <ManagerDashboard onLock={() => setManagerUnlocked(false)} />
             ) : (
               <div className="mx-auto max-w-md pt-8">
-                <PinScreen
-                  title="Manager Access"
-                  subtitle="Enter your 4-digit Manager PIN to unlock reports and loyalty controls."
-                  buttonLabel="Unlock Manager Hub"
-                  onSubmit={async (pin) => {
-                    try {
-                      const res = await fetch(`${API_BASE}/api/auth/staff-login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ pin, role: 'manager' }),
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        saveSession({
-                          token: data.token,
-                          role: 'manager',
-                          expiresAt: data.expiresAt,
-                        });
-                        setManagerUnlocked(true);
-                        return true;
-                      }
-                      return false;
-                    } catch {
-                      throw new Error('network');
-                    }
-                  }}
-                />
+                <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
+                  <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-danger-soft text-danger">
+                    <ShieldAlert className="size-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-ink">Manager Hub Restricted</h3>
+                    <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                      Your Telegram account is logged in as <strong>Staff</strong>. Manager analytics, customer points, and team access management require a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={onLogout}
+                    className="gap-2 font-bold w-full"
+                  >
+                    <LogOut className="size-4" />
+                    Switch to Manager Account
+                  </Button>
+                </Card>
               </div>
             )
           ) : loading ? (
@@ -924,39 +935,111 @@ function StaffApp() {
                   </button>
                   {archiveOpen ? (
                     <ul className="divide-y divide-border border-t border-border">
-                      {shownClosed.map((order) => (
-                        <li
-                          key={order.id}
-                          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm"
-                        >
-                          <span className="font-bold text-ink">
-                            {order.pickupCode || '—'}
-                          </span>
-                          <span className="text-xs tabular-nums text-ink-faint">
-                            {new Date(order.createdAt).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          {order.status === 'cancelled' ? (
-                            <Badge variant="danger">Cancelled</Badge>
-                          ) : PAID_STATUSES.has(order.status) ? (
-                            <Badge variant="completed">Paid &amp; Done</Badge>
-                          ) : null}
-                          <span className="ml-auto font-bold tabular-nums text-ink">
-                            ${order.totalAmount.toFixed(2)}
-                          </span>
-                          <Button
-                            variant="secondary"
-                            size="md"
-                            loading={updatingIds.has(order.id)}
-                            onClick={() => setStatus(order.id, 'ready')}
-                            aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
+                      {shownClosed.map((order) => {
+                        const created = new Date(order.createdAt).getTime();
+                        const finished = order.updatedAt ? new Date(order.updatedAt).getTime() : created;
+                        const durationMins = Math.max(1, Math.round((finished - created) / 60000));
+                        const isDelivery = order.orderType === 'delivery';
+
+                        return (
+                          <li
+                            key={order.id}
+                            className="flex flex-col gap-2.5 p-4 hover:bg-surface-sunken/20 transition-colors"
                           >
-                            Reopen Ticket
-                          </Button>
-                        </li>
-                      ))}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-base font-black tracking-tight text-ink">
+                                  {order.pickupCode || '—'}
+                                </span>
+                                {order.status === 'cancelled' ? (
+                                  <Badge variant="danger">Cancelled</Badge>
+                                ) : PAID_STATUSES.has(order.status) ? (
+                                  <Badge variant="completed">Paid &amp; Done</Badge>
+                                ) : null}
+                                <span className="inline-flex items-center gap-1 rounded-lg bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-soft">
+                                  {isDelivery ? (
+                                    <>
+                                      <Truck className="size-3 text-status-preparing" />
+                                      Delivery
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ShoppingBag className="size-3 text-accent" />
+                                      Pickup
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                <span className="text-base font-black tabular-nums text-ink">
+                                  ${order.totalAmount.toFixed(2)}
+                                </span>
+                                <Button
+                                  variant="secondary"
+                                  size="md"
+                                  loading={updatingIds.has(order.id)}
+                                  onClick={() => setStatus(order.id, 'ready')}
+                                  aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
+                                >
+                                  Reopen Ticket
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Customer and Location Row */}
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
+                              {order.contactName ? (
+                                <div className="flex items-center gap-1 font-bold text-ink">
+                                  <User className="size-3.5 text-ink-faint shrink-0" />
+                                  <span>{order.contactName}</span>
+                                </div>
+                              ) : null}
+
+                              {order.contactPhone ? (
+                                <a
+                                  href={`tel:${order.contactPhone}`}
+                                  className="inline-flex items-center gap-1 font-bold text-accent hover:underline"
+                                >
+                                  <Phone className="size-3.5 shrink-0" />
+                                  <span>{order.contactPhone}</span>
+                                </a>
+                              ) : null}
+
+                              {order.deliveryBuilding && order.deliveryRoom ? (
+                                <div className="flex items-center gap-1 font-medium text-ink-soft">
+                                  <Building2 className="size-3.5 text-ink-faint shrink-0" />
+                                  <span>Bldg {order.deliveryBuilding} · Rm {order.deliveryRoom}</span>
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {/* Timing, Duration and Items */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2 text-xs text-ink-faint">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="tabular-nums">
+                                  Placed: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span>·</span>
+                                <span className="tabular-nums">
+                                  Finished: {new Date(finished).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span>·</span>
+                                <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-md">
+                                  <Clock className="size-3 text-accent" />
+                                  Cook / Prep duration: {durationMins}m
+                                </span>
+                              </div>
+
+                              {order.items && order.items.length > 0 ? (
+                                <div className="text-ink-soft font-medium truncate max-w-md">
+                                  {order.items.map((i) => `${i.quantity}× ${i.menuItem?.name || 'Item'}`).join(', ')}
+                                </div>
+                              ) : null}
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : null}
                 </Card>
@@ -1005,7 +1088,12 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <StaffApp />
+      <StaffApp
+        onLogout={() => {
+          clearSession();
+          setIsAuthenticated(false);
+        }}
+      />
     </ToastProvider>
   );
 }

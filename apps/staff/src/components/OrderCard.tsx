@@ -1,12 +1,16 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Banknote,
+  Building2,
   CircleCheck,
   Hourglass,
   MapPin,
+  Phone,
   QrCode,
+  ShoppingBag,
   TriangleAlert,
   Truck,
+  User,
 } from 'lucide-react';
 import { Button, Card } from './ui';
 import {
@@ -299,43 +303,68 @@ function OrderCardImpl({
 
       <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
         <PaymentTag order={order} />
-        {/* Pickup is the default for almost every order — only the exception earns a tag. */}
         {order.orderType === 'delivery' ? (
           <span className="inline-flex items-center gap-1.5 rounded-xl bg-status-preparing-soft px-3 py-1.5 text-sm font-semibold text-status-preparing">
             <Truck className="size-4 shrink-0" aria-hidden="true" />
             Delivery
           </span>
-        ) : null}
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-surface-sunken px-3 py-1.5 text-sm font-semibold text-ink-soft">
+            <ShoppingBag className="size-4 shrink-0" aria-hidden="true" />
+            Pickup
+          </span>
+        )}
       </div>
 
-      {order.orderType === 'delivery' && order.deliveryAddress ? (
-        <div className="mx-4 mt-3 rounded-xl bg-surface-sunken p-3">
-          <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-faint uppercase">
-            <MapPin className="size-3.5" aria-hidden="true" />
-            Deliver to
-          </p>
-          {order.deliveryBuilding && order.deliveryRoom ? (
-            <p className="mt-1 text-lg leading-tight font-bold text-ink">
-              {order.deliveryBuilding}
-              {order.deliveryRoom}
+      {(order.contactName || order.contactPhone || order.deliveryBuilding || order.deliveryRoom || order.deliveryAddress) ? (
+        <div className="mx-4 mt-3 rounded-xl border border-border/60 bg-surface-sunken/70 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-ink-faint uppercase">
+              {order.orderType === 'delivery' ? (
+                <>
+                  <MapPin className="size-3.5 text-status-preparing" aria-hidden="true" />
+                  Delivery Destination
+                </>
+              ) : (
+                <>
+                  <User className="size-3.5 text-accent" aria-hidden="true" />
+                  Customer Details
+                </>
+              )}
             </p>
+            {order.deliveryBuilding && order.deliveryRoom ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-surface px-2 py-0.5 text-xs font-black text-ink shadow-xs">
+                <Building2 className="size-3 text-ink-soft" />
+                Bldg {order.deliveryBuilding} · Rm {order.deliveryRoom}
+              </span>
+            ) : null}
+          </div>
+
+          {order.deliveryAddress && order.orderType === 'delivery' ? (
+            <p className="text-xs text-ink-soft">{order.deliveryAddress}</p>
           ) : null}
-          <p className="text-sm text-ink">{order.deliveryAddress}</p>
-          {order.contactName || order.contactPhone ? (
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm">
-              {order.contactName ? (
-                <span className="text-ink">{order.contactName}</span>
-              ) : null}
-              {order.contactPhone ? (
-                <a
-                  href={`tel:${order.contactPhone}`}
-                  className="inline-flex min-h-11 items-center font-semibold text-accent hover:text-accent-strong"
-                >
-                  {order.contactPhone}
-                </a>
-              ) : null}
-            </p>
-          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 border-t border-border/40 text-xs">
+            {order.contactName ? (
+              <div className="flex items-center gap-1.5 font-bold text-ink">
+                <User className="size-3.5 text-ink-faint shrink-0" />
+                <span>{order.contactName}</span>
+              </div>
+            ) : (
+              <span className="text-ink-faint italic">Customer</span>
+            )}
+
+            {order.contactPhone ? (
+              <a
+                href={`tel:${order.contactPhone}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-accent/10 px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent hover:text-on-accent transition-colors"
+                title={`Call ${order.contactPhone}`}
+              >
+                <Phone className="size-3.5 shrink-0" />
+                <span>{order.contactPhone}</span>
+              </a>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

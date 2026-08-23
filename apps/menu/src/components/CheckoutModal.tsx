@@ -184,10 +184,10 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           // board, which filters by branch and defaults to the first one.
           branchId: branchId || null,
           orderType,
-          building: orderType === 'delivery' ? userProfile?.building : null,
-          roomNumber: orderType === 'delivery' ? userProfile?.roomNumber : null,
-          contactName: orderType === 'delivery' ? userProfile?.contactName : null,
-          contactPhone: orderType === 'delivery' ? userProfile?.phoneNumber : null,
+          building: userProfile?.building || null,
+          roomNumber: userProfile?.roomNumber || null,
+          contactName: userProfile?.contactName || null,
+          contactPhone: userProfile?.phoneNumber || null,
           pointsToUse
         }),
       });

@@ -11,7 +11,7 @@ import {
 import {
   issueToken, requireStaff, requireManager, staffPin, managerPin,
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
-  roleForTelegramId,
+  roleForTelegramId, resolveStaffAccount, adminTelegramIds,
 } from './auth';
 import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
@@ -141,21 +141,21 @@ export function createApp() {
         return res.status(400).json({ error: 'Missing Telegram user ID' });
       }
 
-      const role = roleForTelegramId(telegramId);
-      if (!role) {
+      const account = await resolveStaffAccount(telegramId, prisma);
+      if (!account) {
         return res.status(403).json({ error: 'Access denied: You are not authorized as staff or manager' });
       }
 
-      const { token: staffAuthToken, expiresAt } = issueToken(role);
+      const { token: staffAuthToken, expiresAt } = issueToken(account.role, { telegramUserId: telegramId, name: account.name });
       const target = process.env.STAFF_APP_URL || 'http://localhost:5174';
-      res.redirect(`${target}#staff_token=${encodeURIComponent(staffAuthToken)}&role=${encodeURIComponent(role)}&expiresAt=${expiresAt}`);
+      res.redirect(`${target}#staff_token=${encodeURIComponent(staffAuthToken)}&role=${encodeURIComponent(account.role)}&name=${encodeURIComponent(account.name)}&expiresAt=${expiresAt}`);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Staff Telegram login failed' });
     }
   });
 
-  // Direct Staff/Manager Login endpoint via Telegram ID
+  // Direct Staff/Manager Login endpoint via Telegram ID / WebApp
   app.post('/api/auth/staff-telegram-login', loginRateLimit, async (req, res) => {
     try {
       const { telegramUserId, initData } = req.body || {};
@@ -169,7 +169,7 @@ export function createApp() {
       }
 
       // If in dev mode with ALLOW_UNVERIFIED_TELEGRAM or plain telegramUserId
-      if (!verifiedTelegramId && (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' || !botToken)) {
+      if (!verifiedTelegramId && (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' || !botToken || process.env.NODE_ENV !== 'production')) {
         verifiedTelegramId = typeof telegramUserId === 'string' ? telegramUserId.trim() : null;
       }
 
@@ -178,21 +178,21 @@ export function createApp() {
         return res.status(401).json({ error: 'Telegram authentication failed' });
       }
 
-      // If no managers/staff explicitly defined in dev, default to manager role for quick dev testing
-      let role = roleForTelegramId(verifiedTelegramId);
-      if (!role && process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && process.env.NODE_ENV !== 'production') {
-        // Fallback role in dev if ID not explicitly listed
-        role = 'manager';
+      let account = await resolveStaffAccount(verifiedTelegramId, prisma);
+
+      // Fallback in local dev if no admins/staff configured yet
+      if (!account && process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && process.env.NODE_ENV !== 'production' && adminTelegramIds().length === 0) {
+        account = { role: 'manager', name: 'Dev Admin' };
       }
 
-      if (!role) {
+      if (!account) {
         recordFailedLogin(req);
-        return res.status(403).json({ error: 'Access denied: Telegram ID is not authorized' });
+        return res.status(403).json({ error: 'Access denied: Telegram ID is not authorized. Please ask an Admin or Manager to add your account.' });
       }
 
       clearFailedLogins(req);
-      const { token, expiresAt } = issueToken(role);
-      res.json({ ok: true, token, role, expiresAt, telegramUserId: verifiedTelegramId });
+      const { token, expiresAt } = issueToken(account.role, { telegramUserId: verifiedTelegramId, name: account.name });
+      res.json({ ok: true, token, role: account.role, name: account.name, expiresAt, telegramUserId: verifiedTelegramId });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Login error' });
@@ -628,13 +628,18 @@ export function createApp() {
         pricedItems.push({ menuItemId: menuItem.id, quantity, price: lineTotal, modifiers: JSON.stringify(selected) });
       }
 
-      // Delivery details are validated and formatted server-side: the client may
-      // send anything, and an old order must keep the address it was sent to.
+      // Customer details: validated strictly for delivery, captured gracefully for pickup
       let delivery: { building: string; room: string; name: string; phone: string } | null = null;
+      let orderContactName: string | null = null;
+      let orderContactPhone: string | null = null;
+      let orderBuilding: string | null = null;
+      let orderRoom: string | null = null;
+
+      const saved = telegramUserId
+        ? await prisma.user.findUnique({ where: { telegramUserId } })
+        : null;
+
       if (orderType === 'delivery') {
-        const saved = telegramUserId
-          ? await prisma.user.findUnique({ where: { telegramUserId } })
-          : null;
         const b = (building ?? saved?.building ?? '').toString().trim().toUpperCase();
         const r = (roomNumber ?? saved?.roomNumber ?? '').toString().trim();
         const n = (contactName ?? saved?.contactName ?? '').toString().trim();
@@ -653,6 +658,21 @@ export function createApp() {
           return res.status(400).json({ error: 'Please add a phone number we can call.' });
         }
         delivery = { building: b, room: r, name: n, phone: p };
+        orderContactName = n;
+        orderContactPhone = p;
+        orderBuilding = b;
+        orderRoom = r;
+      } else {
+        const b = (building ?? saved?.building ?? '').toString().trim().toUpperCase();
+        const r = (roomNumber ?? saved?.roomNumber ?? '').toString().trim();
+        const n = (contactName ?? saved?.contactName ?? [saved?.firstName, saved?.lastName].filter(Boolean).join(' ') ?? (saved?.username ? `@${saved.username}` : '')).toString().trim();
+        const rawPhone = contactPhone ?? saved?.phoneNumber ?? '';
+        const p = rawPhone ? normalizePhone(rawPhone) : '';
+
+        if (b && isValidBuilding(b)) orderBuilding = b;
+        if (r) orderRoom = r;
+        if (n) orderContactName = n;
+        if (p && isValidPhone(p)) orderContactPhone = p;
       }
 
       const DELIVERY_FEE = await getConfigNumber(prisma, 'deliveryFee', CONFIG_DEFAULTS.deliveryFee);
@@ -727,10 +747,10 @@ export function createApp() {
               pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
               orderType: orderType || 'pickup',
               deliveryAddress: delivery ? formatAddress(delivery.building, delivery.room) : null,
-              deliveryBuilding: delivery ? delivery.building : null,
-              deliveryRoom: delivery ? delivery.room : null,
-              contactName: delivery ? delivery.name : null,
-              contactPhone: delivery ? delivery.phone : null,
+              deliveryBuilding: orderBuilding,
+              deliveryRoom: orderRoom,
+              contactName: orderContactName,
+              contactPhone: orderContactPhone,
               deliveryFee,
               branchId: branchId || null,
               pointsEarned,
@@ -1331,6 +1351,100 @@ export function createApp() {
       res.json(user);
     } catch (err) {
       res.status(500).json({ error: 'Failed to update user points' });
+    }
+  });
+
+  // Staff Account Management Endpoints (Manager / Admin Only)
+  app.get('/api/staff-accounts', requireManager, async (req, res) => {
+    try {
+      const dbAccounts = await prisma.staffAccount.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+      const envAdmins = adminTelegramIds().map((id) => ({
+        id: `env-${id}`,
+        telegramUserId: id,
+        name: 'Root Admin (.env)',
+        role: 'manager' as const,
+        isActive: true,
+        isEnvAdmin: true,
+        createdAt: new Date().toISOString(),
+      }));
+
+      // Combine env admins and DB accounts without duplicate telegram user IDs
+      const envIds = new Set(envAdmins.map((a) => a.telegramUserId));
+      const filteredDb = dbAccounts.filter((a) => !envIds.has(a.telegramUserId));
+
+      res.json([...envAdmins, ...filteredDb]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch staff accounts' });
+    }
+  });
+
+  app.post('/api/staff-accounts', requireManager, async (req, res) => {
+    try {
+      const { telegramUserId, name, role } = req.body || {};
+      const cleanId = typeof telegramUserId === 'string' || typeof telegramUserId === 'number' ? String(telegramUserId).trim() : '';
+      const cleanName = typeof name === 'string' ? name.trim() : '';
+      const cleanRole = role === 'manager' ? 'manager' : 'staff';
+
+      if (!cleanId || !/^\d+$/.test(cleanId)) {
+        return res.status(400).json({ error: 'Valid numeric Telegram User ID is required' });
+      }
+      if (!cleanName) {
+        return res.status(400).json({ error: 'Staff name is required' });
+      }
+
+      const account = await prisma.staffAccount.upsert({
+        where: { telegramUserId: cleanId },
+        create: {
+          telegramUserId: cleanId,
+          name: cleanName,
+          role: cleanRole,
+          isActive: true,
+        },
+        update: {
+          name: cleanName,
+          role: cleanRole,
+          isActive: true,
+        }
+      });
+
+      res.json(account);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to create or update staff account' });
+    }
+  });
+
+  app.put('/api/staff-accounts/:id', requireManager, async (req, res) => {
+    try {
+      const { name, role, isActive } = req.body || {};
+      const updateData: any = {};
+      if (typeof name === 'string' && name.trim()) updateData.name = name.trim();
+      if (role === 'staff' || role === 'manager') updateData.role = role;
+      if (typeof isActive === 'boolean') updateData.isActive = isActive;
+
+      const account = await prisma.staffAccount.update({
+        where: { id: String(req.params.id) },
+        data: updateData,
+      });
+      res.json(account);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to update staff account' });
+    }
+  });
+
+  app.delete('/api/staff-accounts/:id', requireManager, async (req, res) => {
+    try {
+      await prisma.staffAccount.delete({
+        where: { id: String(req.params.id) },
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to remove staff account' });
     }
   });
 

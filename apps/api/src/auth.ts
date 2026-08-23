@@ -20,24 +20,53 @@ export const staffTelegramIds = () =>
     .map((id) => id.trim())
     .filter(Boolean);
 
-export const managerTelegramIds = () =>
-  (process.env.MANAGER_TELEGRAM_IDS || '')
+export const adminTelegramIds = () => {
+  const raw = `${process.env.ADMIN_TELEGRAM_IDS || ''},${process.env.ADMIN_TELEGRAM_ID || ''},${process.env.MANAGER_TELEGRAM_IDS || ''}`;
+  return raw
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean);
+};
+
+export const managerTelegramIds = adminTelegramIds;
 
 export function roleForTelegramId(telegramUserId: string): StaffRole | null {
-  const managers = managerTelegramIds();
-  if (managers.includes(telegramUserId)) return 'manager';
+  const admins = adminTelegramIds();
+  if (admins.includes(telegramUserId)) return 'manager';
   const staff = staffTelegramIds();
   if (staff.includes(telegramUserId)) return 'staff';
   return null;
 }
 
-export function issueToken(role: StaffRole) {
+export async function resolveStaffAccount(telegramUserId: string, prisma: any): Promise<{ role: StaffRole; name: string } | null> {
+  const admins = adminTelegramIds();
+  if (admins.includes(telegramUserId)) {
+    return { role: 'manager', name: 'Admin' };
+  }
+
+  try {
+    const account = await prisma.staffAccount.findUnique({
+      where: { telegramUserId },
+    });
+    if (account && account.isActive) {
+      return { role: (account.role === 'manager' ? 'manager' : 'staff') as StaffRole, name: account.name };
+    }
+  } catch (err) {
+    console.error('Error fetching staff account:', err);
+  }
+
+  const staff = staffTelegramIds();
+  if (staff.includes(telegramUserId)) {
+    return { role: 'staff', name: 'Staff' };
+  }
+
+  return null;
+}
+
+export function issueToken(role: StaffRole, meta?: { telegramUserId?: string; name?: string }) {
   const token = randomUUID();
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  sessions.set(token, { role, expiresAt });
+  sessions.set(token, { role, expiresAt, ...meta });
   return { token, expiresAt };
 }
 

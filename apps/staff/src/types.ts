@@ -16,6 +16,7 @@ export type Order = {
   paymentMethod: string;
   status: string;
   createdAt: string;
+  updatedAt?: string;
   pickupCode: string | null;
   /**
    * When the KHQR code stops being payable. ISO timestamp, null for cash orders

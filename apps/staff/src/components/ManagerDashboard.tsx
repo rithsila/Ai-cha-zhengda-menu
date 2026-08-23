@@ -12,10 +12,15 @@ import {
   Receipt,
   Search,
   Settings2,
+  Shield,
   Sliders,
   Sparkles,
+  Trash2,
   TrendingUp,
+  UserCheck,
+  UserPlus,
   Users,
+  Users2,
   X,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
@@ -69,9 +74,19 @@ const RANGES: Array<{ id: Range; label: string; days: string; caption: string }>
   { id: 'all', label: 'All Time', days: 'all', caption: 'All time' },
 ];
 
+type StaffAccount = {
+  id: string;
+  telegramUserId: string;
+  name: string;
+  role: 'staff' | 'manager';
+  isActive: boolean;
+  isEnvAdmin?: boolean;
+  createdAt: string;
+};
+
 const PANEL_ID = 'manager-panel';
 
-type ManagerSubTab = 'analytics' | 'loyalty' | 'rewards' | 'settings';
+type ManagerSubTab = 'analytics' | 'loyalty' | 'rewards' | 'staff' | 'settings';
 
 function rateError(value: string): string | null {
   const trimmed = value.trim();
@@ -121,6 +136,31 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const [rates, setRates] = useState({ pointsPerDollar: '100', earnPointsPerDollar: '10' });
   const [savingRates, setSavingRates] = useState(false);
 
+  // Staff & Manager Accounts
+  const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [newStaffId, setNewStaffId] = useState('');
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffRole, setNewStaffRole] = useState<'staff' | 'manager'>('staff');
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [staffActionId, setStaffActionId] = useState<string | null>(null);
+  const [addStaffOpen, setAddStaffOpen] = useState(false);
+
+  const fetchStaffAccounts = useCallback(async () => {
+    setLoadingStaff(true);
+    try {
+      const data = await apiFetch<StaffAccount[]>('/api/staff-accounts');
+      setStaffAccounts(data);
+    } catch {
+      toast({
+        title: "Couldn't load staff accounts",
+        variant: 'error',
+      });
+    } finally {
+      setLoadingStaff(false);
+    }
+  }, [toast]);
+
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setAnalyticsError(null);
@@ -150,8 +190,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
         ...Object.fromEntries(rows.filter((r) => r.key in prev).map((r) => [r.key, r.value])),
       }));
     }
+    fetchStaffAccounts();
     setLoading(false);
-  }, [range]);
+  }, [range, fetchStaffAccounts]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -345,6 +386,76 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     }
   };
 
+  const handleAddStaffAccount = async (e: FormEvent) => {
+    e.preventDefault();
+    const id = newStaffId.trim();
+    const name = newStaffName.trim();
+    if (!id || !/^\d+$/.test(id)) {
+      toast({ title: 'Please enter a valid numeric Telegram User ID.', variant: 'error' });
+      return;
+    }
+    if (!name) {
+      toast({ title: 'Please enter staff or manager name.', variant: 'error' });
+      return;
+    }
+    setAddingStaff(true);
+    try {
+      const created = await apiFetch<StaffAccount>('/api/staff-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegramUserId: id, name, role: newStaffRole }),
+      });
+      setStaffAccounts((prev) => {
+        const filtered = prev.filter((a) => a.telegramUserId !== id);
+        return [created, ...filtered];
+      });
+      toast({ title: `Added ${name} (${newStaffRole})`, variant: 'success' });
+      setNewStaffId('');
+      setNewStaffName('');
+      setNewStaffRole('staff');
+      setAddStaffOpen(false);
+    } catch (err: any) {
+      toast({ title: "Couldn't add staff account", description: err.message, variant: 'error' });
+    } finally {
+      setAddingStaff(false);
+    }
+  };
+
+  const handleToggleStaffStatus = async (account: StaffAccount) => {
+    if (account.isEnvAdmin) return;
+    setStaffActionId(account.id);
+    try {
+      const updated = await apiFetch<StaffAccount>(`/api/staff-accounts/${account.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !account.isActive }),
+      });
+      setStaffAccounts((prev) => prev.map((a) => (a.id === account.id ? updated : a)));
+      toast({
+        title: updated.isActive ? 'Account activated' : 'Account deactivated',
+        variant: 'info',
+      });
+    } catch {
+      toast({ title: "Couldn't update status", variant: 'error' });
+    } finally {
+      setStaffActionId(null);
+    }
+  };
+
+  const handleDeleteStaffAccount = async (account: StaffAccount) => {
+    if (account.isEnvAdmin) return;
+    setStaffActionId(account.id);
+    try {
+      await apiFetch(`/api/staff-accounts/${account.id}`, { method: 'DELETE' });
+      setStaffAccounts((prev) => prev.filter((a) => a.id !== account.id));
+      toast({ title: `Removed ${account.name}`, variant: 'info' });
+    } catch {
+      toast({ title: "Couldn't remove staff account", variant: 'error' });
+    } finally {
+      setStaffActionId(null);
+    }
+  };
+
   const rangeCaption = RANGES.find((r) => r.id === range)!.caption;
   const entries = analytics
     ? Object.entries(analytics.byDate).sort(([a], [b]) => a.localeCompare(b))
@@ -359,6 +470,7 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
     { id: 'loyalty', label: 'Customer Points', icon: <Users className="size-4" /> },
     { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
+    { id: 'staff', label: 'Staff & Accounts', icon: <Users2 className="size-4" />, badge: staffAccounts.length },
     { id: 'settings', label: 'Loyalty Rates', icon: <Settings2 className="size-4" /> },
   ];
 
@@ -997,6 +1109,208 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                     </div>
                   </Card>
                 ))}
+              </div>
+            )}
+          </div>
+        ) : activeTab === 'staff' ? (
+          <div className="space-y-6">
+            {/* Header + Add Action */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-ink">Staff &amp; Manager Accounts</h3>
+                <p className="text-xs text-ink-soft">
+                  Authorize Telegram accounts to log into the staff portal.
+                </p>
+              </div>
+              <Button
+                variant={addStaffOpen ? 'secondary' : 'primary'}
+                size="md"
+                onClick={() => setAddStaffOpen(!addStaffOpen)}
+                className="gap-2 font-bold"
+              >
+                {addStaffOpen ? (
+                  <>
+                    <X className="size-4" />
+                    Close Form
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="size-4" />
+                    Add Staff / Manager
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Add Account Drawer / Form */}
+            {addStaffOpen && (
+              <Card padding="lg" className="border-accent/40 bg-surface shadow-md">
+                <form onSubmit={handleAddStaffAccount} className="space-y-4">
+                  <div className="flex items-center gap-2 font-bold text-ink">
+                    <UserPlus className="size-5 text-accent" />
+                    <span>Authorize New Telegram User</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div>
+                      <label className="block text-xs font-bold text-ink mb-1">
+                        Telegram User ID <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="e.g. 715714775"
+                        value={newStaffId}
+                        onChange={(e) => setNewStaffId(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-sm font-bold text-ink outline-none focus:border-accent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-ink mb-1">
+                        Staff / Manager Name <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Sok Dara (Barista)"
+                        value={newStaffName}
+                        onChange={(e) => setNewStaffName(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-ink mb-1">
+                        Assigned Role
+                      </label>
+                      <select
+                        value={newStaffRole}
+                        onChange={(e) => setNewStaffRole(e.target.value as 'staff' | 'manager')}
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                      >
+                        <option value="staff">Staff (Orders &amp; Stock)</option>
+                        <option value="manager">Manager (Full Access + Reports)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="md"
+                      onClick={() => setAddStaffOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="md"
+                      loading={addingStaff}
+                      className="font-bold"
+                    >
+                      Save &amp; Grant Access
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            )}
+
+            {/* Staff Accounts List */}
+            {loadingStaff ? (
+              <div className="space-y-3">
+                <Skeleton className="h-20 w-full rounded-xl" />
+                <Skeleton className="h-20 w-full rounded-xl" />
+                <Skeleton className="h-20 w-full rounded-xl" />
+              </div>
+            ) : staffAccounts.length === 0 ? (
+              <EmptyState
+                icon={<Users2 className="size-10" />}
+                title="No Staff Accounts Configured"
+                description="Click 'Add Staff / Manager' to allow team members to log in."
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {staffAccounts.map((account) => {
+                  const isManager = account.role === 'manager';
+                  return (
+                    <Card
+                      key={account.id}
+                      padding="md"
+                      className={`flex flex-col justify-between transition-all ${
+                        account.isActive
+                          ? 'border-border bg-surface shadow-xs'
+                          : 'border-border/60 bg-surface-sunken/40 opacity-70'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`flex size-8 items-center justify-center rounded-lg ${
+                                isManager
+                                  ? 'bg-accent/15 text-accent'
+                                  : 'bg-surface-sunken text-ink-soft'
+                              }`}
+                            >
+                              {isManager ? <Shield className="size-4" /> : <UserCheck className="size-4" />}
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-ink">{account.name}</h4>
+                              <p className="font-mono text-[11px] text-ink-faint">
+                                ID: {account.telegramUserId}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end gap-1">
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                                isManager
+                                  ? 'bg-accent text-on-accent'
+                                  : 'bg-surface-sunken text-ink-soft'
+                              }`}
+                            >
+                              {account.role}
+                            </span>
+                            {account.isEnvAdmin ? (
+                              <span className="text-[10px] font-bold text-accent">Root .env</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!account.isEnvAdmin ? (
+                        <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                          <Button
+                            variant={account.isActive ? 'ghost' : 'success'}
+                            size="md"
+                            loading={staffActionId === account.id}
+                            onClick={() => handleToggleStaffStatus(account)}
+                            className="text-xs"
+                          >
+                            {account.isActive ? 'Deactivate' : 'Activate'}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="md"
+                            loading={staffActionId === account.id}
+                            onClick={() => handleDeleteStaffAccount(account)}
+                            className="text-xs gap-1"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Remove
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-4 border-t border-border pt-2 text-[11px] text-ink-faint italic">
+                          Configured in environment file (.env)
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
