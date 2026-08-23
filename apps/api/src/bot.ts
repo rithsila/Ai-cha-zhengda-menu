@@ -117,3 +117,21 @@ export const setupBot = () => {
 
   return bot;
 };
+
+export async function sendTelegramNotification(telegramUserId: string, text: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token || !telegramUserId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: telegramUserId,
+        text,
+        parse_mode: 'HTML',
+      }),
+    });
+  } catch (err) {
+    console.error('Error sending Telegram notification:', err);
+  }
+}

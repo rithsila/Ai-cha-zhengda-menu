@@ -35,6 +35,7 @@ interface PaymentOrder {
   pickupCode: string | null;
   transactionId?: string | null;
   pointsEarned?: number | null;
+  cancelReason?: string | null;
   items: PaymentOrderItem[];
 }
 
@@ -336,9 +337,16 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                 </div>
 
                 {cancelled ? (
-                  <p className="mt-2 text-xs text-tg-hint">
-                    {t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
-                  </p>
+                  <div className="mt-2 text-xs">
+                    {order.cancelReason ? (
+                      <p className="font-semibold text-rose-500">
+                        Reason: {order.cancelReason}
+                      </p>
+                    ) : null}
+                    <p className="text-tg-hint">
+                      {t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
+                    </p>
+                  </div>
                 ) : (
                   (order.pointsEarned ?? 0) > 0 && (
                     <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">

@@ -227,7 +227,7 @@ export interface OrderCardProps {
   /** True while the board shows more than one branch, so each card must name its own. */
   showBranch: boolean;
   onAction: (id: string, status: string) => void;
-  onCancel: (id: string) => void;
+  onCancel: (order: Order) => void;
   /** Escape hatch: the customer paid at the counter instead of scanning. */
   onMarkPaid: (id: string) => void;
   onSeen: (id: string) => void;
@@ -248,9 +248,6 @@ function OrderCardImpl({
   // No "Start preparing" while nobody has paid — see the footer below.
   const config = awaitingPayment ? undefined : STATUS_CONFIG[order.status];
 
-  const cancelConfirm = useTapConfirm(
-    useCallback(() => onCancel(order.id), [onCancel, order.id]),
-  );
   const paidConfirm = useTapConfirm(
     useCallback(() => onMarkPaid(order.id), [onMarkPaid, order.id]),
   );
@@ -267,11 +264,11 @@ function OrderCardImpl({
       // cards compress to fit instead of overflowing.
       // The unpaid ring outranks the new-order ring: "do not make this" matters
       // more than "you have not looked at this yet".
-      className={`shrink-0 overflow-hidden ${
+      className={`shrink-0 overflow-hidden transition-all ${
         awaitingPayment
-          ? 'ring-2 ring-danger'
+          ? 'border-danger ring-2 ring-danger'
           : isNew
-            ? 'ring-2 ring-accent'
+            ? 'border-accent ring-2 ring-accent/40'
             : ''
       }`}
       onPointerDown={isNew ? () => onSeen(order.id) : undefined}
@@ -406,19 +403,15 @@ function OrderCardImpl({
         })}
       </ul>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-border p-3">
+      <div className="mt-4 flex items-center gap-2 border-t border-border p-2.5">
         {cancellable ? (
           <Button
-            variant={cancelConfirm.armed ? 'danger' : 'ghost'}
-            size="lg"
-            onClick={cancelConfirm.press}
-            aria-label={
-              cancelConfirm.armed
-                ? `Confirm cancelling order ${order.pickupCode ?? ''}`
-                : `Cancel order ${order.pickupCode ?? ''}`
-            }
+            variant="ghost"
+            size="md"
+            onClick={() => onCancel(order)}
+            aria-label={`Cancel order ${order.pickupCode ?? ''}`}
           >
-            {cancelConfirm.armed ? 'Tap to confirm' : 'Cancel'}
+            Cancel
           </Button>
         ) : null}
         {awaitingPayment ? (
@@ -434,7 +427,7 @@ function OrderCardImpl({
            */
           <Button
             variant={paidConfirm.armed ? 'success' : 'secondary'}
-            size="lg"
+            size="md"
             fullWidth
             loading={updating}
             onClick={paidConfirm.press}
@@ -449,7 +442,7 @@ function OrderCardImpl({
         ) : config ? (
           <Button
             variant={config.button}
-            size="lg"
+            size="md"
             fullWidth
             loading={updating}
             data-order-action={order.id}

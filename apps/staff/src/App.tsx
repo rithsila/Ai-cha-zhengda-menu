@@ -25,6 +25,7 @@ import {
 import { MenuManagement } from './components/MenuManagement';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { OrderCard } from './components/OrderCard';
+import { CancelOrderModal } from './components/CancelOrderModal';
 import {
   PAID_STATUSES,
   STALE_AFTER_MS,
@@ -220,6 +221,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [muted, setMutedState] = useState(() => isMuted());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
 
   const failuresRef = useRef(0);
   const knownIdsRef = useRef<Set<string> | null>(null);
@@ -326,16 +328,37 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   const setStatus = useCallback(
-    async (id: string, status: string, options?: { silent?: boolean }) => {
+    async (
+      id: string,
+      status: string,
+      options?: { silent?: boolean; cancelReason?: string },
+    ) => {
       const previous = orders.find((o) => o.id === id);
       markSeen(id);
       setUpdatingIds((prev) => new Set(prev).add(id));
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === id
+            ? {
+                ...o,
+                status,
+                ...(options?.cancelReason
+                  ? { cancelReason: options.cancelReason }
+                  : {}),
+              }
+            : o,
+        ),
+      );
       try {
         const res = await fetch(`${API_BASE}/api/orders/${id}/status`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({
+            status,
+            ...(options?.cancelReason
+              ? { cancelReason: options.cancelReason }
+              : {}),
+          }),
         });
         if (res.status === 401) handleUnauthorized();
         if (!res.ok) throw new Error('status update failed');
@@ -348,6 +371,10 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               status === 'cancelled'
                 ? `${code} cancelled`
                 : `${code} completed & handed over`,
+            description:
+              status === 'cancelled' && options?.cancelReason
+                ? `Reason: ${options.cancelReason}`
+                : undefined,
             variant: status === 'cancelled' ? 'info' : 'success',
             action: {
               label: 'Undo',
@@ -421,8 +448,15 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
     [laneOrders, setStatus],
   );
 
-  const cancelOrder = useCallback(
-    (id: string) => setStatus(id, 'cancelled'),
+  const cancelOrder = useCallback((order: Order) => {
+    setCancelModalOrder(order);
+  }, []);
+
+  const handleConfirmCancel = useCallback(
+    (orderId: string, reason: string) => {
+      setStatus(orderId, 'cancelled', { cancelReason: reason });
+      setCancelModalOrder(null);
+    },
     [setStatus],
   );
 
@@ -501,7 +535,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   ];
 
   return (
-    <div className="flex min-h-dvh bg-surface-page text-ink">
+    <div className="flex h-dvh overflow-hidden bg-surface-page text-ink">
       {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (
         <div
@@ -512,7 +546,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
 
       {/* Modern Dashboard Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-surface transition-transform duration-200 lg:static lg:w-68 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col border-r border-border bg-surface transition-transform duration-200 lg:static lg:w-68 lg:translate-x-0 lg:shrink-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -676,9 +710,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top Header Bar */}
-        <header className="sticky top-0 z-30 flex h-18 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+        <header className="z-30 flex h-18 shrink-0 items-center justify-between border-b border-border bg-surface/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -743,8 +777,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         <main
           id={PANEL_ID}
           role="tabpanel"
-          className="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8"
+          className="w-full flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"
         >
+          <div className="mx-auto max-w-7xl">
           {activeTab === 'menu' ? (
             <MenuManagement />
           ) : activeTab === 'manager' ? (
@@ -952,7 +987,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                   {order.pickupCode || '—'}
                                 </span>
                                 {order.status === 'cancelled' ? (
-                                  <Badge variant="danger">Cancelled</Badge>
+                                  <Badge variant="danger">
+                                    Cancelled{order.cancelReason ? `: ${order.cancelReason}` : ''}
+                                  </Badge>
                                 ) : PAID_STATUSES.has(order.status) ? (
                                   <Badge variant="completed">Paid &amp; Done</Badge>
                                 ) : null}
@@ -1048,8 +1085,17 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               <BoardLegend />
             </div>
           )}
+          </div>
         </main>
       </div>
+
+      <CancelOrderModal
+        order={cancelModalOrder}
+        isOpen={cancelModalOrder !== null}
+        onClose={() => setCancelModalOrder(null)}
+        onConfirm={handleConfirmCancel}
+        loading={cancelModalOrder ? updatingIds.has(cancelModalOrder.id) : false}
+      />
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}

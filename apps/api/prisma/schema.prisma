@@ -94,6 +94,7 @@ model Order {
   discountApplied Float      @default(0)
   pointsRedeemed Int         @default(0)
   pointsSettled  Boolean     @default(false)
+  cancelReason   String?
   items          OrderItem[]
 }
 

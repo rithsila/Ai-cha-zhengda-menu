@@ -17,6 +17,7 @@ import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
 } from './telegram-initdata';
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
+import { sendTelegramNotification } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -881,7 +882,7 @@ export function createApp() {
   app.put('/api/orders/:id/status', requireStaff, async (req, res) => {
     try {
       const id = String(req.params.id);
-      const { status } = req.body;
+      const { status, cancelReason } = req.body;
 
       // Prisma stores whatever string it is given, so an unchecked status ends
       // up on the tablet and in the customer's order list verbatim.
@@ -891,16 +892,26 @@ export function createApp() {
 
       const updatedOrder = await prisma.order.update({
         where: { id },
-        data: { status }
+        data: {
+          status,
+          ...(status === 'cancelled' && cancelReason ? { cancelReason: String(cancelReason).trim() } : {}),
+        },
       });
 
       if (status === 'completed' || status === 'paid') {
         await settleOrderPoints(prisma, id);
       } else if (status === 'cancelled') {
         await refundOrderPoints(prisma, id);
-      }
 
-      // In a real app, you might notify the user via Telegram bot here that their order status changed
+        if (updatedOrder.telegramUserId) {
+          const reasonMsg = updatedOrder.cancelReason ? `\n\n<b>Reason:</b> ${updatedOrder.cancelReason}` : '';
+          const codeMsg = updatedOrder.pickupCode ? ` (#${updatedOrder.pickupCode})` : '';
+          await sendTelegramNotification(
+            updatedOrder.telegramUserId,
+            `❌ <b>Order Cancelled</b>\n\nYour order${codeMsg} has been cancelled by the store.${reasonMsg}\n\nIf you have questions or paid via QR, please check with our counter staff.`,
+          );
+        }
+      }
 
       res.json(updatedOrder);
     } catch (error) {

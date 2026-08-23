@@ -33,6 +33,7 @@ export type Order = {
   deliveryLng: number | null;
   /** Included by GET /api/orders; only rendered while viewing all branches. */
   branch?: { id: string; name: string } | null;
+  cancelReason?: string | null;
   items: OrderItem[];
 };
 

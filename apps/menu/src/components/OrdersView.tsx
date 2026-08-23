@@ -21,6 +21,7 @@ interface Order {
   paymentMethod: string;
   createdAt: string;
   pickupCode: string | null;
+  cancelReason?: string | null;
   items: OrderItem[];
 }
 
@@ -122,6 +123,11 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
               <p className="text-xs text-tg-hint mt-2">
                 {new Date(order.createdAt).toLocaleDateString()} at {new Date(order.createdAt).toLocaleTimeString()}
               </p>
+              {order.status === 'cancelled' && order.cancelReason && (
+                <p className="text-xs font-semibold text-rose-500 mt-1">
+                  Reason: {order.cancelReason}
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="font-bold">{formatCurrency(order.totalAmount)}</p>
