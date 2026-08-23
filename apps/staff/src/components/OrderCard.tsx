@@ -265,11 +265,7 @@ function OrderCardImpl({
       // The unpaid ring outranks the new-order ring: "do not make this" matters
       // more than "you have not looked at this yet".
       className={`shrink-0 overflow-hidden transition-all ${
-        awaitingPayment
-          ? 'border-danger ring-2 ring-danger'
-          : isNew
-            ? 'border-accent ring-2 ring-accent/40'
-            : ''
+        awaitingPayment ? 'border-danger ring-2 ring-danger' : ''
       }`}
       onPointerDown={isNew ? () => onSeen(order.id) : undefined}
     >

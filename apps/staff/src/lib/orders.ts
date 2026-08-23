@@ -68,9 +68,9 @@ export interface StatusConfig {
  * is not made yet.
  */
 export const STATUS_CONFIG: Record<string, StatusConfig> = {
-  pending: { buttonLabel: 'Start preparing', next: 'preparing', button: 'primary' },
-  paid: { buttonLabel: 'Start preparing', next: 'preparing', button: 'primary' },
-  preparing: { buttonLabel: 'Ready for pickup', next: 'ready', button: 'success' },
+  pending: { buttonLabel: 'Start preparing', next: 'preparing', button: 'secondary' },
+  paid: { buttonLabel: 'Start preparing', next: 'preparing', button: 'secondary' },
+  preparing: { buttonLabel: 'Ready for pickup', next: 'ready', button: 'secondary' },
   ready: { buttonLabel: 'Hand over', next: 'completed', button: 'secondary' },
 };
 
