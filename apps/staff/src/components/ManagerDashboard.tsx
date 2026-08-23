@@ -1259,7 +1259,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                             <div>
                               <h4 className="text-sm font-bold text-ink">{account.name}</h4>
                               <p className="font-mono text-[11px] text-ink-faint">
-                                ID: {account.telegramUserId}
+                                {account.isEnvAdmin
+                                  ? 'ID: Protected'
+                                  : `ID: •••• ${account.telegramUserId.slice(-4)}`}
                               </p>
                             </div>
                           </div>
@@ -1272,11 +1274,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                                   : 'bg-surface-sunken text-ink-soft'
                               }`}
                             >
-                              {account.role}
+                              {account.isEnvAdmin ? 'Admin' : account.role}
                             </span>
-                            {account.isEnvAdmin ? (
-                              <span className="text-[10px] font-bold text-accent">Root .env</span>
-                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1304,8 +1303,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                           </Button>
                         </div>
                       ) : (
-                        <div className="mt-4 border-t border-border pt-2 text-[11px] text-ink-faint italic">
-                          Configured in environment file (.env)
+                        <div className="mt-4 flex items-center justify-between border-t border-border pt-2 text-[11px] text-ink-soft font-semibold">
+                          <span>Primary Admin</span>
+                          <Badge variant="ready" dot>Active</Badge>
                         </div>
                       )}
                     </Card>

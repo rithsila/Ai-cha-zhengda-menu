@@ -1363,7 +1363,7 @@ export function createApp() {
       const envAdmins = adminTelegramIds().map((id) => ({
         id: `env-${id}`,
         telegramUserId: id,
-        name: 'Root Admin (.env)',
+        name: 'Admin',
         role: 'manager' as const,
         isActive: true,
         isEnvAdmin: true,
