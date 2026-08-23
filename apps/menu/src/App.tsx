@@ -60,35 +60,102 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
   const botName = import.meta.env.VITE_BOT_NAME || 'aicha_zhengda_arakawa_bot';
 
   return (
-    <div className="flex flex-col h-screen w-screen items-center justify-center bg-tg-bg p-6 text-center">
-      <div className="bg-tg-secondary-bg p-8 rounded-2xl shadow-sm max-w-sm w-full">
-        <h1 className="text-2xl font-bold text-tg-text mb-2">Welcome</h1>
-        <p className="text-tg-hint mb-8">
-          Order easily through our Telegram App or continue as a guest.
-        </p>
+    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-[#0A0D14]">
+      {/* Dynamic Brand Ambient Glow Orbs */}
+      <motion.div
+        animate={{
+          scale: [1, 1.25, 1],
+          opacity: [0.35, 0.55, 0.35],
+          x: [0, 30, 0],
+          y: [0, -40, 0],
+        }}
+        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#10b981]/30 via-[#059669]/20 to-transparent blur-3xl pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.3, 1],
+          opacity: [0.3, 0.5, 0.3],
+          x: [0, -35, 0],
+          y: [0, 35, 0],
+        }}
+        transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#e53935]/30 via-[#ef4444]/20 to-transparent blur-3xl pointer-events-none"
+      />
+      <motion.div
+        animate={{
+          scale: [1, 1.15, 1],
+          opacity: [0.15, 0.3, 0.15],
+        }}
+        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#38bdf8]/15 via-transparent to-transparent blur-2xl pointer-events-none"
+      />
 
-        <a
-          href={`https://t.me/${botName}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-[#2AABEE] hover:bg-[#229ED9] text-white text-sm font-bold rounded-xl transition-colors shadow-sm"
-        >
-          <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .26z"/>
-          </svg>
-          Open in Telegram App
-        </a>
+      {/* Subtle Pattern Grid */}
+      <div 
+        className="absolute inset-0 opacity-[0.04] pointer-events-none" 
+        style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+      />
 
-        {/* Logging in is only needed for points, saved address and history.
-            A guest can still browse and order for pickup with cash. */}
-        <button
-          type="button"
-          onClick={onContinueAsGuest}
-          className="mt-4 text-sm font-semibold text-brand-primary underline underline-offset-4"
-        >
-          Continue as guest
-        </button>
-      </div>
+      {/* Double-Bezel Hardware Card Container */}
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 w-full max-w-sm p-2 rounded-[2.5rem] bg-gradient-to-b from-white/15 to-white/5 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-2xl"
+      >
+        <div className="p-7 sm:p-8 rounded-[2rem] bg-[#111827]/85 border border-white/10 shadow-inner flex flex-col items-center">
+          
+          {/* Dual Brand Header Floating Badges */}
+          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-sm">
+            <div className="flex items-center gap-1.5">
+              <img src="/images/aicha-logo.png" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
+              <span className="text-xs font-bold text-emerald-400 tracking-wide">Ai-Cha</span>
+            </div>
+            <span className="text-white/20 text-xs font-light">✕</span>
+            <div className="flex items-center gap-1.5">
+              <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
+              <span className="text-xs font-bold text-rose-400 tracking-wide">Zhengda</span>
+            </div>
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
+            Fresh Tea & Crispy
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-300/80 mb-8 max-w-[260px] leading-relaxed">
+            Order your favorite boba, smoothies & crispy chicken on Telegram.
+          </p>
+
+          {/* Primary CTA - Open in Telegram App */}
+          <a
+            href={`https://t.me/${botName}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group relative flex items-center justify-center gap-3 w-full py-3.5 px-5 bg-gradient-to-r from-[#2AABEE] to-[#229ED9] hover:from-[#32b2f5] hover:to-[#25a5e3] text-white text-sm font-bold rounded-2xl transition-all duration-300 shadow-[0_8px_24px_rgba(42,171,238,0.35)] hover:shadow-[0_12px_28px_rgba(42,171,238,0.45)] active:scale-[0.98]"
+          >
+            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6">
+              <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .26z"/>
+              </svg>
+            </div>
+            <span>Open in Telegram App</span>
+          </a>
+
+          {/* Secondary Action - Guest */}
+          <button
+            type="button"
+            onClick={onContinueAsGuest}
+            className="mt-4 text-xs font-semibold text-slate-400 hover:text-white transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-white/5"
+          >
+            Or browse as guest →
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Subtle Footer Identity */}
+      <p className="relative z-10 text-[11px] font-medium text-slate-500 mt-8 tracking-wider uppercase">
+        Arakawa Branch • Official Menu
+      </p>
     </div>
   );
 };
