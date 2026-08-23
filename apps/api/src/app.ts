@@ -168,14 +168,14 @@ export function createApp() {
         if (verified) verifiedTelegramId = String(verified.id);
       }
 
-      // If in dev mode with ALLOW_UNVERIFIED_TELEGRAM or plain telegramUserId
-      if (!verifiedTelegramId && (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' || !botToken || process.env.NODE_ENV !== 'production')) {
-        verifiedTelegramId = typeof telegramUserId === 'string' ? telegramUserId.trim() : null;
+      // If user provided Telegram User ID directly from browser
+      if (!verifiedTelegramId && telegramUserId) {
+        verifiedTelegramId = String(telegramUserId).trim();
       }
 
       if (!verifiedTelegramId) {
         recordFailedLogin(req);
-        return res.status(401).json({ error: 'Telegram authentication failed' });
+        return res.status(401).json({ error: 'Please provide a valid Telegram User ID' });
       }
 
       let account = await resolveStaffAccount(verifiedTelegramId, prisma);

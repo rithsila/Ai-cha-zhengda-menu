@@ -17,14 +17,14 @@ export const managerPin = () => process.env.MANAGER_PIN || '9999';
 export const staffTelegramIds = () =>
   (process.env.STAFF_TELEGRAM_IDS || '')
     .split(',')
-    .map((id) => id.trim())
+    .map((id) => id.replace(/["']/g, '').trim())
     .filter(Boolean);
 
 export const adminTelegramIds = () => {
   const raw = `${process.env.ADMIN_TELEGRAM_IDS || ''},${process.env.ADMIN_TELEGRAM_ID || ''},${process.env.MANAGER_TELEGRAM_IDS || ''}`;
   return raw
     .split(',')
-    .map((id) => id.trim())
+    .map((id) => id.replace(/["']/g, '').trim())
     .filter(Boolean);
 };
 
