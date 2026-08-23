@@ -1,5 +1,6 @@
 import { Telegraf, Markup } from 'telegraf';
 import { PrismaClient } from '@prisma/client';
+import { resolveStaffAccount } from './auth';
 
 const prisma = new PrismaClient();
 
@@ -15,13 +16,33 @@ export const setupBot = () => {
 
   bot.start(async (ctx) => {
     const userId = ctx.from.id.toString();
+    const payload = ctx.payload || '';
+
+    // Check if user is an authorized Staff or Manager
+    const staffAccount = await resolveStaffAccount(userId, prisma);
+    const staffUrl = process.env.STAFF_APP_URL || 'https://staff.aichazhengdaarakawa.com';
+    const menuUrl = process.env.WEBAPP_URL || 'https://menu.aichazhengdaarakawa.com';
+
+    if (staffAccount || payload === 'staff') {
+      const roleLabel = staffAccount?.role === 'manager' ? 'Admin / Manager' : 'Staff';
+      const staffName = staffAccount?.name || ctx.from.first_name || 'Team Member';
+      return ctx.reply(`👋 Welcome ${staffName} (${roleLabel})!\n\nTap below to open the Staff Portal.`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🖥️ Open Staff Portal', web_app: { url: staffUrl } }],
+            [{ text: '📋 Open Customer Menu', web_app: { url: menuUrl } }]
+          ]
+        }
+      });
+    }
+
     const user = await prisma.user.findUnique({ where: { telegramUserId: userId } });
 
     if (user && user.phoneNumber) {
       return ctx.reply('Welcome back to Ai-Cha & Zhengda! Tap below to order.', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: 'Open Menu', web_app: { url: process.env.WEBAPP_URL || 'https://example.com' } }]
+            [{ text: 'Open Menu', web_app: { url: menuUrl } }]
           ]
         }
       });
@@ -32,6 +53,23 @@ export const setupBot = () => {
         ]).resize().oneTime()
       );
     }
+  });
+
+  bot.command('staff', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const staffAccount = await resolveStaffAccount(userId, prisma);
+    const staffUrl = process.env.STAFF_APP_URL || 'https://staff.aichazhengdaarakawa.com';
+
+    if (staffAccount) {
+      return ctx.reply(`👋 Staff Portal Access for ${staffAccount.name}:`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🖥️ Open Staff Portal', web_app: { url: staffUrl } }]
+          ]
+        }
+      });
+    }
+    return ctx.reply('⚠️ Access denied: Your Telegram account is not authorized as Staff or Manager.');
   });
 
   bot.on('contact', async (ctx) => {
