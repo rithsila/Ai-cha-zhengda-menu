@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from './Card';
 import { API_BASE, saveSession } from '../../lib/api';
-import { AlertCircle, Sparkles } from 'lucide-react';
+import { AlertCircle, Send, Sparkles } from 'lucide-react';
 
 interface TelegramAuthScreenProps {
   onSuccess: () => void;
@@ -10,9 +10,10 @@ interface TelegramAuthScreenProps {
 export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [telegramUserId, setTelegramUserId] = useState('');
   const botName = import.meta.env.VITE_BOT_NAME || 'aicha_zhengda_arakawa_bot';
 
-  // Authenticate using Telegram initData or token
+  // Authenticate using Telegram initData or token or numeric ID
   const authenticate = useCallback(async (payload: { initData?: string; telegramUserId?: string }) => {
     setLoading(true);
     setError(null);
@@ -25,7 +26,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
 
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Access denied: You are not authorized as staff or manager.');
+        throw new Error(data.error || 'Access denied: Telegram account is not authorized.');
       }
 
       saveSession({
@@ -74,10 +75,20 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
     window.location.href = `https://t.me/${botName}?startapp=staff`;
   };
 
+  const handleIdLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanId = telegramUserId.trim();
+    if (!cleanId) {
+      setError('Please enter your Telegram User ID.');
+      return;
+    }
+    authenticate({ telegramUserId: cleanId });
+  };
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-surface-page p-4">
       <Card padding="lg" className="w-full max-w-sm border-border bg-surface text-center shadow-2xl">
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-accent text-on-accent shadow-md">
             <Sparkles className="size-7" />
           </div>
@@ -88,31 +99,14 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
         </div>
 
         {error && (
-          <div className="mb-6 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-left text-xs font-semibold text-danger">
+          <div className="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-left text-xs font-semibold text-danger">
             <AlertCircle className="size-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         <div className="space-y-4">
-          {/* Telegram Login Widget (Web Auth) */}
-          <div
-            id="telegram-login-widget"
-            className="flex justify-center min-h-[40px]"
-            ref={(el) => {
-              if (el && !el.hasChildNodes()) {
-                const script = document.createElement('script');
-                script.src = 'https://telegram.org/js/telegram-widget.js?22';
-                script.setAttribute('data-telegram-login', botName);
-                script.setAttribute('data-size', 'large');
-                script.setAttribute('data-radius', '12');
-                script.setAttribute('data-auth-url', `${API_BASE}/api/auth/staff-telegram-callback`);
-                script.setAttribute('data-request-access', 'write');
-                el.appendChild(script);
-              }
-            }}
-          />
-
+          {/* Action 1: Open directly in Telegram App */}
           <button
             type="button"
             disabled={loading}
@@ -124,6 +118,36 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
             </svg>
             <span>{loading ? 'Authenticating...' : 'Open in Telegram App'}</span>
           </button>
+
+          <div className="flex items-center gap-2 text-xs text-ink-faint">
+            <div className="h-px flex-1 bg-border" />
+            <span>or sign in on browser</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          {/* Action 2: Direct numeric Telegram ID login */}
+          <form onSubmit={handleIdLogin} className="space-y-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Enter Telegram ID (e.g. 715714775)"
+              value={telegramUserId}
+              onChange={(e) => {
+                setTelegramUserId(e.target.value);
+                if (error) setError(null);
+              }}
+              className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-center text-sm font-bold tracking-wider text-ink focus:border-accent outline-none"
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 w-full h-10 rounded-xl border border-border bg-surface-sunken hover:bg-surface-elevated text-xs font-bold text-ink transition-colors disabled:opacity-50"
+            >
+              <Send className="size-3.5 text-accent" />
+              Sign in with Telegram ID
+            </button>
+          </form>
         </div>
       </Card>
     </div>
