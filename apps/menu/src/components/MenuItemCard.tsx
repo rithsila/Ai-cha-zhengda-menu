@@ -72,7 +72,7 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
           className={`py-2 ${item.isSoldOut ? 'opacity-50 cursor-not-allowed' : ''}`}
           disabled={item.isSoldOut}
         >
-          {item.isSoldOut ? t('soldOut', 'Sold Out') : t('order', 'ORDER')}
+          {item.isSoldOut ? t('soldOut', 'Sold Out') : t('add', 'ADD')}
         </Button>
       </div>
     </motion.div>
