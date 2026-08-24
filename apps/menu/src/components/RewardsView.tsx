@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Gift, Coin, Info, ShoppingCart } from '@phosphor-icons/react';
+import { Gift, Info, ShoppingCart } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { SignInPrompt } from './SignInPrompt';
+import { RewardCard } from './RewardCard';
 
 const DEFAULT_EARN_PER_DOLLAR = 10;
 const DEFAULT_POINTS_PER_DOLLAR = 100;
@@ -82,16 +83,12 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto">
-      {/* Points Card */}
-      <div className="bg-gradient-to-r from-brand-primary to-[#ff7a7a] rounded-2xl p-6 shadow-md text-white flex justify-between items-center">
-        <div>
-          <h3 className="text-white/80 font-semibold text-sm mb-1">{t('loyaltyPoints', 'Loyalty Points')}</h3>
-          <div className="text-3xl font-black">{points ?? 0}</div>
-        </div>
-        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-          <Coin size={28} weight="fill" className="text-white" />
-        </div>
-      </div>
+      {/* 10-Slot Stamp Reward Card */}
+      <RewardCard
+        points={points ?? 0}
+        earnPerDollar={earnPerDollar}
+        pointsPerDollar={pointsPerDollar}
+      />
 
       {/* How you earn points */}
       <div className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-3">
