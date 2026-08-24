@@ -485,13 +485,11 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                     </Button>
                   )}
                 </div>
-                <input
-                  type="text"
-                  placeholder="Or enter image path: /images/boba.webp"
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-xs font-mono text-ink-soft outline-none focus:border-accent"
-                />
+                {image && (
+                  <p className="text-xs text-ink-faint font-mono truncate max-w-xs" title={image}>
+                    {image.startsWith('http') ? '☁️ Uploaded to cloud' : image}
+                  </p>
+                )}
               </div>
             </div>
           </div>
