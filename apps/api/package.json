@@ -26,6 +26,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1116.0",
     "@prisma/client": "^6.19.3",
     "aba-payway-sdk-unofficial": "*",
     "cors": "^2.8.6",

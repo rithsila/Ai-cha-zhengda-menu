@@ -21,6 +21,7 @@ import { sendTelegramNotification } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { uploadToR2, isR2Configured } from './r2';
 
 // The tuned SQLite client lives in db.ts; re-exported here because every
 // caller (and every test) already imports it from this module.
@@ -344,15 +345,8 @@ export function createApp() {
   }
   app.use('/uploads', express.static(uploadDir));
 
-  const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, uploadDir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.png';
-      cb(null, `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
-    },
-  });
   const upload = multer({
-    storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (_req, file, cb) => {
       if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -360,12 +354,20 @@ export function createApp() {
     },
   });
 
-  app.post('/api/upload', requireStaff, upload.single('image'), (req, res) => {
+  app.post('/api/upload', requireStaff, upload.single('image'), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
-    const imageUrl = `/uploads/${req.file.filename}`;
-    res.json({ url: imageUrl });
+    try {
+      if (!isR2Configured()) {
+        return res.status(503).json({ error: 'Image storage (R2) is not configured. Set R2_* env vars in .env' });
+      }
+      const publicUrl = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype);
+      res.json({ url: publicUrl });
+    } catch (err: any) {
+      console.error('R2 upload error:', err);
+      res.status(500).json({ error: 'Failed to upload image' });
+    }
   });
 
   app.get('/api/catalog', async (req, res) => {
