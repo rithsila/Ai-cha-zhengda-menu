@@ -441,12 +441,9 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               <div className="relative flex size-20 items-center justify-center rounded-xl border border-border bg-surface-sunken overflow-hidden">
                 {image ? (
                   <img
-                    src={image.startsWith('http') || image.startsWith('/') ? `${API_BASE}${image}`.replace(/([^:]\/)\/+/g, '$1') : image}
+                    src={image.startsWith('http://') || image.startsWith('https://') ? image : image.startsWith('/') ? `${API_BASE}${image}`.replace(/([^:]\/)\/+/g, '$1') : image}
                     alt="Preview"
                     className="h-full w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = image; // fallback to raw path
-                    }}
                   />
                 ) : (
                   <ImageIcon className="size-6 text-ink-faint" />
@@ -485,11 +482,6 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                     </Button>
                   )}
                 </div>
-                {image && (
-                  <p className="text-xs text-ink-faint font-mono truncate max-w-xs" title={image}>
-                    {image.startsWith('http') ? '☁️ Uploaded to cloud' : image}
-                  </p>
-                )}
               </div>
             </div>
           </div>

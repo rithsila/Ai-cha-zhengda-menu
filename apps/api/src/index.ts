@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createApp, prisma } from './app';
 import { setupBot } from './bot';
 import { assertPinsConfigured } from './auth';
