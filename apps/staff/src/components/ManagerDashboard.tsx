@@ -896,10 +896,10 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                           {item.status !== 'resolved' ? (
                             <Button
                               variant="primary"
-                              size="sm"
+                              size="md"
                               loading={feedbackActionId === item.id}
                               onClick={() => handleUpdateFeedbackStatus(item.id, 'resolved')}
-                              className="gap-1.5 text-xs font-bold"
+                              className="h-9 px-3 gap-1.5 text-xs font-bold"
                             >
                               <CheckCircle className="size-3.5" />
                               Mark Resolved
@@ -907,10 +907,10 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                           ) : (
                             <Button
                               variant="secondary"
-                              size="sm"
+                              size="md"
                               loading={feedbackActionId === item.id}
                               onClick={() => handleUpdateFeedbackStatus(item.id, 'new')}
-                              className="text-xs"
+                              className="h-9 px-3 text-xs"
                             >
                               Reopen
                             </Button>
@@ -919,10 +919,10 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                           {item.status === 'new' && (
                             <Button
                               variant="secondary"
-                              size="sm"
+                              size="md"
                               loading={feedbackActionId === item.id}
                               onClick={() => handleUpdateFeedbackStatus(item.id, 'reviewed')}
-                              className="text-xs"
+                              className="h-9 px-3 text-xs"
                             >
                               Mark Reviewed
                             </Button>
@@ -930,15 +930,16 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
 
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
                             loading={feedbackActionId === item.id}
                             onClick={() => handleDeleteFeedback(item.id)}
-                            className="text-danger hover:bg-danger-soft hover:text-danger text-xs"
+                            className="size-9 text-danger hover:bg-danger-soft hover:text-danger text-xs"
                             aria-label="Delete report"
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
                         </div>
+
                       </div>
                     </Card>
                   );
