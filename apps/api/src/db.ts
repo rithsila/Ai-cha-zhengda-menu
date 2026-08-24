@@ -1,4 +1,7 @@
+import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+
+dotenv.config();
 
 /**
  * SQLite tuning for a burst of checkouts.
@@ -73,11 +76,15 @@ export function tuneSqliteUrl(raw: string): string {
   return `${path}?${params.toString()}`;
 }
 
-const rawUrl = process.env.DATABASE_URL;
+const rawUrl = process.env.DATABASE_URL || 'file:./dev.db';
 
-export const prisma = rawUrl
-  ? new PrismaClient({ datasources: { db: { url: tuneSqliteUrl(rawUrl) } } })
-  : new PrismaClient();
+export const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: tuneSqliteUrl(rawUrl),
+    },
+  },
+});
 
 let pragmasApplied: Promise<void> | null = null;
 

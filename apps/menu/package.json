@@ -16,6 +16,7 @@
     "i18next": "^26.3.6",
     "leaflet": "^1.9.4",
     "motion": "^12.42.2",
+    "motion-dom": "^13.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-i18next": "^17.0.9",

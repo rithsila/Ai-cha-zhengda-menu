@@ -1,6 +1,6 @@
 import { Telegraf, Markup } from 'telegraf';
 import { PrismaClient } from '@prisma/client';
-import { resolveStaffAccount } from './auth';
+import { adminTelegramIds } from './auth';
 
 const prisma = new PrismaClient();
 
@@ -16,38 +16,27 @@ export const setupBot = () => {
 
   bot.start(async (ctx) => {
     const userId = ctx.from.id.toString();
-    const payload = ctx.payload || '';
-
-    // Check if user is an authorized Staff or Manager
-    const staffAccount = await resolveStaffAccount(userId, prisma);
-    const staffUrl = process.env.STAFF_APP_URL || 'https://staff.aichazhengdaarakawa.com';
     const menuUrl = process.env.WEBAPP_URL || 'https://menu.aichazhengdaarakawa.com';
-
-    if (staffAccount || payload === 'staff') {
-      const roleLabel = staffAccount?.role === 'manager' ? 'Admin / Manager' : 'Staff';
-      const staffName = staffAccount?.name || ctx.from.first_name || 'Team Member';
-      return ctx.reply(`👋 Welcome ${staffName} (${roleLabel})!\n\nTap below to open the Staff Portal.`, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🖥️ Open Staff Portal', web_app: { url: staffUrl } }],
-            [{ text: '📋 Open Customer Menu', web_app: { url: menuUrl } }]
-          ]
-        }
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { telegramUserId: userId } });
 
     if (user && user.phoneNumber) {
-      return ctx.reply('Welcome back to Ai-Cha & Zhengda! Tap below to order.', {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Open Menu', web_app: { url: menuUrl } }]
-          ]
+      return ctx.reply(
+        '👋 Welcome back to Ai-Cha & Zhengda!\n\n' +
+        '• Tap below to open the customer menu.\n' +
+        '• To report an issue or send feedback, type <code>/report your message</code>.',
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📋 Open Menu', web_app: { url: menuUrl } }]
+            ]
+          }
         }
-      });
+      );
     } else {
-      return ctx.reply('Welcome! To start ordering and earn loyalty points, please share your phone number.', 
+      return ctx.reply(
+        'Welcome! To start ordering and earn loyalty points, please share your phone number.', 
         Markup.keyboard([
           Markup.button.contactRequest('📱 Share Phone Number')
         ]).resize().oneTime()
@@ -55,22 +44,71 @@ export const setupBot = () => {
     }
   });
 
-  bot.command('staff', async (ctx) => {
+  bot.command(['report', 'feedback'], async (ctx) => {
     const userId = ctx.from.id.toString();
-    const staffAccount = await resolveStaffAccount(userId, prisma);
-    const staffUrl = process.env.STAFF_APP_URL || 'https://staff.aichazhengdaarakawa.com';
+    const rawText = ctx.message.text || '';
+    const text = rawText.replace(/^\/(?:report|feedback)(?:@\w+)?\s*/i, '').trim();
 
-    if (staffAccount) {
-      return ctx.reply(`👋 Staff Portal Access for ${staffAccount.name}:`, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '🖥️ Open Staff Portal', web_app: { url: staffUrl } }]
-          ]
-        }
-      });
+    if (!text) {
+      return ctx.reply(
+        '📝 <b>Report an Issue or Feedback</b>\n\n' +
+        'Please type <code>/report</code> followed by your message.\n\n' +
+        '<b>Example:</b>\n' +
+        '<code>/report Missing straw in my order</code>\n\n' +
+        'Our manager and admin team will receive your report immediately.',
+        { parse_mode: 'HTML' }
+      );
     }
-    return ctx.reply('⚠️ Access denied: Your Telegram account is not authorized as Staff or Manager.');
+
+    try {
+      const user = await prisma.user.findUnique({ where: { telegramUserId: userId } });
+      const userName = [user?.firstName || ctx.from.first_name, user?.lastName || ctx.from.last_name]
+        .filter(Boolean)
+        .join(' ') || (ctx.from.username ? `@${ctx.from.username}` : 'Customer');
+      const userPhone = user?.phoneNumber;
+
+      await prisma.feedbackReport.create({
+        data: {
+          telegramUserId: userId,
+          userName,
+          userPhone: userPhone || null,
+          message: text,
+          status: 'new',
+        },
+      });
+
+      // Send immediate alert to managers & admins
+      const envAdmins = adminTelegramIds();
+      let dbManagers: string[] = [];
+      try {
+        const managers = await prisma.staffAccount.findMany({
+          where: { role: 'manager', isActive: true },
+          select: { telegramUserId: true },
+        });
+        dbManagers = managers.map((m) => m.telegramUserId);
+      } catch (err) {
+        console.error('Error fetching manager accounts:', err);
+      }
+
+      const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers]));
+      const alertText = `🚨 <b>New Customer Issue / Feedback Report</b>\n\n` +
+        `<b>From:</b> ${userName} (ID: <code>${userId}</code>)\n` +
+        `<b>Phone:</b> ${userPhone || 'Not provided'}\n\n` +
+        `<b>Message:</b>\n${text}`;
+
+      for (const managerId of allManagerIds) {
+        if (managerId !== userId) {
+          await sendTelegramNotification(managerId, alertText);
+        }
+      }
+
+      await ctx.reply('✅ Thank you for your feedback! Our management team has received your report.');
+    } catch (err) {
+      console.error('Error saving feedback:', err);
+      await ctx.reply('⚠️ Sorry, could not submit your report right now. Please try again later.');
+    }
   });
+
 
   bot.on('contact', async (ctx) => {
     const contact = ctx.message.contact;

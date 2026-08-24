@@ -1471,5 +1471,89 @@ export function createApp() {
     }
   });
 
+  // Customer Feedback & Issue Reports Endpoints (Manager / Admin View)
+  app.get('/api/feedback', requireManager, async (req, res) => {
+    try {
+      const reports = await prisma.feedbackReport.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      res.json(reports);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch feedback reports' });
+    }
+  });
+
+  app.post('/api/feedback', async (req, res) => {
+    try {
+      const { message, telegramUserId, userName, userPhone } = req.body || {};
+      const cleanMessage = typeof message === 'string' ? message.trim() : '';
+      if (!cleanMessage) {
+        return res.status(400).json({ error: 'Message is required' });
+      }
+
+      const report = await prisma.feedbackReport.create({
+        data: {
+          message: cleanMessage,
+          telegramUserId: telegramUserId ? String(telegramUserId) : null,
+          userName: userName ? String(userName) : null,
+          userPhone: userPhone ? String(userPhone) : null,
+          status: 'new',
+        },
+      });
+
+      // Send Telegram alert to managers / admins if configured
+      try {
+        const { sendTelegramNotification } = await import('./bot');
+        const envAdmins = adminTelegramIds();
+        const dbManagers = await prisma.staffAccount.findMany({
+          where: { role: 'manager', isActive: true },
+          select: { telegramUserId: true },
+        });
+        const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers.map((m) => m.telegramUserId)]));
+        const alertText = `🚨 <b>New Customer Report / Feedback</b>\n\n<b>From:</b> ${report.userName || 'Customer'}${report.telegramUserId ? ` (<code>${report.telegramUserId}</code>)` : ''}\n<b>Phone:</b> ${report.userPhone || 'Not provided'}\n\n<b>Message:</b>\n${report.message}`;
+        for (const managerId of allManagerIds) {
+          await sendTelegramNotification(managerId, alertText);
+        }
+      } catch (notifyErr) {
+        console.error('Error sending feedback notification:', notifyErr);
+      }
+
+      res.status(201).json(report);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to submit feedback' });
+    }
+  });
+
+  app.put('/api/feedback/:id/status', requireManager, async (req, res) => {
+    try {
+      const { status } = req.body || {};
+      if (!['new', 'reviewed', 'resolved'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      const updated = await prisma.feedbackReport.update({
+        where: { id: String(req.params.id) },
+        data: { status },
+      });
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to update feedback status' });
+    }
+  });
+
+  app.delete('/api/feedback/:id', requireManager, async (req, res) => {
+    try {
+      await prisma.feedbackReport.delete({
+        where: { id: String(req.params.id) },
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to delete feedback' });
+    }
+  });
+
   return app;
 }

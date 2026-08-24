@@ -3,11 +3,15 @@ import type { FormEvent } from 'react';
 import {
   Award,
   BarChart3,
+  CheckCircle,
   CircleAlert,
+  Clock,
   Coins,
   DollarSign,
   History,
   Lock,
+  MessageSquare,
+  Phone,
   Plus,
   Receipt,
   Search,
@@ -16,6 +20,7 @@ import {
   Sliders,
   Trash2,
   TrendingUp,
+  User,
   UserCheck,
   UserPlus,
   Users,
@@ -55,6 +60,16 @@ type User = {
   loyaltyPoints: number;
 };
 
+type FeedbackReport = {
+  id: string;
+  telegramUserId?: string | null;
+  userName?: string | null;
+  userPhone?: string | null;
+  message: string;
+  status: 'new' | 'reviewed' | 'resolved';
+  createdAt: string;
+};
+
 type RecentAdjustment = {
   id: string;
   name: string;
@@ -85,7 +100,8 @@ type StaffAccount = {
 
 const PANEL_ID = 'manager-panel';
 
-type ManagerSubTab = 'analytics' | 'loyalty' | 'rewards' | 'staff' | 'settings';
+type ManagerSubTab = 'analytics' | 'feedback' | 'loyalty' | 'rewards' | 'staff' | 'settings';
+
 
 function rateError(value: string): string | null {
   const trimmed = value.trim();
@@ -145,6 +161,11 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const [staffActionId, setStaffActionId] = useState<string | null>(null);
   const [addStaffOpen, setAddStaffOpen] = useState(false);
 
+  // Feedback & Reports
+  const [feedbacks, setFeedbacks] = useState<FeedbackReport[]>([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [feedbackActionId, setFeedbackActionId] = useState<string | null>(null);
+
   const fetchStaffAccounts = useCallback(async () => {
     setLoadingStaff(true);
     try {
@@ -159,6 +180,54 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       setLoadingStaff(false);
     }
   }, [toast]);
+
+  const fetchFeedbacks = useCallback(async () => {
+    setLoadingFeedback(true);
+    try {
+      const data = await apiFetch<FeedbackReport[]>('/api/feedback');
+      setFeedbacks(data);
+    } catch {
+      toast({
+        title: "Couldn't load feedback reports",
+        variant: 'error',
+      });
+    } finally {
+      setLoadingFeedback(false);
+    }
+  }, [toast]);
+
+  const handleUpdateFeedbackStatus = async (id: string, status: 'new' | 'reviewed' | 'resolved') => {
+    setFeedbackActionId(id);
+    try {
+      const updated = await apiFetch<FeedbackReport>(`/api/feedback/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      setFeedbacks((prev) => prev.map((f) => (f.id === id ? updated : f)));
+      toast({
+        title: status === 'resolved' ? 'Marked as Resolved' : 'Status updated',
+        variant: 'success',
+      });
+    } catch {
+      toast({ title: "Couldn't update status", variant: 'error' });
+    } finally {
+      setFeedbackActionId(null);
+    }
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    setFeedbackActionId(id);
+    try {
+      await apiFetch(`/api/feedback/${id}`, { method: 'DELETE' });
+      setFeedbacks((prev) => prev.filter((f) => f.id !== id));
+      toast({ title: 'Feedback report deleted', variant: 'info' });
+    } catch {
+      toast({ title: "Couldn't delete report", variant: 'error' });
+    } finally {
+      setFeedbackActionId(null);
+    }
+  };
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -190,8 +259,10 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       }));
     }
     fetchStaffAccounts();
+    fetchFeedbacks();
     setLoading(false);
-  }, [range, fetchStaffAccounts]);
+  }, [range, fetchStaffAccounts, fetchFeedbacks]);
+
 
   useEffect(() => {
     fetchDashboardData();
@@ -464,14 +535,17 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const dateLabelEvery = Math.max(1, Math.ceil(entries.length / 10));
 
   const activeRewardsCount = rewards.filter((r) => r.isActive).length;
+  const newFeedbackCount = feedbacks.filter((f) => f.status === 'new').length;
 
   const subTabs: Array<{ id: ManagerSubTab; label: string; icon: React.ReactNode; badge?: string | number }> = [
     { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
+    { id: 'feedback', label: 'Issues & Feedback', icon: <MessageSquare className="size-4" />, badge: newFeedbackCount > 0 ? `${newFeedbackCount} new` : (feedbacks.length > 0 ? feedbacks.length : undefined) },
     { id: 'loyalty', label: 'Customer Points', icon: <Users className="size-4" /> },
     { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
     { id: 'staff', label: 'Staff & Accounts', icon: <Users2 className="size-4" />, badge: staffAccounts.length },
     { id: 'settings', label: 'Loyalty Rates', icon: <Settings2 className="size-4" /> },
   ];
+
 
   return (
     <div className="flex flex-col gap-6">
@@ -728,6 +802,150 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
               </Card>
             </div>
           ) : null
+        ) : activeTab === 'feedback' ? (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-ink">Customer Reports &amp; Feedback</h3>
+                <p className="text-xs text-ink-soft">
+                  Issues and feedback submitted by customers via Telegram bot (/report or /feedback)
+                </p>
+              </div>
+              <Badge variant="default">
+                {feedbacks.length} Total {newFeedbackCount > 0 ? `(${newFeedbackCount} new)` : ''}
+              </Badge>
+            </div>
+
+            {loadingFeedback ? (
+              <div className="space-y-3">
+                <Skeleton className="h-24 w-full rounded-2xl" />
+                <Skeleton className="h-24 w-full rounded-2xl" />
+                <Skeleton className="h-24 w-full rounded-2xl" />
+              </div>
+            ) : feedbacks.length === 0 ? (
+              <EmptyState
+                icon={<MessageSquare className="size-10" />}
+                title="No issue reports yet"
+                description="When customers send /report or /feedback to the Telegram bot, their messages will arrive here."
+              />
+            ) : (
+              <div className="space-y-3">
+                {feedbacks.map((item) => {
+                  const isNew = item.status === 'new';
+                  const isResolved = item.status === 'resolved';
+
+                  return (
+                    <Card
+                      key={item.id}
+                      padding="lg"
+                      className={`border transition-all duration-150 ${
+                        isNew
+                          ? 'border-accent/40 bg-accent-soft/20 shadow-xs'
+                          : 'border-border bg-surface'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant={
+                                isNew
+                                  ? 'danger'
+                                  : isResolved
+                                    ? 'ready'
+                                    : 'preparing'
+                              }
+                            >
+                              {item.status.toUpperCase()}
+                            </Badge>
+
+                            <span className="text-sm font-bold text-ink">
+                              {item.userName || 'Customer'}
+                            </span>
+
+                            {item.telegramUserId && (
+                              <span className="font-mono text-xs text-ink-faint">
+                                (ID: {item.telegramUserId})
+                              </span>
+                            )}
+
+                            {item.userPhone && (
+                              <a
+                                href={`tel:${item.userPhone}`}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
+                              >
+                                <Phone className="size-3" />
+                                <span>{item.userPhone}</span>
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="rounded-xl bg-surface-sunken/50 p-3.5 text-sm font-medium text-ink leading-relaxed whitespace-pre-wrap">
+                            {item.message}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-xs text-ink-faint">
+                            <Clock className="size-3.5" />
+                            <span>
+                              Received: {new Date(item.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 sm:pt-0">
+                          {item.status !== 'resolved' ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              loading={feedbackActionId === item.id}
+                              onClick={() => handleUpdateFeedbackStatus(item.id, 'resolved')}
+                              className="gap-1.5 text-xs font-bold"
+                            >
+                              <CheckCircle className="size-3.5" />
+                              Mark Resolved
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={feedbackActionId === item.id}
+                              onClick={() => handleUpdateFeedbackStatus(item.id, 'new')}
+                              className="text-xs"
+                            >
+                              Reopen
+                            </Button>
+                          )}
+
+                          {item.status === 'new' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={feedbackActionId === item.id}
+                              onClick={() => handleUpdateFeedbackStatus(item.id, 'reviewed')}
+                              className="text-xs"
+                            >
+                              Mark Reviewed
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            loading={feedbackActionId === item.id}
+                            onClick={() => handleDeleteFeedback(item.id)}
+                            className="text-danger hover:bg-danger-soft hover:text-danger text-xs"
+                            aria-label="Delete report"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : activeTab === 'loyalty' ? (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* User Search and Point Adjuster */}
