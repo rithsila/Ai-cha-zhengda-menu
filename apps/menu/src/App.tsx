@@ -507,7 +507,15 @@ export default function App() {
       <div className="px-4 pt-6">
         {activeTab === 'orders' && <OrdersView onReorder={handleReorder} onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'payment' && <PaymentView onBrowseMenu={() => setActiveTab('menu')} />}
-        {activeTab === 'rewards' && <RewardsView onBrowseMenu={() => setActiveTab('menu')} />}
+        {activeTab === 'rewards' && (
+          <RewardsView
+            onBrowseMenu={() => setActiveTab('menu')}
+            onSelectClaimItem={(claimItem) => {
+              const target = dynamicCatalog.find((i) => i.id === claimItem.id) || claimItem;
+              handleAddItem(target);
+            }}
+          />
+        )}
         {activeTab === 'account' && <AccountView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'menu' && (
           <>

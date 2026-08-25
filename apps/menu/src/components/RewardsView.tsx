@@ -16,9 +16,10 @@ function readConfigNumber(rows: { key: string; value: string }[], key: string, f
 
 interface RewardsViewProps {
   onBrowseMenu?: () => void;
+  onSelectClaimItem?: (item: any) => void;
 }
 
-export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
+export function RewardsView({ onBrowseMenu, onSelectClaimItem }: RewardsViewProps) {
   const { t } = useTranslation();
   // Points belong to one account. A guest has none to show.
   const signedIn = hasIdentity();
@@ -29,6 +30,9 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
   const [pointsPerDollar, setPointsPerDollar] = useState(DEFAULT_POINTS_PER_DOLLAR);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+
+  const pointsPerStamp = Math.max(1, Math.round(pointsPerDollar / 10));
+  const userStamps = Math.floor((points ?? 0) / pointsPerStamp);
 
   useEffect(() => {
     if (!signedIn) {
@@ -119,7 +123,11 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         ) : (
           <div className="grid gap-3">
             {claimableMenu.map((item) => (
-              <div key={item.id} className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-4 items-center">
+              <div
+                key={item.id}
+                onClick={() => onSelectClaimItem?.(item)}
+                className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-4 items-center cursor-pointer hover:border-brand-primary/40 active:scale-[0.99] transition-all"
+              >
                 <div className="w-16 h-16 bg-tg-hint/10 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center">
                   {item.image ? (
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
@@ -135,6 +143,20 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
                     <span>10 Stamps (Free)</span>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectClaimItem?.(item);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 ${
+                    userStamps >= 10
+                      ? 'bg-brand-primary text-white hover:opacity-90 active:scale-95'
+                      : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
+                  }`}
+                >
+                  {userStamps >= 10 ? t('claimFree', 'Claim Free') : t('orderNow', 'Order')}
+                </button>
               </div>
             ))}
 
