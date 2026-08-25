@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Sparkle, CheckCircle } from '@phosphor-icons/react';
+import { Sparkle } from '@phosphor-icons/react';
 
 interface RewardCardProps {
   points: number;
@@ -94,9 +94,9 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
             <span className="text-sm font-bold text-tg-text">{t('stampsCollected', 'Stamps Collected')}</span>
           </div>
           {completedCards > 0 && (
-            <div className="flex items-center gap-1 bg-green-500/10 text-green-600 px-2.5 py-1 rounded-full text-xs font-bold">
-              <CheckCircle size={14} weight="fill" />
-              <span>{completedCards} {t('cardsCompleted', 'Card(s) Completed')}</span>
+            <div className="flex items-center gap-1 bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2.5 py-1 rounded-full text-xs font-black">
+              <span>🏅</span>
+              <span>x{completedCards} {t('fullCards', 'Cards')}</span>
             </div>
           )}
         </div>
