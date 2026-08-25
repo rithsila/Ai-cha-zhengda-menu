@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Gift, Info, ShoppingCart } from '@phosphor-icons/react';
+import { Gift, ShoppingCart } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { SignInPrompt } from './SignInPrompt';
 import { RewardCard } from './RewardCard';
@@ -89,22 +89,6 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         earnPerDollar={earnPerDollar}
         pointsPerDollar={pointsPerDollar}
       />
-
-      {/* How you earn points */}
-      <div className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-3">
-        <div className="text-brand-primary flex-shrink-0 mt-0.5">
-          <Info size={22} weight="fill" />
-        </div>
-        <div>
-          <h3 className="font-bold text-tg-text mb-1">{t('howYouEarnPoints', 'How you earn points')}</h3>
-          <p className="text-sm text-tg-hint">
-            {t('earnPointsRule', 'Earn {{earn}} points for every $1 you spend. {{rate}} points = $1 off.', {
-              earn: earnPerDollar,
-              rate: pointsPerDollar,
-            })}
-          </p>
-        </div>
-      </div>
 
       {/* Points become a discount at checkout */}
       <div className="bg-brand-primary/10 rounded-2xl p-4 border border-brand-primary/20 flex gap-3">
