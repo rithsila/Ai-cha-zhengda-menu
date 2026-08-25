@@ -2,8 +2,8 @@
 name: Ai Cha Menu
 description: Telegram Mini App for Ai Cha & Zhengda Chicken
 colors:
-  primary-aicha: "oklch(60% 0.2 140)"
-  primary-zhengda: "var(--color-brand-zhengda, #e53935)"
+  primary-aicha: "#e53935"
+  primary-zhengda: "#e53935"
   neutral-bg: "var(--tg-theme-bg-color)"
   neutral-text: "var(--tg-theme-text-color)"
   neutral-secondary: "var(--tg-theme-secondary-bg-color)"
@@ -30,26 +30,26 @@ components:
     padding: "12px"
 ---
 
-# Design System: Ai Cha Menu
+# Design System: Ai Cha & Zhengda Menu
 
 ## 1. Overview
 
-**Creative North Star: "The Friendly Barista"**
+**Creative North Star: "Double Your Choice, Double Your Joy"**
 
-This interface is playful & vibrant, prioritizing a fast & frictionless user flow. Built specifically for Telegram, it leverages native integration to feel tactile & snappy rather than behaving like a slow, desktop-first website. It rejects cluttered layouts and overly serious corporate aesthetics in favor of a bright, accessible, and high-speed mobile experience.
+This interface is playful & vibrant, prioritizing a fast & frictionless user flow. Built specifically for Telegram, it leverages native integration to feel tactile & snappy rather than behaving like a slow, desktop-first website. It unites Ai-Cha and Zhengda under a clean, signature Red & White brand identity with sharp contrast.
 
 **Key Characteristics:**
-- High-contrast color blocking for brand differentiation.
+- Unified signature Red & White palette matching physical store and reward card branding.
 - Native Telegram light/dark mode syncing for backgrounds and text.
 - Tactile, bouncy physics on all interactive elements.
 
 ## 2. Colors
 
-"Matcha Green & Crispy Red": High contrast, clearly distinguishing the two brands.
+"Signature Red & Crisp White": High contrast, bold, clean.
 
 ### Primary
-- **Ai-Cha Matcha Green** (oklch(60% 0.2 140)): The dominant brand color for the Ai-Cha tab, used for the main Add to Cart buttons and active tab indicators.
-- **Zhengda Crispy Red** (var(--color-brand-zhengda, #e53935)): The dominant brand color for the Zhengda tab, ensuring a distinct identity when swapping menus.
+- **Ai-Cha & Zhengda Brand Red** (`#e53935`): The dominant brand color for both Ai-Cha and Zhengda, used for active tabs, category pills, primary action buttons, and price badges.
+- **Brand Soft Red** (`#fee2e2` / `rgba(229, 57, 53, 0.1)`): Used for soft pill tints, selected states, and badge backgrounds.
 
 ### Neutral
 - **Telegram Base** (var(--tg-theme-bg-color)): Main app background, adapting dynamically to the user's OS preference.

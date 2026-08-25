@@ -49,10 +49,11 @@
   --color-tg-primary-text: var(--tg-theme-button-text-color, var(--tg-fallback-button-text));
   --color-tg-secondary-bg: var(--tg-theme-secondary-bg-color, var(--tg-fallback-secondary-bg));
 
-  /* Brand Specific Additions */
-  --color-brand-primary: oklch(0.65 0.2 140); /* Vibrant Matcha Green */
-  --color-brand-zhengda: #e53935; /* Zhengda Crispy Red */
-  --color-brand-accent: oklch(0.5 0.15 300); /* Taro Purple */
+  /* Brand Specific Additions - Unified Ai-Cha & Zhengda Red */
+  --color-brand-primary: #e53935; /* Signature Brand Red */
+  --color-brand-zhengda: #e53935; /* Signature Brand Red */
+  --color-brand-accent: #d32f2f;  /* Deep Brand Red */
+  --color-brand-soft: #fee2e2;    /* Soft Red Tint (100) */
 
   /* Typography */
   --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;

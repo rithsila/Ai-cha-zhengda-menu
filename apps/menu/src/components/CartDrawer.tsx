@@ -107,7 +107,7 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
                         <div className="flex justify-between items-center pt-1 mt-1 border-t border-tg-hint/10">
                           <button 
                             onClick={() => onRemove(item.id)}
-                            className="text-xs text-[#E53935] bg-[#E53935]/10 px-3 py-1.5 rounded-xl font-medium"
+                            className="text-xs text-brand-primary bg-brand-primary/10 px-3 py-1.5 rounded-xl font-medium"
                           >
                             {t('remove')}
                           </button>

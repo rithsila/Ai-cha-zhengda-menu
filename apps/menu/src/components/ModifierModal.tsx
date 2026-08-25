@@ -129,9 +129,9 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
                         onClick={() => handleToggle(group, opt)}
                         className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
                           isSelected 
-                            ? (item.brand === 'ai-cha' ? 'border-brand-primary text-brand-primary bg-brand-primary/10' : 'border-[#E53935] text-[#E53935] bg-[#E53935]/10')
+                            ? 'border-brand-primary text-brand-primary bg-brand-primary/10 font-bold'
                             : isGroupMissing(group.id)
-                              ? 'border-[#E53935]/40 text-tg-text bg-tg-secondary-bg'
+                              ? 'border-brand-primary/40 text-tg-text bg-tg-secondary-bg'
                               : 'border-tg-hint/20 text-tg-text bg-tg-secondary-bg'
                         }`}
                       >

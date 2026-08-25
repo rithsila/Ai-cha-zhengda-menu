@@ -104,7 +104,7 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
         {/* Progress Bar */}
         <div className="w-full bg-tg-hint/15 h-2.5 rounded-full overflow-hidden">
           <div
-            className="bg-gradient-to-r from-red-500 to-brand-primary h-full rounded-full transition-all duration-500"
+            className="bg-gradient-to-r from-red-600 to-brand-primary h-full rounded-full transition-all duration-500"
             style={{ width: `${(currentStamps / 10) * 100}%` }}
           />
         </div>
@@ -113,7 +113,7 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
         <div className="text-xs text-tg-hint flex items-center gap-1.5 mt-0.5">
           <Sparkle size={14} className="text-brand-primary flex-shrink-0" weight="fill" />
           {stampsRemaining === 0 ? (
-            <span className="text-green-600 font-bold">
+            <span className="text-brand-primary font-bold">
               {t('cardCompletedReward', '🎉 Card completed! You earned a Free 7,000៛ reward!')}
             </span>
           ) : (

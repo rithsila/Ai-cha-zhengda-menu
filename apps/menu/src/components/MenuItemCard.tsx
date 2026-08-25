@@ -48,14 +48,14 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
              {formatCurrency(item.basePrice)}
            </div>
          )}
-         {onToggleFavorite && (
-           <button 
-             onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
-             className={`absolute top-2 left-2 p-1.5 rounded-full bg-tg-bg/90 backdrop-blur-sm transition-colors active:scale-95 ${isFavorite ? 'text-[#E53935]' : 'text-tg-hint hover:text-tg-text'}`}
-           >
-             <Heart size={16} weight={isFavorite ? "fill" : "regular"} />
-           </button>
-         )}
+          {onToggleFavorite && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
+              className={`absolute top-2 left-2 p-1.5 rounded-full bg-tg-bg/90 backdrop-blur-sm transition-colors active:scale-95 ${isFavorite ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
+            >
+              <Heart size={16} weight={isFavorite ? "fill" : "regular"} />
+            </button>
+          )}
       </div>
       <div className="p-3 flex flex-col flex-1 justify-between">
         <div>

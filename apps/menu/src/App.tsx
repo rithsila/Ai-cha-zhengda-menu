@@ -107,15 +107,15 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
         <div className="p-7 sm:p-8 rounded-[2rem] bg-[#111827]/85 border border-white/10 shadow-inner flex flex-col items-center">
           
           {/* Dual Brand Header Floating Badges */}
-          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md shadow-sm">
+          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md shadow-sm">
             <div className="flex items-center gap-1.5">
               <img src="/images/aicha-logo.png" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
-              <span className="text-xs font-bold text-emerald-400 tracking-wide">Ai-Cha</span>
+              <span className="text-xs font-bold text-white tracking-wide">Ai-Cha</span>
             </div>
-            <span className="text-white/20 text-xs font-light">✕</span>
+            <span className="text-white/30 text-xs font-light">✕</span>
             <div className="flex items-center gap-1.5">
               <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
-              <span className="text-xs font-bold text-rose-400 tracking-wide">Zhengda</span>
+              <span className="text-xs font-bold text-white tracking-wide">Zhengda</span>
             </div>
           </div>
 
