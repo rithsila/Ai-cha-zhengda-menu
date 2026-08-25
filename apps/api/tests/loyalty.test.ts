@@ -43,6 +43,29 @@ describe('order creation reserves points', () => {
     const user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
     expect(user?.loyaltyPoints).toBe(100);         // 200 - 100 reserved
   });
+
+  it('allows claiming a free reward item with 10 stamps (100 points)', async () => {
+    const claimUid = `test-claim-${randomUUID()}`;
+    const claimItemId = `test-claim-item-${randomUUID()}`;
+    await prisma.user.create({ data: { telegramUserId: claimUid, loyaltyPoints: 100 } });
+    await prisma.menuItem.create({
+      data: { id: claimItemId, brand: 'ai-cha', category: 'Tea', name: 'Free Drink', basePrice: 2.0, canClaim: true, earnsStamp: true },
+    });
+
+    const res = await request(app).post('/api/orders').set(asCustomer(claimUid)).send({
+      items: [{ menuItemId: claimItemId, quantity: 1, totalPrice: 2.0, selectedModifiers: {} }],
+      paymentMethod: 'khqr',
+      orderType: 'pickup',
+      claimReward: true,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.pointsRedeemed).toBe(100); // 10 stamps = 100 points
+    expect(res.body.discountApplied).toBe(2);  // $2 free item
+    expect(res.body.totalAmount).toBe(0);
+    const user = await prisma.user.findUnique({ where: { telegramUserId: claimUid } });
+    expect(user?.loyaltyPoints).toBe(0);
+  });
 });
 
 describe('settlement on completion (cash path)', () => {

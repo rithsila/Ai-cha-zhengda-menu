@@ -38,6 +38,8 @@ model MenuItem {
   image       String?
   isSoldOut   Boolean         @default(false)
   isActive    Boolean         @default(true)
+  earnsStamp  Boolean         @default(true)
+  canClaim    Boolean         @default(false)
   modifiers   ModifierGroup[]
   orderItems  OrderItem[]
 }

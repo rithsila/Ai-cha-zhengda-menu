@@ -8,9 +8,10 @@ import {
   Image as ImageIcon,
   Layers,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Award
 } from 'lucide-react';
-import { Button, Segmented, useToast } from './ui';
+import { Button, Segmented, Switch, useToast } from './ui';
 import { API_BASE, authHeaders } from '../lib/api';
 
 export type ModifierOptionInput = {
@@ -39,6 +40,8 @@ export type MenuItemFull = {
   image?: string | null;
   isSoldOut?: boolean;
   isActive?: boolean;
+  earnsStamp?: boolean;
+  canClaim?: boolean;
   modifiers?: ModifierGroupInput[];
 };
 
@@ -59,6 +62,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('1.50');
   const [image, setImage] = useState('');
+  const [earnsStamp, setEarnsStamp] = useState(true);
+  const [canClaim, setCanClaim] = useState(false);
   const [modifiers, setModifiers] = useState<ModifierGroupInput[]>([]);
 
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -84,6 +89,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setDescription(item.description || '');
       setBasePrice(String(item.basePrice ?? '1.50'));
       setImage(item.image || '');
+      setEarnsStamp(item.earnsStamp !== undefined ? Boolean(item.earnsStamp) : true);
+      setCanClaim(item.canClaim !== undefined ? Boolean(item.canClaim) : false);
       setModifiers(
         item.modifiers?.map((g) => ({
           id: g.id,
@@ -106,6 +113,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setDescription('');
       setBasePrice('1.50');
       setImage('');
+      setEarnsStamp(true);
+      setCanClaim(false);
       setModifiers([]);
     }
     setError(null);
@@ -240,6 +249,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       description: description.trim() || undefined,
       basePrice: parsedPrice,
       image: image.trim() || undefined,
+      earnsStamp,
+      canClaim,
       modifiers: modifiers.map((g) => ({
         key: g.key || `group_${Date.now()}`,
         name: g.name.trim(),
@@ -482,6 +493,40 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                     </Button>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Stamp & Loyalty Reward Settings */}
+          <div className="border-t border-border pt-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Award className="size-4 text-accent" />
+              <h4 className="text-sm font-bold text-ink">Stamp &amp; Reward Rules</h4>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-sunken/40 p-3.5">
+                <div className="pr-3">
+                  <p className="text-xs font-bold text-ink">Earns Stamp</p>
+                  <p className="text-[11px] text-ink-soft">Customer gets 1 stamp on purchase</p>
+                </div>
+                <Switch
+                  checked={earnsStamp}
+                  onChange={setEarnsStamp}
+                  srLabel="Allow reward stamp"
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-sunken/40 p-3.5">
+                <div className="pr-3">
+                  <p className="text-xs font-bold text-ink">Free Claim Item</p>
+                  <p className="text-[11px] text-ink-soft">Can be claimed with 10 stamps</p>
+                </div>
+                <Switch
+                  checked={canClaim}
+                  onChange={setCanClaim}
+                  srLabel="Allow free claim with stamps"
+                />
               </div>
             </div>
           </div>

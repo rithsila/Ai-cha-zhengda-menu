@@ -19,6 +19,11 @@ const START_POINTS = 1000;
 
 /** Place an order and hand back its row. */
 async function makeOrder(paymentMethod: 'khqr' | 'cash', pointsToUse = 0) {
+  await prisma.menuItem.upsert({
+    where: { id: itemId },
+    update: {},
+    create: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Expiry Tea', basePrice: ITEM_PRICE },
+  });
   const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
     items: [{ menuItemId: itemId, quantity: 1, selectedModifiers: {} }],
     paymentMethod,

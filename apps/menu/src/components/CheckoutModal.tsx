@@ -39,7 +39,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [branchId, setBranchId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
   const [pointsToUse, setPointsToUse] = useState(0);
+  const [claimReward, setClaimReward] = useState(false);
   const [pointsPerDollar, setPointsPerDollar] = useState(100);
+  const [catalogItems, setCatalogItems] = useState<any[]>([]);
   // Free inside Arakawa today; the shop can change it with PUT /api/config.
   const [deliveryFeeRate, setDeliveryFeeRate] = useState(0);
   
@@ -78,6 +80,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setOrderType('pickup');
       setEditingAddress(false);
       setPointsToUse(0);
+      setClaimReward(false);
       setBranchId('');
       setPaymentOrderId(null);
       setPaymentOrderCode(null);
@@ -90,10 +93,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
     const fetchData = async () => {
       try {
-        const [branchRes, userRes, cfgRes] = await Promise.all([
+        const [branchRes, userRes, cfgRes, catRes] = await Promise.all([
           apiFetch('/api/branches'),
           signedIn ? apiFetch(ME.profile()) : Promise.resolve(null),
-          apiFetch('/api/config')
+          apiFetch('/api/config'),
+          apiFetch('/api/catalog')
         ]);
         if (branchRes.ok) {
           const data = await branchRes.json();
@@ -102,6 +106,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         }
         if (userRes?.ok) {
           setUserProfile(await userRes.json());
+        }
+        if (catRes.ok) {
+          setCatalogItems(await catRes.json());
         }
         if (cfgRes.ok) {
           const rows: { key: string; value: string }[] = await cfgRes.json();
@@ -130,10 +137,22 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     && isValidRoom(userProfile.roomNumber)
     && isValidName(userProfile.contactName)
     && isValidPhone(userProfile.phoneNumber);
+
+  const claimableCartItem = cart.find((c) => {
+    const item = catalogItems.find((i) => i.id === c.menuItemId);
+    return item && item.canClaim;
+  });
+  const pointsPerStamp = Math.max(1, Math.round(pointsPerDollar / 10));
+  const userPoints = userProfile?.loyaltyPoints ?? 0;
+  const userStamps = Math.floor(userPoints / pointsPerStamp);
+  const canClaimFree = Boolean(claimableCartItem) && userStamps >= 10;
+
   const maxUsablePoints = userProfile
     ? Math.min(userProfile.loyaltyPoints, Math.floor((total + deliveryFee) * pointsPerDollar))
     : 0;
-  const discountApplied = pointsToUse / pointsPerDollar;
+  const discountApplied = claimReward && claimableCartItem
+    ? Math.min(claimableCartItem.unitPrice, total + deliveryFee)
+    : pointsToUse / pointsPerDollar;
   const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
 
   const handleNext = async () => {
@@ -188,7 +207,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           roomNumber: userProfile?.roomNumber || null,
           contactName: userProfile?.contactName || null,
           contactPhone: userProfile?.phoneNumber || null,
-          pointsToUse
+          pointsToUse: claimReward ? (pointsPerStamp * 10) : pointsToUse,
+          claimReward: claimReward || undefined,
         }),
       });
 
@@ -374,13 +394,63 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               </div>
             ) : (
               <div className="flex flex-col gap-6">
-                {userProfile && userProfile.loyaltyPoints > 0 && (
+                {/* 10-Stamp Free Reward Claim Card */}
+                {claimableCartItem && (
+                  <div className={`rounded-2xl p-4 border transition-all ${
+                    claimReward ? 'bg-brand-primary/10 border-brand-primary/40 shadow-xs' : 'bg-tg-secondary-bg border-tg-hint/15'
+                  }`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-brand-primary text-white text-lg">
+                          🎁
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-tg-text">
+                            {t('claimFreeDrink', 'Claim Free Drink (10 Stamps)')}
+                          </div>
+                          <div className="text-xs text-tg-hint">
+                            {canClaimFree
+                              ? t('eligibleDrink', '{{name}} is free with 10 stamps', { name: claimableCartItem.name })
+                              : t('needMoreStamps', 'You have {{stamps}}/10 stamps', { stamps: userStamps })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {canClaimFree && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !claimReward;
+                            setClaimReward(next);
+                            if (next) setPointsToUse(0);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                            claimReward
+                              ? 'bg-brand-primary text-white shadow-xs'
+                              : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
+                          }`}
+                        >
+                          {claimReward ? t('applied', 'Applied ✓') : t('apply', 'Apply')}
+                        </button>
+                      )}
+                    </div>
+
+                    {claimReward && (
+                      <div className="text-xs font-bold text-brand-primary mt-2 flex items-center justify-between border-t border-brand-primary/20 pt-2">
+                        <span>{claimableCartItem.name}</span>
+                        <span>-{formatCurrency(claimableCartItem.unitPrice)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!claimReward && userProfile && userProfile.loyaltyPoints > 0 && (
                   <div className={`rounded-2xl p-4 border transition-all ${
                     pointsToUse > 0 ? 'bg-brand-primary/10 border-brand-primary/30' : 'bg-tg-secondary-bg border-tg-hint/15'
                   }`}>
                     <div className="font-bold text-tg-text flex items-center gap-2 mb-1">
                       <Coins size={20} weight="fill" className={pointsToUse > 0 ? 'text-brand-primary' : 'text-tg-hint'} />
-                      {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')}
+                      {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')} ({userStamps} stamps)
                     </div>
                     <p className="text-xs text-tg-hint mb-3">
                       {t('choosePoints', 'Choose how many points to use. {{rate}} points = $1 off.', { rate: pointsPerDollar })}

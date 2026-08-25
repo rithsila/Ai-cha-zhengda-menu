@@ -23,6 +23,8 @@ export interface MenuItem {
   basePrice: number;
   imageFallback?: string;
   isSoldOut?: boolean;
+  earnsStamp?: boolean;
+  canClaim?: boolean;
   modifiers?: ModifierGroup[];
 }
 

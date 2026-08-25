@@ -290,24 +290,42 @@ export function MenuManagement() {
                       }`}
                     >
                       <td className="p-3.5">
-                        <span className="flex items-center gap-2.5">
-                          <span
-                            aria-hidden="true"
-                            className={`size-2.5 shrink-0 rounded-full ${
-                              zhengda ? 'bg-zhengda' : 'bg-accent'
-                            }`}
-                          />
-                          <span
-                            className={`font-medium ${
-                              item.isSoldOut ? 'text-ink-faint' : 'text-ink'
-                            }`}
-                          >
-                            <span className="sr-only">
-                              {zhengda ? 'Zhengda' : 'Ai-Cha'}:{' '}
+                        <div className="flex flex-col gap-1">
+                          <span className="flex items-center gap-2.5">
+                            <span
+                              aria-hidden="true"
+                              className={`size-2.5 shrink-0 rounded-full ${
+                                zhengda ? 'bg-zhengda' : 'bg-accent'
+                              }`}
+                            />
+                            <span
+                              className={`font-medium ${
+                                item.isSoldOut ? 'text-ink-faint' : 'text-ink'
+                              }`}
+                            >
+                              <span className="sr-only">
+                                {zhengda ? 'Zhengda' : 'Ai-Cha'}:{' '}
+                              </span>
+                              {item.name}
                             </span>
-                            {item.name}
                           </span>
-                        </span>
+                          <div className="flex items-center gap-1.5 pl-5">
+                            {item.earnsStamp !== false ? (
+                              <span className="inline-flex items-center rounded-md bg-success-soft px-1.5 py-0.5 text-[10px] font-bold text-success">
+                                +1 Stamp
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-md bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium text-ink-faint">
+                                No Stamp
+                              </span>
+                            )}
+                            {item.canClaim && (
+                              <span className="inline-flex items-center rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                                🎁 Free Claim
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="hidden p-3.5 text-sm text-ink-soft sm:table-cell">
                         {item.category}

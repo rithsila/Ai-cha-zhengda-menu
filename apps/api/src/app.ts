@@ -392,7 +392,7 @@ export function createApp() {
 
   app.post('/api/catalog', requireManager, async (req, res) => {
     try {
-      const { brand, category, name, description, basePrice, image, modifiers } = req.body || {};
+      const { brand, category, name, description, basePrice, image, modifiers, earnsStamp, canClaim } = req.body || {};
       if (!name || typeof name !== 'string' || !brand || typeof brand !== 'string' || !category || typeof category !== 'string') {
         return res.status(400).json({ error: 'Name, brand, and category are required' });
       }
@@ -411,6 +411,8 @@ export function createApp() {
           image: typeof image === 'string' && image.trim() ? image.trim() : null,
           isActive: true,
           isSoldOut: false,
+          earnsStamp: earnsStamp !== undefined ? Boolean(earnsStamp) : true,
+          canClaim: canClaim !== undefined ? Boolean(canClaim) : false,
           modifiers: Array.isArray(modifiers) && modifiers.length > 0 ? {
             create: modifiers.map((group: any) => ({
               key: group.key || group.id || randomUUID(),
@@ -446,7 +448,7 @@ export function createApp() {
   app.put('/api/catalog/:id', requireManager, async (req, res) => {
     try {
       const id = String(req.params.id);
-      const { brand, category, name, description, basePrice, image, isActive, isSoldOut, modifiers } = req.body || {};
+      const { brand, category, name, description, basePrice, image, isActive, isSoldOut, earnsStamp, canClaim, modifiers } = req.body || {};
 
       const existing = await prisma.menuItem.findUnique({
         where: { id },
@@ -469,6 +471,8 @@ export function createApp() {
       if (image !== undefined) data.image = image ? String(image).trim() : null;
       if (isActive !== undefined) data.isActive = Boolean(isActive);
       if (isSoldOut !== undefined) data.isSoldOut = Boolean(isSoldOut);
+      if (earnsStamp !== undefined) data.earnsStamp = Boolean(earnsStamp);
+      if (canClaim !== undefined) data.canClaim = Boolean(canClaim);
 
       // If modifiers are supplied, sync them (delete removed, create new)
       if (Array.isArray(modifiers)) {
@@ -588,7 +592,7 @@ export function createApp() {
 
   app.post('/api/orders', resolveCustomer, async (req, res) => {
     try {
-      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse } = req.body;
+      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward } = req.body;
 
       // The owner of an order is the verified caller, never a body field —
       // a body field let anyone attach an order to a stranger and spend their
@@ -738,10 +742,44 @@ export function createApp() {
             available = user?.loyaltyPoints ?? 0;
           }
 
-          const pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
-          const discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
+          let pointsRedeemed = 0;
+          let discountApplied = 0;
+
+          // 10-stamp free reward item claim
+          const stampCostForFreeItem = Math.round(POINTS_PER_DOLLAR); // e.g. 100 points = 10 stamps
+          const claimablePricedItem = pricedItems.find((p) => {
+            const m = menuItems.find((item) => item.id === p.menuItemId);
+            return m && m.canClaim;
+          });
+
+          if (Boolean(claimReward) && claimablePricedItem && available >= stampCostForFreeItem) {
+            const unitPrice = Math.round((claimablePricedItem.price / claimablePricedItem.quantity) * 100) / 100;
+            discountApplied = Math.min(unitPrice, serverTotal);
+            pointsRedeemed = stampCostForFreeItem;
+          } else if (requestedPoints > 0) {
+            pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
+            discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
+          }
+
           const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
-          const pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR);
+
+          // Points/stamps earned: only from paid portion of items where earnsStamp !== false
+          const totalItemsAmount = pricedItems.reduce((sum, p) => sum + p.price, 0);
+          const eligibleItemsAmount = pricedItems.reduce((sum, p) => {
+            const m = menuItems.find((item) => item.id === p.menuItemId);
+            return sum + (m && m.earnsStamp !== false ? p.price : 0);
+          }, 0);
+
+          let pointsEarned = 0;
+          if (Boolean(claimReward) && claimablePricedItem) {
+            // Free item claimed: only remaining paid portion of stamp-eligible items earns stamps
+            const paidStampAmount = Math.max(0, eligibleItemsAmount - discountApplied);
+            pointsEarned = Math.floor(paidStampAmount * EARN_POINTS_PER_DOLLAR);
+          } else {
+            // Normal checkout (with or without points cash discount)
+            const stampRatio = totalItemsAmount > 0 ? eligibleItemsAmount / totalItemsAmount : 1;
+            pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR * stampRatio);
+          }
 
           if (telegramUserId && pointsRedeemed > 0) {
             await tx.user.update({

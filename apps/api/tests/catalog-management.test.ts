@@ -68,8 +68,40 @@ describe('Manager Catalog CRUD API', () => {
 
     expect(res.body.name).toBe('Special Mango Boba');
     expect(res.body.basePrice).toBe(2.50);
+    expect(res.body.earnsStamp).toBe(true);
+    expect(res.body.canClaim).toBe(false);
     expect(res.body.modifiers.length).toBe(2);
     expect(res.body.modifiers[1].options.length).toBe(2);
+  });
+
+  it('allows manager to toggle earnsStamp and canClaim for reward rules', async () => {
+    const res = await request(app)
+      .post('/api/catalog')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({
+        brand: 'ai-cha',
+        category: 'Milk Tea',
+        name: 'Reward Milk Tea',
+        basePrice: 1.50,
+        earnsStamp: true,
+        canClaim: true,
+      })
+      .expect(201);
+
+    expect(res.body.earnsStamp).toBe(true);
+    expect(res.body.canClaim).toBe(true);
+
+    const updateRes = await request(app)
+      .put(`/api/catalog/${res.body.id}`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({
+        earnsStamp: false,
+        canClaim: false,
+      })
+      .expect(200);
+
+    expect(updateRes.body.earnsStamp).toBe(false);
+    expect(updateRes.body.canClaim).toBe(false);
   });
 
   it('allows manager to update an existing menu item and its modifiers', async () => {

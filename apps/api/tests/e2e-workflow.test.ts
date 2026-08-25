@@ -331,4 +331,78 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(deactivated).toBeDefined();
     expect(deactivated.isActive).toBe(false);
   });
+
+  it('7. End-to-End Stamp Reward Claim & Item Stamp Exclusion Workflow', async () => {
+    // 1. Manager configures Jasmine Tea to be claimable (canClaim = true) and earn stamps (earnsStamp = true)
+    await request(app)
+      .put(`/api/catalog/${drinkItemId}`)
+      .set(managerAuth())
+      .send({ earnsStamp: true, canClaim: true })
+      .expect(200);
+
+    // 2. Manager configures Snack to NOT earn stamps (earnsStamp = false) and NOT claimable (canClaim = false)
+    await request(app)
+      .put(`/api/catalog/${snackItemId}`)
+      .set(managerAuth())
+      .send({ earnsStamp: false, canClaim: false })
+      .expect(200);
+
+    // 3. Reset rate config to standard 100 pts per dollar
+    await prisma.systemConfig.deleteMany({
+      where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
+    });
+
+    // 4. Give customer exactly 100 points (10 stamps)
+    await prisma.user.update({
+      where: { telegramUserId: customerTelegramId },
+      data: { loyaltyPoints: 100 },
+    });
+
+    // 5. Customer places order: 1 Jasmine Tea ($2.50, claimable) + 1 Snack ($3.00, no stamps)
+    // Using claimReward: true to redeem 10 stamps for the Jasmine Tea
+    const claimOrderRes = await request(app).post('/api/orders').set(customerAuth()).send({
+      items: [
+        {
+          menuItemId: drinkItemId,
+          quantity: 1,
+          totalPrice: 2.50,
+          selectedModifiers: {},
+        },
+        {
+          menuItemId: snackItemId,
+          quantity: 1,
+          totalPrice: 3.00,
+          selectedModifiers: {},
+        }
+      ],
+      paymentMethod: 'cash',
+      orderType: 'pickup',
+      branchId,
+      claimReward: true,
+    });
+
+    expect(claimOrderRes.status).toBe(200);
+    const order = claimOrderRes.body;
+    expect(order.discountApplied).toBe(2.50); // $2.50 free drink
+    expect(order.totalAmount).toBe(3.00);     // Only pay for snack
+    expect(order.pointsRedeemed).toBe(100);   // 10 stamps redeemed
+    // Snack has earnsStamp = false, so 0 stamps/points earned on snack
+    expect(order.pointsEarned).toBe(0);
+
+    // Verify 10 stamps deducted from user account immediately
+    const userAfterOrder = await prisma.user.findUnique({ where: { telegramUserId: customerTelegramId } });
+    expect(userAfterOrder?.loyaltyPoints).toBe(0);
+
+    // 6. Staff completes the order
+    const statusRes = await request(app)
+      .put(`/api/orders/${order.id}/status`)
+      .set(staffAuth())
+      .send({ status: 'completed' });
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.status).toBe('completed');
+
+    // 7. Verify order points settled
+    const completedOrder = await prisma.order.findUnique({ where: { id: order.id } });
+    expect(completedOrder?.pointsSettled).toBe(true);
+  });
 });
