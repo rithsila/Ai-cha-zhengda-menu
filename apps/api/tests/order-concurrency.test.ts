@@ -38,13 +38,19 @@ beforeAll(async () => {
   });
 });
 
-const checkout = () =>
-  request(app).post('/api/orders').set(asCustomer(uid)).send({
+const checkout = async () => {
+  await prisma.menuItem.upsert({
+    where: { id: itemId },
+    update: {},
+    create: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Rush Tea', basePrice: ITEM_PRICE },
+  });
+  return request(app).post('/api/orders').set(asCustomer(uid)).send({
     items: [{ menuItemId: itemId, quantity: 1, selectedModifiers: {} }],
     paymentMethod: 'khqr',
     orderType: 'pickup',
     pointsToUse: POINTS_PER_ORDER,
   });
+};
 
 describe('POST /api/orders under a rush', () => {
   it(`saves all ${CONCURRENT} orders and spends the points exactly once each`, async () => {
