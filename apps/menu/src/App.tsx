@@ -576,22 +576,22 @@ export default function App() {
       )}
       </div>
 
-      {/* Bottom Navigation (Apple Liquid Glass Dock) */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-gradient-to-b from-white/30 via-white/20 to-white/10 dark:from-slate-850/80 dark:via-slate-900/80 dark:to-slate-950/85 backdrop-blur-2xl border border-white/40 dark:border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.22),inset_0_1.5px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-2 px-3 flex justify-between items-center z-20">
+      {/* Bottom Navigation (Apple Liquid Glass Compact Dock) */}
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] bg-gradient-to-b from-white/30 via-white/20 to-white/10 dark:from-slate-850/80 dark:via-slate-900/80 dark:to-slate-950/85 backdrop-blur-2xl border border-white/40 dark:border-white/20 shadow-[0_12px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-1 px-2 flex justify-between items-center z-20">
         {TABS.map(({ id, Icon, labelKey, labelFallback }) => {
           const isActive = activeTab === id;
           return (
             <button 
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex-1 flex flex-col items-center py-1.5 px-2 rounded-2xl transition-all active:scale-95 ${
+              className={`flex-1 flex flex-col items-center py-1 px-1 rounded-xl transition-all active:scale-95 ${
                 isActive 
-                  ? 'text-brand-primary font-bold drop-shadow-[0_2px_8px_rgba(229,57,53,0.35)]' 
+                  ? 'text-brand-primary font-bold drop-shadow-[0_2px_6px_rgba(229,57,53,0.35)]' 
                   : 'text-tg-hint hover:text-tg-text font-medium'
               }`}
             >
-              <Icon size={24} weight={isActive ? 'fill' : 'regular'} />
-              <span className="text-xs mt-1 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
+              <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
+              <span className="text-[10px] mt-0.5 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
             </button>
           );
         })}
@@ -602,17 +602,17 @@ export default function App() {
         <motion.div 
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[6.5rem] left-4 right-4 max-w-sm mx-auto z-30"
+          className="fixed bottom-[4.75rem] left-4 right-4 max-w-sm mx-auto z-30"
         >
           <button 
             onClick={() => setIsCartOpen(true)}
-            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-4 rounded-2xl font-bold flex justify-between items-center px-6 border border-white/35 shadow-[0_16px_36px_rgba(229,57,53,0.4),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
+            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-3.5 rounded-2xl font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_14px_32px_rgba(229,57,53,0.38),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
           >
-            <div className="flex items-center gap-2">
-              <ShoppingCart size={20} weight="fill" />
+            <div className="flex items-center gap-2 text-sm">
+              <ShoppingCart size={18} weight="fill" />
               <span>{cart.length} {t('items')}</span>
             </div>
-            <span>{t('checkout')} {formatCurrency(cartTotal)}</span>
+            <span className="text-sm font-black">{t('checkout')} {formatCurrency(cartTotal)}</span>
           </button>
         </motion.div>
       )}
@@ -625,7 +625,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.8 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className={`fixed right-4 z-40 w-12 h-12 flex items-center justify-center hover:scale-110 transition-all duration-300 active:scale-95 cursor-pointer ${cart.length > 0 && !isCartOpen ? 'bottom-[11.5rem]' : 'bottom-24'}`}
+            className={`fixed right-4 z-40 w-11 h-11 flex items-center justify-center hover:scale-110 transition-all duration-300 active:scale-95 cursor-pointer ${cart.length > 0 && !isCartOpen ? 'bottom-[9.5rem]' : 'bottom-20'}`}
           >
             <img src="/images/aicha_scroll_top.png" alt="Scroll to top" className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
           </motion.button>
