@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import twa from '@twa-dev/sdk';
 const WebApp = (twa as any)?.WebApp || twa || {};
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise, CreditCard, Gift, User } from '@phosphor-icons/react';
+import { ShoppingCart, Translate, MagnifyingGlass, X, List, ClockCounterClockwise, Gift, User } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
@@ -21,17 +21,15 @@ import { ModifierModal } from './components/ModifierModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrdersView } from './components/OrdersView';
-import { PaymentView } from './components/PaymentView';
 import { RewardsView } from './components/RewardsView';
 import { AccountView } from './components/AccountView';
 import { Button } from './components/ui/Button';
 
-type TabId = 'menu' | 'orders' | 'payment' | 'rewards' | 'account';
+type TabId = 'menu' | 'orders' | 'rewards' | 'account';
 
 const TAB_META: Record<TabId, { titleKey: string; titleFallback: string; subKey: string; subFallback: string }> = {
   menu: { titleKey: 'menuTitle', titleFallback: 'Menu', subKey: 'menuSubtitle', subFallback: 'Tap to order instantly' },
   orders: { titleKey: 'ordersTitle', titleFallback: 'My Orders', subKey: 'ordersSubtitle', subFallback: 'Track your active and past orders' },
-  payment: { titleKey: 'paymentTitle', titleFallback: 'Payment', subKey: 'paymentSubtitle', subFallback: 'Pay for orders and see your payment history' },
   rewards: { titleKey: 'rewardsTitle', titleFallback: 'Rewards', subKey: 'rewardsSubtitle', subFallback: 'Your points and what you can get' },
   account: { titleKey: 'accountTitle', titleFallback: 'My Account', subKey: 'accountSubtitle', subFallback: 'Manage your profile' },
 };
@@ -39,7 +37,6 @@ const TAB_META: Record<TabId, { titleKey: string; titleFallback: string; subKey:
 const TABS: { id: TabId; Icon: typeof List; labelKey: string; labelFallback: string }[] = [
   { id: 'menu', Icon: List, labelKey: 'tabMenu', labelFallback: 'Menu' },
   { id: 'orders', Icon: ClockCounterClockwise, labelKey: 'tabOrders', labelFallback: 'Orders' },
-  { id: 'payment', Icon: CreditCard, labelKey: 'tabPayment', labelFallback: 'Payment' },
   { id: 'rewards', Icon: Gift, labelKey: 'tabRewards', labelFallback: 'Rewards' },
   { id: 'account', Icon: User, labelKey: 'tabAccount', labelFallback: 'Account' },
 ];
@@ -506,7 +503,6 @@ export default function App() {
 
       <div className="px-4 pt-6">
         {activeTab === 'orders' && <OrdersView onReorder={handleReorder} onBrowseMenu={() => setActiveTab('menu')} />}
-        {activeTab === 'payment' && <PaymentView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'rewards' && <RewardsView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'account' && <AccountView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'menu' && (
@@ -581,17 +577,24 @@ export default function App() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-auto min-w-[200px] max-w-[calc(100vw-1.5rem)] bg-tg-bg/30 backdrop-blur-2xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] rounded-full py-1.5 px-3 flex justify-around gap-1 z-20 supports-[backdrop-filter]:bg-tg-bg/20">
-        {TABS.map(({ id, Icon, labelKey, labelFallback }) => (
-          <button 
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`flex flex-col items-center py-1 px-1.5 transition-colors ${activeTab === id ? 'text-brand-primary' : 'text-tg-hint hover:text-tg-text'}`}
-          >
-            <Icon size={20} weight={activeTab === id ? 'fill' : 'regular'} />
-            <span className="text-[10px] font-bold mt-0.5 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
-          </button>
-        ))}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-tg-bg/85 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.55)] rounded-full py-2 px-3 flex justify-between items-center z-20">
+        {TABS.map(({ id, Icon, labelKey, labelFallback }) => {
+          const isActive = activeTab === id;
+          return (
+            <button 
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex-1 flex flex-col items-center py-1.5 px-2 rounded-2xl transition-all active:scale-95 ${
+                isActive 
+                  ? 'text-brand-primary font-bold' 
+                  : 'text-tg-hint hover:text-tg-text font-medium'
+              }`}
+            >
+              <Icon size={24} weight={isActive ? 'fill' : 'regular'} />
+              <span className="text-xs mt-1 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Floating Cart Button (Fallback if Telegram MainButton is not available) */}

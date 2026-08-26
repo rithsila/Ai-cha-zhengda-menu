@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Phone, House, Storefront, Sun, Moon } from '@phosphor-icons/react';
+import { Phone, House, Storefront, Sun, Moon, CreditCard, Money } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { SignInPrompt } from './SignInPrompt';
 import { AddressForm, AddressSummary } from './AddressForm';
 import { isValidBuilding, isValidRoom, formatPhone, SHOP_UNIT, RESIDENCE_NAME } from '../utils/address';
 import { useTheme } from '../hooks/useTelegramTheme';
+import { useOnlinePaymentState } from '../utils/onlinePayment';
+import {
+  getDefaultPaymentMethod,
+  setDefaultPaymentMethod,
+  type PaymentMethod,
+} from '../utils/paymentPrefs';
 
 interface AccountViewProps {
   onBrowseMenu?: () => void;
@@ -14,6 +20,8 @@ interface AccountViewProps {
 export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const { t } = useTranslation();
   const { isDark, toggleTheme } = useTheme();
+  const khqrOffered = useOnlinePaymentState() === 'available';
+  const [defaultMethod, setMethod] = useState<PaymentMethod>(() => getDefaultPaymentMethod());
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -39,6 +47,18 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
     };
     fetchData();
   }, [signedIn]);
+
+  useEffect(() => {
+    if (!khqrOffered && defaultMethod === 'khqr') {
+      setMethod('cash');
+      setDefaultPaymentMethod('cash');
+    }
+  }, [khqrOffered, defaultMethod]);
+
+  const handleChangeMethod = (method: PaymentMethod) => {
+    setMethod(method);
+    setDefaultPaymentMethod(method);
+  };
 
   if (!signedIn) {
     return (
@@ -117,6 +137,44 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
               </button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Default payment method */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-tg-text flex items-center gap-1.5">
+          <CreditCard size={16} weight="fill" className="text-brand-primary" />
+          {t('defaultPaymentMethod', 'Default payment method')}
+        </h3>
+        <p className="text-xs text-tg-hint">
+          {t('defaultPaymentHint', 'We pick this for you at checkout. You can still change it there.')}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          {([
+            ...(khqrOffered
+              ? [{ key: 'khqr' as const, label: t('khqr', 'KHQR'), Icon: CreditCard }]
+              : []),
+            { key: 'cash' as const, label: t('cash', 'Cash'), Icon: Money },
+          ]).map(({ key, label, Icon }) => {
+            const active = defaultMethod === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleChangeMethod(key)}
+                aria-pressed={active}
+                className={`flex flex-col items-center gap-2 py-3.5 px-4 rounded-2xl border font-bold text-sm transition-all active:scale-95 ${
+                  active
+                    ? 'bg-brand-primary/10 border-brand-primary text-brand-primary'
+                    : 'bg-tg-secondary-bg border-tg-hint/10 text-tg-text'
+                }`}
+              >
+                <Icon size={22} weight="fill" />
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
