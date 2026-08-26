@@ -198,7 +198,7 @@ export default function App() {
   }, []);
 
   const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchCatalog = useCallback(async () => {
     try {
@@ -424,7 +424,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-tg-bg text-tg-text pb-28">
+    <div className="min-h-screen bg-tg-bg text-tg-text pb-36">
       {/* Top Banner Section */}
       <div 
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
@@ -576,8 +576,8 @@ export default function App() {
       )}
       </div>
 
-      {/* Bottom Navigation */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-tg-bg/85 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.55)] rounded-full py-2 px-3 flex justify-between items-center z-20">
+      {/* Bottom Navigation (Apple Liquid Glass Dock) */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-gradient-to-b from-white/30 via-white/20 to-white/10 dark:from-slate-850/80 dark:via-slate-900/80 dark:to-slate-950/85 backdrop-blur-2xl border border-white/40 dark:border-white/20 shadow-[0_16px_40px_rgba(0,0,0,0.22),inset_0_1.5px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-2 px-3 flex justify-between items-center z-20">
         {TABS.map(({ id, Icon, labelKey, labelFallback }) => {
           const isActive = activeTab === id;
           return (
@@ -586,7 +586,7 @@ export default function App() {
               onClick={() => setActiveTab(id)}
               className={`flex-1 flex flex-col items-center py-1.5 px-2 rounded-2xl transition-all active:scale-95 ${
                 isActive 
-                  ? 'text-brand-primary font-bold' 
+                  ? 'text-brand-primary font-bold drop-shadow-[0_2px_8px_rgba(229,57,53,0.35)]' 
                   : 'text-tg-hint hover:text-tg-text font-medium'
               }`}
             >
@@ -597,16 +597,16 @@ export default function App() {
         })}
       </div>
 
-      {/* Floating Cart Button (Fallback if Telegram MainButton is not available) */}
+      {/* Floating Cart Button (Apple Liquid Glass Red Pill) */}
       {(!WebApp?.isExpanded && cart.length > 0 && !isCartOpen) && (
         <motion.div 
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-20 left-4 right-4 z-30"
+          className="fixed bottom-24 left-4 right-4 max-w-sm mx-auto z-30"
         >
           <button 
             onClick={() => setIsCartOpen(true)}
-            className="w-full bg-tg-primary/80 backdrop-blur-lg backdrop-brightness-150 text-tg-primary-text py-4 rounded-2xl font-bold flex justify-between items-center px-6 shadow-[0_-10px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-4 rounded-2xl font-bold flex justify-between items-center px-6 border border-white/35 shadow-[0_16px_36px_rgba(229,57,53,0.4),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
           >
             <div className="flex items-center gap-2">
               <ShoppingCart size={20} weight="fill" />
@@ -625,7 +625,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.8 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="fixed bottom-16 right-4 z-40 w-12 h-12 flex items-center justify-center hover:scale-110 transition-transform active:scale-95 cursor-pointer"
+            className={`fixed right-4 z-40 w-12 h-12 flex items-center justify-center hover:scale-110 transition-all duration-300 active:scale-95 cursor-pointer ${cart.length > 0 && !isCartOpen ? 'bottom-40' : 'bottom-24'}`}
           >
             <img src="/images/aicha_scroll_top.png" alt="Scroll to top" className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
           </motion.button>
