@@ -745,17 +745,36 @@ export function createApp() {
           let pointsRedeemed = 0;
           let discountApplied = 0;
 
-          // 10-stamp free reward item claim
+          // 10-stamp free reward item claim (supports multiple items if customer has enough stamps)
           const stampCostForFreeItem = Math.round(POINTS_PER_DOLLAR); // e.g. 100 points = 10 stamps
-          const claimablePricedItem = pricedItems.find((p) => {
+          const claimableUnits: { name: string; unitPrice: number }[] = [];
+          for (const p of pricedItems) {
             const m = menuItems.find((item) => item.id === p.menuItemId);
-            return m && m.canClaim;
-          });
+            if (m && m.canClaim) {
+              const unitPrice = Math.round((p.price / p.quantity) * 100) / 100;
+              for (let i = 0; i < p.quantity; i++) {
+                claimableUnits.push({ name: m.name, unitPrice });
+              }
+            }
+          }
+          // Sort descending so highest value claimable items get discounted first
+          claimableUnits.sort((a, b) => b.unitPrice - a.unitPrice);
 
-          if (Boolean(claimReward) && claimablePricedItem && available >= stampCostForFreeItem) {
-            const unitPrice = Math.round((claimablePricedItem.price / claimablePricedItem.quantity) * 100) / 100;
-            discountApplied = Math.min(unitPrice, serverTotal);
-            pointsRedeemed = stampCostForFreeItem;
+          const maxStampsAvailable = Math.floor(available / stampCostForFreeItem);
+          const maxClaimableCount = Math.min(claimableUnits.length, maxStampsAvailable);
+
+          let claimCount = 0;
+          if (typeof claimReward === 'number' && claimReward > 0) {
+            claimCount = Math.min(Math.floor(claimReward), maxClaimableCount);
+          } else if (Boolean(claimReward)) {
+            claimCount = Math.min(1, maxClaimableCount);
+          }
+
+          if (claimCount > 0) {
+            const claimedUnits = claimableUnits.slice(0, claimCount);
+            const totalClaimDiscount = claimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
+            discountApplied = Math.min(totalClaimDiscount, serverTotal);
+            pointsRedeemed = claimCount * stampCostForFreeItem;
           } else if (requestedPoints > 0) {
             pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
             discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
@@ -771,7 +790,7 @@ export function createApp() {
           }, 0);
 
           let pointsEarned = 0;
-          if (Boolean(claimReward) && claimablePricedItem) {
+          if (claimCount > 0) {
             // Free item claimed: only remaining paid portion of stamp-eligible items earns stamps
             const paidStampAmount = Math.max(0, eligibleItemsAmount - discountApplied);
             pointsEarned = Math.floor(paidStampAmount * EARN_POINTS_PER_DOLLAR);

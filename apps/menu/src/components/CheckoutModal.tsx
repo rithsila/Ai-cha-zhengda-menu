@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
-import { CaretRight, MapPin, Storefront, Coins, CaretLeft, X } from '@phosphor-icons/react';
+import { CaretRight, MapPin, Storefront, CaretLeft, X } from '@phosphor-icons/react';
 import { AddressForm, AddressSummary, type AddressFormHandle } from './AddressForm';
 import { isValidBuilding, isValidRoom, isValidName, isValidPhone } from '../utils/address';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
@@ -38,8 +38,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
-  const [pointsToUse, setPointsToUse] = useState(0);
-  const [claimReward, setClaimReward] = useState(false);
+  const [claimedCount, setClaimedCount] = useState(0);
   const [pointsPerDollar, setPointsPerDollar] = useState(100);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   // Free inside Arakawa today; the shop can change it with PUT /api/config.
@@ -79,8 +78,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setMethod(initialPaymentMethod());
       setOrderType('pickup');
       setEditingAddress(false);
-      setPointsToUse(0);
-      setClaimReward(false);
+      setClaimedCount(0);
       setBranchId('');
       setPaymentOrderId(null);
       setPaymentOrderCode(null);
@@ -138,21 +136,30 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     && isValidName(userProfile.contactName)
     && isValidPhone(userProfile.phoneNumber);
 
-  const claimableCartItem = cart.find((c) => {
-    const item = catalogItems.find((i) => i.id === c.menuItemId);
-    return item && item.canClaim;
-  });
   const pointsPerStamp = Math.max(1, Math.round(pointsPerDollar / 10));
   const userPoints = userProfile?.loyaltyPoints ?? 0;
   const userStamps = Math.floor(userPoints / pointsPerStamp);
-  const canClaimFree = Boolean(claimableCartItem) && userStamps >= 10;
 
-  const maxUsablePoints = userProfile
-    ? Math.min(userProfile.loyaltyPoints, Math.floor((total + deliveryFee) * pointsPerDollar))
-    : 0;
-  const discountApplied = claimReward && claimableCartItem
-    ? Math.min(claimableCartItem.unitPrice, total + deliveryFee)
-    : pointsToUse / pointsPerDollar;
+  // List all individual claimable units in cart
+  const claimableCartUnits: { name: string; unitPrice: number; menuItemId: string }[] = [];
+  for (const c of cart) {
+    const item = catalogItems.find((i) => i.id === c.menuItemId);
+    if (item && item.canClaim) {
+      for (let q = 0; q < c.quantity; q++) {
+        claimableCartUnits.push({ name: c.name, unitPrice: c.unitPrice, menuItemId: c.menuItemId });
+      }
+    }
+  }
+  // Sort descending by unitPrice so most expensive items get discounted first
+  claimableCartUnits.sort((a, b) => b.unitPrice - a.unitPrice);
+
+  const totalClaimableUnits = claimableCartUnits.length;
+  const maxStampsCanClaim = Math.floor(userStamps / 10);
+  const maxClaimableCount = Math.min(totalClaimableUnits, maxStampsCanClaim);
+
+  const effectiveClaimCount = Math.min(claimedCount, maxClaimableCount);
+  const claimedUnits = claimableCartUnits.slice(0, effectiveClaimCount);
+  const discountApplied = claimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
   const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
 
   const handleNext = async () => {
@@ -207,8 +214,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           roomNumber: userProfile?.roomNumber || null,
           contactName: userProfile?.contactName || null,
           contactPhone: userProfile?.phoneNumber || null,
-          pointsToUse: claimReward ? (pointsPerStamp * 10) : pointsToUse,
-          claimReward: claimReward || undefined,
+          pointsToUse: effectiveClaimCount * (pointsPerStamp * 10),
+          claimReward: effectiveClaimCount > 0 ? effectiveClaimCount : undefined,
         }),
       });
 
@@ -394,88 +401,116 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               </div>
             ) : (
               <div className="flex flex-col gap-6">
-                {/* 10-Stamp Free Reward Claim Card */}
-                {claimableCartItem && (
-                  <div className={`rounded-2xl p-4 border transition-all ${
-                    claimReward ? 'bg-brand-primary/10 border-brand-primary/40 shadow-xs' : 'bg-tg-secondary-bg border-tg-hint/15'
-                  }`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-xl bg-brand-primary text-white text-lg">
+                {/* Stamp Loyalty Rewards Section */}
+                {signedIn && userProfile && (
+                  <>
+                    {/* Case 1: Has at least 10 stamps AND has eligible claimable items in cart */}
+                    {maxClaimableCount > 0 && (
+                      <div className={`rounded-2xl p-4 border transition-all ${
+                        effectiveClaimCount > 0
+                          ? 'bg-brand-primary/10 border-brand-primary/40 shadow-xs'
+                          : 'bg-tg-secondary-bg border-tg-hint/15'
+                      }`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-brand-primary text-white text-lg shrink-0">
+                              🎁
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm text-tg-text">
+                                {t('claimFreeDrink', 'Claim Free Item (10 Stamps each)')}
+                              </div>
+                              <div className="text-xs text-tg-hint">
+                                {t('stampsAvailableCount', '{{stamps}} stamps available (can claim up to {{max}} free)', {
+                                  stamps: userStamps,
+                                  max: maxClaimableCount,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {maxClaimableCount === 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => setClaimedCount(effectiveClaimCount > 0 ? 0 : 1)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                                effectiveClaimCount > 0
+                                  ? 'bg-brand-primary text-white shadow-xs'
+                                  : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
+                              }`}
+                            >
+                              {effectiveClaimCount > 0 ? t('applied', 'Applied ✓') : t('apply', 'Apply')}
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 bg-tg-bg border border-tg-hint/20 rounded-xl p-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setClaimedCount(Math.max(0, effectiveClaimCount - 1))}
+                                disabled={effectiveClaimCount <= 0}
+                                className="w-7 h-7 rounded-lg bg-tg-secondary-bg font-bold text-sm flex items-center justify-center disabled:opacity-40 text-tg-text active:scale-95 transition-transform"
+                                aria-label="Decrease free items"
+                              >
+                                -
+                              </button>
+                              <span className="w-5 text-center font-bold text-sm text-tg-text">
+                                {effectiveClaimCount}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setClaimedCount(Math.min(maxClaimableCount, effectiveClaimCount + 1))}
+                                disabled={effectiveClaimCount >= maxClaimableCount}
+                                className="w-7 h-7 rounded-lg bg-brand-primary text-white font-bold text-sm flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform"
+                                aria-label="Increase free items"
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {effectiveClaimCount > 0 && (
+                          <div className="text-xs font-bold text-brand-primary mt-3 flex flex-col gap-1 border-t border-brand-primary/20 pt-2">
+                            {claimedUnits.map((u, idx) => (
+                              <div key={idx} className="flex items-center justify-between">
+                                <span>🎁 {u.name} (Free)</span>
+                                <span>-{formatCurrency(u.unitPrice)}</span>
+                              </div>
+                            ))}
+                            <div className="text-[11px] text-tg-hint font-normal mt-0.5">
+                              {t('stampsDeducted', 'Using {{stamps}} stamps', {
+                                stamps: effectiveClaimCount * 10,
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Case 2: Customer has >= 10 stamps, but NO claimable items in cart */}
+                    {userStamps >= 10 && totalClaimableUnits === 0 && (
+                      <div className="rounded-2xl p-4 bg-tg-secondary-bg border border-tg-hint/15 flex items-center gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 text-lg shrink-0">
                           🎁
                         </div>
                         <div>
                           <div className="font-bold text-sm text-tg-text">
-                            {t('claimFreeDrink', 'Claim Free Drink (10 Stamps)')}
+                            {t('stampsReady', 'You have {{stamps}} stamps ready!', { stamps: userStamps })}
                           </div>
                           <div className="text-xs text-tg-hint">
-                            {canClaimFree
-                              ? t('eligibleDrink', '{{name}} is free with 10 stamps', { name: claimableCartItem.name })
-                              : t('needMoreStamps', 'You have {{stamps}}/10 stamps', { stamps: userStamps })}
+                            {t('addClaimableItemHint', 'Add an eligible drink to your cart to claim for free.')}
                           </div>
                         </div>
                       </div>
+                    )}
 
-                      {canClaimFree && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = !claimReward;
-                            setClaimReward(next);
-                            if (next) setPointsToUse(0);
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                            claimReward
-                              ? 'bg-brand-primary text-white shadow-xs'
-                              : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
-                          }`}
-                        >
-                          {claimReward ? t('applied', 'Applied ✓') : t('apply', 'Apply')}
-                        </button>
-                      )}
-                    </div>
-
-                    {claimReward && (
-                      <div className="text-xs font-bold text-brand-primary mt-2 flex items-center justify-between border-t border-brand-primary/20 pt-2">
-                        <span>{claimableCartItem.name}</span>
-                        <span>-{formatCurrency(claimableCartItem.unitPrice)}</span>
+                    {/* Case 3: Customer has less than 10 stamps */}
+                    {userStamps < 10 && userStamps > 0 && (
+                      <div className="rounded-2xl p-3 bg-tg-secondary-bg border border-tg-hint/10 flex items-center justify-between text-xs text-tg-hint">
+                        <span>🥣 {t('yourStamps', 'Your Stamps')}: <strong className="text-tg-text">{userStamps}/10</strong></span>
+                        <span>{t('needMoreStampsCount', '{{count}} more for free item', { count: 10 - userStamps })}</span>
                       </div>
                     )}
-                  </div>
-                )}
-
-                {!claimReward && userProfile && userProfile.loyaltyPoints > 0 && (
-                  <div className={`rounded-2xl p-4 border transition-all ${
-                    pointsToUse > 0 ? 'bg-brand-primary/10 border-brand-primary/30' : 'bg-tg-secondary-bg border-tg-hint/15'
-                  }`}>
-                    <div className="font-bold text-tg-text flex items-center gap-2 mb-1">
-                      <Coins size={20} weight="fill" className={pointsToUse > 0 ? 'text-brand-primary' : 'text-tg-hint'} />
-                      {userProfile.loyaltyPoints} {t('pointsAvailable', 'Points Available')} ({userStamps} stamps)
-                    </div>
-                    <p className="text-xs text-tg-hint mb-3">
-                      {t('choosePoints', 'Choose how many points to use. {{rate}} points = $1 off.', { rate: pointsPerDollar })}
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range" min={0} max={maxUsablePoints} step={1} value={pointsToUse}
-                        onChange={e => setPointsToUse(Number(e.target.value))}
-                        className="flex-1 accent-brand-primary"
-                        aria-label="Points to use"
-                      />
-                      <input
-                        type="number" min={0} max={maxUsablePoints} value={pointsToUse}
-                        onChange={e => {
-                          const v = Math.floor(Number(e.target.value) || 0);
-                          setPointsToUse(Math.max(0, Math.min(v, maxUsablePoints)));
-                        }}
-                        className="w-20 bg-tg-bg border border-tg-hint/20 rounded-lg px-2 py-1 text-sm font-bold text-center text-tg-text"
-                        aria-label="Points to use (number)"
-                      />
-                    </div>
-                    <div className="text-xs font-bold text-brand-primary mt-2">
-                      -{formatCurrency(discountApplied)} {t('discount', 'discount')}
-                    </div>
-                  </div>
+                  </>
                 )}
 
                 <div className="flex flex-col gap-3">
@@ -539,7 +574,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
                     {discountApplied > 0 && (
                       <div className="flex justify-between items-center text-sm text-brand-primary">
-                        <span>{t('pointsDiscount', 'Points Discount')}</span>
+                        <span>
+                          {t('stampRewardDiscount', '10-Stamp Reward ({{count}} free)', {
+                            count: effectiveClaimCount,
+                          })}
+                        </span>
                         <span className="font-medium">-{formatCurrency(discountApplied)}</span>
                       </div>
                     )}

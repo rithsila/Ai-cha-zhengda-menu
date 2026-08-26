@@ -66,6 +66,36 @@ describe('order creation reserves points', () => {
     const user = await prisma.user.findUnique({ where: { telegramUserId: claimUid } });
     expect(user?.loyaltyPoints).toBe(0);
   });
+
+  it('allows claiming multiple free reward items with enough stamps (e.g. 20 stamps = 2 items)', async () => {
+    const multiUid = `test-multi-claim-${randomUUID()}`;
+    const itemA = `test-item-a-${randomUUID()}`;
+    const itemB = `test-item-b-${randomUUID()}`;
+    await prisma.user.create({ data: { telegramUserId: multiUid, loyaltyPoints: 250 } }); // 25 stamps
+    await prisma.menuItem.createMany({
+      data: [
+        { id: itemA, brand: 'ai-cha', category: 'Tea', name: 'Free Drink A', basePrice: 2.0, canClaim: true, earnsStamp: true },
+        { id: itemB, brand: 'ai-cha', category: 'Tea', name: 'Free Drink B', basePrice: 2.5, canClaim: true, earnsStamp: true },
+      ],
+    });
+
+    const res = await request(app).post('/api/orders').set(asCustomer(multiUid)).send({
+      items: [
+        { menuItemId: itemA, quantity: 1, totalPrice: 2.0, selectedModifiers: {} },
+        { menuItemId: itemB, quantity: 1, totalPrice: 2.5, selectedModifiers: {} },
+      ],
+      paymentMethod: 'khqr',
+      orderType: 'pickup',
+      claimReward: 2,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.pointsRedeemed).toBe(200); // 20 stamps = 200 points
+    expect(res.body.discountApplied).toBe(4.5); // $2.0 + $2.5
+    expect(res.body.totalAmount).toBe(0);
+    const user = await prisma.user.findUnique({ where: { telegramUserId: multiUid } });
+    expect(user?.loyaltyPoints).toBe(50); // 250 - 200 = 50 remaining (5 stamps)
+  });
 });
 
 describe('settlement on completion (cash path)', () => {
