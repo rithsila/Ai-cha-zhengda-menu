@@ -108,6 +108,9 @@ const resources = {
       paymentSubtitle: "Pay for orders and see your payment history",
       rewardsTitle: "Rewards",
       rewardsSubtitle: "Your points and what you can get",
+      claimHistory: "Claim History",
+      noClaimsYet: "No Claim History Yet",
+      noClaimsDesc: "When you redeem 10 stamps for a free drink at checkout, your claim history will appear here.",
 
       // Categories
       "Cones": "Cones",
@@ -358,6 +361,9 @@ const resources = {
       paymentSubtitle: "ទូទាត់ការកុម្ម៉ង់ និងមើលប្រវត្តិការទូទាត់របស់អ្នក",
       rewardsTitle: "រង្វាន់",
       rewardsSubtitle: "ពិន្ទុរបស់អ្នក និងអ្វីដែលអ្នកអាចទទួលបាន",
+      claimHistory: "ប្រវត្តិការប្តូររង្វាន់",
+      noClaimsYet: "មិនទាន់មានប្រវត្តិប្តូររង្វាន់ទេ",
+      noClaimsDesc: "នៅពេលអ្នកប្រើត្រា 10 ដើម្បីប្តូរភេសជ្ជៈឥតគិតថ្លៃនៅពេលទូទាត់ ប្រវត្តិរបស់អ្នកនឹងបង្ហាញនៅទីនេះ។",
 
       // Categories
       "Cones": "កោណ",
@@ -608,6 +614,9 @@ const resources = {
       paymentSubtitle: "支付订单并查看您的支付记录",
       rewardsTitle: "奖励",
       rewardsSubtitle: "您的积分以及可兑换的奖励",
+      claimHistory: "兑换记录",
+      noClaimsYet: "暂无兑换记录",
+      noClaimsDesc: "结账时使用 10 个印花兑换免费饮品后，兑换记录将显示在此处。",
 
       // Categories
       "Cones": "冰淇淋甜筒",

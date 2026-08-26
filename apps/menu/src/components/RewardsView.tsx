@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Gift, ShoppingCart } from '@phosphor-icons/react';
+import { Gift, ShoppingCart, ClockCounterClockwise, Sparkle } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { formatCurrency } from '../utils/format';
 import { SignInPrompt } from './SignInPrompt';
 import { RewardCard } from './RewardCard';
 
@@ -14,6 +15,17 @@ function readConfigNumber(rows: { key: string; value: string }[], key: string, f
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+function shortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 interface RewardsViewProps {
   onBrowseMenu?: () => void;
 }
@@ -23,8 +35,7 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
   // Points belong to one account. A guest has none to show.
   const signedIn = hasIdentity();
   const [points, setPoints] = useState<number | null>(null);
-  const [rewards, setRewards] = useState<any[]>([]);
-  const [claimableMenu, setClaimableMenu] = useState<any[]>([]);
+  const [claimOrders, setClaimOrders] = useState<any[]>([]);
   const [earnPerDollar, setEarnPerDollar] = useState(DEFAULT_EARN_PER_DOLLAR);
   const [pointsPerDollar, setPointsPerDollar] = useState(DEFAULT_POINTS_PER_DOLLAR);
   const [loading, setLoading] = useState(true);
@@ -37,11 +48,10 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
     }
     const fetchData = async () => {
       try {
-        const [userRes, rewardsRes, cfgRes, catRes] = await Promise.all([
+        const [userRes, ordersRes, cfgRes] = await Promise.all([
           apiFetch(ME.profile()),
-          apiFetch('/api/rewards'),
-          apiFetch('/api/config'),
-          apiFetch('/api/catalog')
+          apiFetch(ME.orders()),
+          apiFetch('/api/config')
         ]);
 
         if (userRes.ok) {
@@ -50,11 +60,15 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         } else {
           setFailed(true);
         }
-        if (rewardsRes.ok) setRewards(await rewardsRes.json());
-        if (catRes.ok) {
-          const cat = await catRes.json();
-          setClaimableMenu(cat.filter((i: any) => i.canClaim));
+
+        if (ordersRes.ok) {
+          const orders = await ordersRes.json();
+          const claims = (Array.isArray(orders) ? orders : []).filter(
+            (o: any) => (o.pointsRedeemed ?? 0) > 0 || (o.discountApplied ?? 0) > 0
+          );
+          setClaimOrders(claims);
         }
+
         if (cfgRes.ok) {
           const rows: { key: string; value: string }[] = await cfgRes.json();
           setEarnPerDollar(readConfigNumber(rows, 'earnPointsPerDollar', DEFAULT_EARN_PER_DOLLAR));
@@ -69,6 +83,8 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
     };
     fetchData();
   }, [signedIn]);
+
+  const pointsPerStamp = Math.max(1, Math.round(pointsPerDollar / 10));
 
   if (!signedIn) {
     return (
@@ -106,58 +122,92 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         </p>
       </div>
 
-      {/* Reward Catalog */}
+      {/* Claim History */}
       <div>
         <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-tg-text">
-          <Gift size={24} className="text-brand-primary" weight="fill" /> {t('rewardCatalog', 'Claimable Free Drinks (10 Stamps)')}
+          <ClockCounterClockwise size={24} className="text-brand-primary" weight="bold" />
+          {t('claimHistory', 'Claim History')}
         </h3>
 
-        {claimableMenu.length === 0 && rewards.length === 0 ? (
-          <div className="text-center p-8 bg-tg-secondary-bg rounded-2xl text-tg-hint border border-tg-hint/10">
-            {t('noRewardsYet', 'No rewards available right now. Check back later!')}
+        {claimOrders.length === 0 ? (
+          <div className="text-center p-8 bg-tg-secondary-bg rounded-2xl text-tg-hint border border-tg-hint/10 flex flex-col items-center gap-2">
+            <Gift size={36} className="text-tg-hint/40" weight="duotone" />
+            <p className="font-bold text-tg-text">{t('noClaimsYet', 'No Claim History Yet')}</p>
+            <p className="text-xs text-tg-hint">
+              {t('noClaimsDesc', 'When you redeem 10 stamps for a free drink at checkout, your claim history will appear here.')}
+            </p>
           </div>
         ) : (
           <div className="grid gap-3">
-            {claimableMenu.map((item) => (
-              <div key={item.id} className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-4 items-center">
-                <div className="w-16 h-16 bg-tg-hint/10 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center">
-                  {item.image ? (
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="text-2xl">🧋</div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-tg-text">{item.name}</h4>
-                  {item.description && <p className="text-xs text-tg-hint line-clamp-1">{item.description}</p>}
-                  <div className="mt-2 font-bold text-xs text-brand-primary bg-brand-primary/10 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg">
-                    <span>🎁</span>
-                    <span>10 Stamps (Free)</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {claimOrders.map((order) => {
+              const stampsUsed = Math.floor((order.pointsRedeemed ?? 0) / pointsPerStamp);
+              const firstItem = order.items?.[0]?.menuItem;
 
-            {rewards.map(reward => (
-              <div key={reward.id} className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex gap-4 items-center">
-                <div className="w-16 h-16 bg-tg-hint/10 rounded-xl flex-shrink-0 overflow-hidden">
-                  {reward.image ? (
-                    <img src={reward.image} alt={reward.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-tg-hint/50">
-                      <Gift size={24} />
+              return (
+                <div
+                  key={order.id}
+                  className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex flex-col gap-3"
+                >
+                  <div className="flex gap-3 items-center">
+                    <div className="w-14 h-14 bg-tg-hint/10 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {firstItem?.image ? (
+                        <img src={firstItem.image} alt={firstItem.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-2xl">🧋</span>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-tg-text">{reward.name}</h4>
-                  {reward.description && <p className="text-xs text-tg-hint line-clamp-1">{reward.description}</p>}
-                  <div className="mt-2 font-bold text-sm text-brand-primary bg-brand-primary/10 inline-block px-2 py-1 rounded-lg">
-                    {reward.pointsCost} pts
+
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-tg-text truncate">
+                        {order.items?.map((i: any) => `${i.quantity}x ${i.menuItem?.name || 'Drink'}`).join(', ') || 'Claimed Drink'}
+                      </h4>
+                      <p className="text-xs text-tg-hint mt-0.5">
+                        {shortDate(order.createdAt)}
+                      </p>
+                      <div className="mt-1.5 inline-flex items-center gap-1 font-bold text-xs text-brand-primary bg-brand-primary/10 px-2.5 py-0.5 rounded-lg">
+                        <Sparkle size={12} weight="fill" />
+                        <span>
+                          {stampsUsed > 0
+                            ? `${stampsUsed} Stamps Redeemed`
+                            : `${order.pointsRedeemed ?? 0} Points Used`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-tg-hint/10 pt-2.5 flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-bold capitalize ${
+                          order.status === 'completed'
+                            ? 'bg-tg-hint/15 text-tg-hint'
+                            : order.status === 'ready'
+                            ? 'bg-green-500/15 text-green-700 dark:text-green-300'
+                            : order.status === 'preparing'
+                            ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+                            : order.status === 'cancelled'
+                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                            : 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300'
+                        }`}
+                      >
+                        {order.status}
+                      </span>
+                      {order.pickupCode && (
+                        <span className="font-mono font-bold text-tg-hint bg-tg-bg px-2 py-0.5 rounded">
+                          #{order.pickupCode}
+                        </span>
+                      )}
+                    </div>
+
+                    {(order.discountApplied ?? 0) > 0 && (
+                      <span className="font-bold text-brand-primary">
+                        Saved {formatCurrency(order.discountApplied)}
+                      </span>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
