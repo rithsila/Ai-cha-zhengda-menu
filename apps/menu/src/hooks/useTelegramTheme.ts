@@ -21,6 +21,16 @@ const getSystemTheme = (): ColorScheme => {
 const applyTheme = (scheme: ColorScheme) => {
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.theme = scheme;
+    try {
+      if (WebApp?.setHeaderColor) {
+        WebApp.setHeaderColor(scheme === 'dark' ? '#0f172a' : '#f8fafc');
+      }
+      if (WebApp?.setBackgroundColor) {
+        WebApp.setBackgroundColor(scheme === 'dark' ? '#0f172a' : '#f8fafc');
+      }
+    } catch {
+      // ignore
+    }
   }
 };
 

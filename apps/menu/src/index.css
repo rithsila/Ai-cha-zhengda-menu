@@ -15,39 +15,38 @@
 */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
-/*
-  Fallback palette = Telegram's default light & dark themes. Only used when the
-  real `--tg-theme-*` variables are absent (i.e. outside Telegram).
-*/
-:root {
-  --tg-fallback-bg: #ffffff;
-  --tg-fallback-text: #000000;
-  --tg-fallback-hint: #707579;
-  --tg-fallback-link: #2481cc;
-  --tg-fallback-button: #3390ec;
-  --tg-fallback-button-text: #ffffff;
-  --tg-fallback-secondary-bg: #f0f0f0;
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --tg-bg: #f8fafc;
+  --tg-secondary-bg: #ffffff;
+  --tg-text: #0f172a;
+  --tg-hint: #64748b;
+  --tg-link: #2563eb;
+  --tg-primary: #e53935;
+  --tg-primary-text: #ffffff;
 }
 
-:root[data-theme="dark"] {
-  --tg-fallback-bg: #17212b;
-  --tg-fallback-text: #f5f5f5;
-  --tg-fallback-hint: #708499;
-  --tg-fallback-link: #6ab3f3;
-  --tg-fallback-button: #5288c1;
-  --tg-fallback-button-text: #ffffff;
-  --tg-fallback-secondary-bg: #232e3c;
+[data-theme="dark"] {
+  color-scheme: dark;
+  --tg-bg: #0f172a;
+  --tg-secondary-bg: #1e293b;
+  --tg-text: #f8fafc;
+  --tg-hint: #94a3b8;
+  --tg-link: #60a5fa;
+  --tg-primary: #e53935;
+  --tg-primary-text: #ffffff;
 }
 
-@theme {
-  /* Dynamic Telegram theme variable mapping (with plain-browser fallback) */
-  --color-tg-bg: var(--tg-theme-bg-color, var(--tg-fallback-bg));
-  --color-tg-text: var(--tg-theme-text-color, var(--tg-fallback-text));
-  --color-tg-hint: var(--tg-theme-hint-color, var(--tg-fallback-hint));
-  --color-tg-link: var(--tg-theme-link-color, var(--tg-fallback-link));
-  --color-tg-primary: var(--tg-theme-button-color, var(--tg-fallback-button));
-  --color-tg-primary-text: var(--tg-theme-button-text-color, var(--tg-fallback-button-text));
-  --color-tg-secondary-bg: var(--tg-theme-secondary-bg-color, var(--tg-fallback-secondary-bg));
+@theme inline {
+  /* Dynamic Telegram theme variable mapping driven by data-theme */
+  --color-tg-bg: var(--tg-bg);
+  --color-tg-text: var(--tg-text);
+  --color-tg-hint: var(--tg-hint);
+  --color-tg-link: var(--tg-link);
+  --color-tg-primary: var(--tg-primary);
+  --color-tg-primary-text: var(--tg-primary-text);
+  --color-tg-secondary-bg: var(--tg-secondary-bg);
 
   /* Brand Specific Additions - Unified Ai-Cha & Zhengda Red */
   --color-brand-primary: #e53935; /* Signature Brand Red */
