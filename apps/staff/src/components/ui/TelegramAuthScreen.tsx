@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from './Card';
 import { API_BASE, saveSession } from '../../lib/api';
-import { AlertCircle, Send, Sparkles } from 'lucide-react';
+import { AlertCircle, Phone, ShieldCheck, Sparkles, ArrowRight, RotateCcw } from 'lucide-react';
 
 interface TelegramAuthScreenProps {
   onSuccess: () => void;
@@ -10,11 +10,17 @@ interface TelegramAuthScreenProps {
 export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [telegramUserId, setTelegramUserId] = useState('');
+  
+  // Phone OTP States
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
   const botName = import.meta.env.VITE_BOT_NAME || 'aicha_zhengda_arakawa_bot';
 
-  // Authenticate using Telegram initData or token or widget auth
-  const authenticate = useCallback(async (payload: { initData?: string; telegramUserId?: string; telegramAuth?: any }) => {
+  // Authenticate using Telegram Web Login Widget or WebApp
+  const authenticateTelegram = useCallback(async (payload: { initData?: string; telegramAuth?: any }) => {
     setLoading(true);
     setError(null);
     try {
@@ -42,10 +48,19 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
     }
   }, [onSuccess]);
 
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
   // Set up Telegram Web Login Widget and auto-detect Mini App context
   useEffect(() => {
     (window as any).onTelegramAuth = (user: any) => {
-      authenticate({ telegramAuth: user });
+      authenticateTelegram({ telegramAuth: user });
     };
 
     const container = document.getElementById('telegram-login-container');
@@ -80,22 +95,96 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
     // Auto-detect Telegram Mini App WebApp context
     const tg = (window as any).Telegram?.WebApp;
     if (tg?.initData) {
-      authenticate({ initData: tg.initData });
+      authenticateTelegram({ initData: tg.initData });
     }
 
     return () => {
       delete (window as any).onTelegramAuth;
     };
-  }, [botName, onSuccess, authenticate]);
+  }, [botName, onSuccess, authenticateTelegram]);
 
-  const handleIdLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanId = telegramUserId.trim();
-    if (!cleanId) {
-      setError('Please enter your Telegram User ID.');
+  // Handle Requesting OTP Code
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanPhone = phoneNumber.trim();
+    if (!cleanPhone) {
+      setError('Please enter your authorized phone number.');
       return;
     }
-    authenticate({ telegramUserId: cleanId });
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/staff/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleanPhone }),
+      });
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`API server is not responding (${res.status}). Make sure apps/api is running.`);
+      }
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Access denied: Phone number is not authorized by Admin.');
+      }
+
+      setOtpSent(true);
+      setCountdown(60);
+    } catch (err: any) {
+      setError(err.message || 'Phone number is not authorized by Admin.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Verifying OTP Code
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPhone = phoneNumber.trim();
+    const cleanCode = otpCode.trim();
+
+    if (!cleanCode || cleanCode.length < 4) {
+      setError('Please enter the verification code.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/staff/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: cleanPhone, code: cleanCode }),
+      });
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`API server is not responding (${res.status}). Make sure apps/api is running.`);
+      }
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Invalid verification code.');
+      }
+
+      saveSession({
+        token: data.token,
+        role: data.role,
+        expiresAt: data.expiresAt,
+      });
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Verification failed. Please check the code.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -127,33 +216,108 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
 
           <div className="flex items-center gap-2 text-xs text-ink-faint">
             <div className="h-px flex-1 bg-border" />
-            <span>or sign in with ID</span>
+            <span>or sign in with phone OTP</span>
             <div className="h-px flex-1 bg-border" />
           </div>
 
-          {/* Action 2: Direct numeric Telegram ID login */}
-          <form onSubmit={handleIdLogin} className="space-y-3">
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Enter Telegram ID (e.g. 715714775)"
-              value={telegramUserId}
-              onChange={(e) => {
-                setTelegramUserId(e.target.value);
-                if (error) setError(null);
-              }}
-              className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-center text-sm font-bold tracking-wider text-ink focus:border-accent outline-none"
-            />
+          {/* Action 2: Phone OTP Authentication */}
+          {!otpSent ? (
+            <form onSubmit={handleSendOtp} className="space-y-3">
+              <div className="text-left">
+                <label className="mb-1 block text-[11px] font-bold text-ink-soft">
+                  Authorized Phone Number
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="e.g. 012 345 678 or +855..."
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      setPhoneNumber(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 pl-9 font-medium text-sm text-ink focus:border-accent outline-none"
+                  />
+                  <Phone className="absolute left-3 top-3.5 size-4 text-ink-faint" />
+                </div>
+                <p className="mt-1 text-[10px] text-ink-faint">
+                  Only phone numbers authorized by Admin can receive OTP.
+                </p>
+              </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 w-full h-10 rounded-xl border border-border bg-surface-sunken hover:bg-surface-elevated text-xs font-bold text-ink transition-colors disabled:opacity-50"
-            >
-              <Send className="size-3.5 text-accent" />
-              Sign in with Telegram ID
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading || !phoneNumber.trim()}
+                className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-accent text-on-accent hover:opacity-90 font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+              >
+                <ArrowRight className="size-4" />
+                {loading ? 'Sending Code...' : 'Send Verification Code'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-3">
+              <div className="text-left">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-ink-soft">
+                    Enter 6-Digit Code
+                  </label>
+                  <span className="font-mono text-[10px] text-accent font-semibold">
+                    Sent to {phoneNumber}
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    maxLength={6}
+                    placeholder="••••••"
+                    value={otpCode}
+                    onChange={(e) => {
+                      setOtpCode(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    className="h-12 w-full rounded-xl border border-border bg-surface px-3 pl-9 font-mono text-center text-lg font-bold tracking-[0.25em] text-ink focus:border-accent outline-none"
+                  />
+                  <ShieldCheck className="absolute left-3 top-3.5 size-5 text-accent" />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || otpCode.trim().length < 4}
+                className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-accent text-on-accent hover:opacity-90 font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+              >
+                <ShieldCheck className="size-4" />
+                {loading ? 'Verifying...' : 'Verify & Sign In'}
+              </button>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtpCode('');
+                    setError(null);
+                  }}
+                  className="text-[11px] font-semibold text-ink-faint hover:text-ink transition-colors"
+                >
+                  Change phone
+                </button>
+
+                <button
+                  type="button"
+                  disabled={countdown > 0 || loading}
+                  onClick={() => handleSendOtp()}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline disabled:opacity-50 disabled:no-underline"
+                >
+                  <RotateCcw className="size-3" />
+                  {countdown > 0 ? `Resend code in ${countdown}s` : 'Resend code'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </Card>
     </div>

@@ -90,7 +90,8 @@ const RANGES: Array<{ id: Range; label: string; days: string; caption: string }>
 
 type StaffAccount = {
   id: string;
-  telegramUserId: string;
+  telegramUserId?: string | null;
+  phoneNumber?: string | null;
   name: string;
   role: 'staff' | 'manager';
   isActive: boolean;
@@ -154,6 +155,7 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   // Staff & Manager Accounts
   const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
+  const [newStaffPhone, setNewStaffPhone] = useState('');
   const [newStaffId, setNewStaffId] = useState('');
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<'staff' | 'manager'>('staff');
@@ -459,28 +461,41 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const handleAddStaffAccount = async (e: FormEvent) => {
     e.preventDefault();
     const id = newStaffId.trim();
+    const phone = newStaffPhone.trim();
     const name = newStaffName.trim();
-    if (!id || !/^\d+$/.test(id)) {
-      toast({ title: 'Please enter a valid numeric Telegram User ID.', variant: 'error' });
-      return;
-    }
+
     if (!name) {
       toast({ title: 'Please enter staff or manager name.', variant: 'error' });
       return;
     }
+    if (!phone && !id) {
+      toast({ title: 'Please provide either a Phone Number or Telegram User ID.', variant: 'error' });
+      return;
+    }
+    if (id && !/^\d+$/.test(id)) {
+      toast({ title: 'Telegram User ID must be numeric.', variant: 'error' });
+      return;
+    }
+
     setAddingStaff(true);
     try {
       const created = await apiFetch<StaffAccount>('/api/staff-accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telegramUserId: id, name, role: newStaffRole }),
+        body: JSON.stringify({
+          phoneNumber: phone || undefined,
+          telegramUserId: id || undefined,
+          name,
+          role: newStaffRole,
+        }),
       });
       setStaffAccounts((prev) => {
-        const filtered = prev.filter((a) => a.telegramUserId !== id);
+        const filtered = prev.filter((a) => a.id !== created.id && (!created.phoneNumber || a.phoneNumber !== created.phoneNumber));
         return [created, ...filtered];
       });
       toast({ title: `Added ${name} (${newStaffRole})`, variant: 'success' });
       setNewStaffId('');
+      setNewStaffPhone('');
       setNewStaffName('');
       setNewStaffRole('staff');
       setAddStaffOpen(false);
@@ -1350,24 +1365,10 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                 <form onSubmit={handleAddStaffAccount} className="space-y-4">
                   <div className="flex items-center gap-2 font-bold text-ink">
                     <UserPlus className="size-5 text-accent" />
-                    <span>Authorize New Telegram User</span>
+                    <span>Authorize New Staff Member</span>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="block text-xs font-bold text-ink mb-1">
-                        Telegram User ID <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="e.g. 715714775"
-                        value={newStaffId}
-                        onChange={(e) => setNewStaffId(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-sm font-bold text-ink outline-none focus:border-accent"
-                      />
-                    </div>
-
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <label className="block text-xs font-bold text-ink mb-1">
                         Staff / Manager Name <span className="text-danger">*</span>
@@ -1378,6 +1379,34 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                         value={newStaffName}
                         onChange={(e) => setNewStaffName(e.target.value)}
                         className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-ink mb-1">
+                        Phone Number (for SMS OTP)
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="e.g. 012 345 678"
+                        value={newStaffPhone}
+                        onChange={(e) => setNewStaffPhone(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-ink mb-1">
+                        Telegram ID (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="e.g. 715714775"
+                        value={newStaffId}
+                        onChange={(e) => setNewStaffId(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-sm font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
 
@@ -1460,11 +1489,21 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                             </div>
                             <div>
                               <h4 className="text-sm font-bold text-ink">{account.name}</h4>
-                              <p className="font-mono text-[11px] text-ink-faint">
-                                {account.isEnvAdmin
-                                  ? 'ID: Protected'
-                                  : `ID: •••• ${account.telegramUserId.slice(-4)}`}
-                              </p>
+                              <div className="flex flex-col gap-0.5 mt-0.5">
+                                {account.phoneNumber && (
+                                  <p className="font-mono text-[11px] text-ink-soft flex items-center gap-1">
+                                    <Phone className="size-3 text-accent" />
+                                    {account.phoneNumber}
+                                  </p>
+                                )}
+                                {account.telegramUserId && (
+                                  <p className="font-mono text-[11px] text-ink-faint">
+                                    {account.isEnvAdmin
+                                      ? 'TG: Protected Admin'
+                                      : `TG: •••• ${account.telegramUserId.slice(-4)}`}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
 

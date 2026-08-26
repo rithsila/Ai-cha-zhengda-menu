@@ -28,6 +28,25 @@ export const adminTelegramIds = () => {
     .filter(Boolean);
 };
 
+export const adminPhoneNumbers = () => {
+  const raw = `${process.env.ADMIN_PHONE_NUMBERS || ''},${process.env.ADMIN_PHONE || ''},${process.env.MANAGER_PHONE_NUMBERS || ''}`;
+  return raw
+    .split(',')
+    .map((p) => canonicalPhone(p.replace(/["']/g, '').trim()))
+    .filter(Boolean);
+};
+
+export function canonicalPhone(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return '';
+  if (trimmed.startsWith('+')) return `+${digits}`;
+  if (digits.startsWith('855')) return `+${digits}`;
+  if (digits.startsWith('0')) return `+855${digits.slice(1)}`;
+  return `+${digits}`;
+}
+
 export const managerTelegramIds = adminTelegramIds;
 
 export function roleForTelegramId(telegramUserId: string): StaffRole | null {
@@ -63,7 +82,140 @@ export async function resolveStaffAccount(telegramUserId: string, prisma: any): 
   return null;
 }
 
-export function issueToken(role: StaffRole, meta?: { telegramUserId?: string; name?: string }) {
+export async function resolveStaffByPhone(
+  rawPhone: string,
+  prisma: any
+): Promise<{ role: StaffRole; name: string; phoneNumber: string; telegramUserId?: string | null; id?: string } | null> {
+  const phone = canonicalPhone(rawPhone);
+  if (!phone) return null;
+
+  const admins = adminPhoneNumbers();
+  if (admins.includes(phone)) {
+    return { role: 'manager', name: 'Admin', phoneNumber: phone };
+  }
+
+  try {
+    // Check exact canonical match or without plus
+    const withoutPlus = phone.replace(/^\+/, '');
+    const account = await prisma.staffAccount.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: phone },
+          { phoneNumber: withoutPlus },
+          { phoneNumber: `+${withoutPlus}` },
+          { phoneNumber: `0${withoutPlus.replace(/^855/, '')}` },
+        ],
+        isActive: true,
+      },
+    });
+
+    if (account) {
+      let linkedTelegramId = account.telegramUserId || null;
+
+      // If telegramUserId not in staffAccount, check if linked in customer User table
+      if (!linkedTelegramId) {
+        const linkedUser = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { phoneNumber: phone },
+              { phoneNumber: withoutPlus },
+              { phoneNumber: `+${withoutPlus}` },
+            ],
+          },
+        });
+        if (linkedUser?.telegramUserId) {
+          linkedTelegramId = linkedUser.telegramUserId;
+        }
+      }
+
+      return {
+        role: (account.role === 'manager' ? 'manager' : 'staff') as StaffRole,
+        name: account.name,
+        phoneNumber: account.phoneNumber || phone,
+        telegramUserId: linkedTelegramId,
+        id: account.id,
+      };
+    }
+  } catch (err) {
+    console.error('Error finding staff by phone:', err);
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// In-memory OTP storage
+// ---------------------------------------------------------------------------
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_OTP_ATTEMPTS = 5;
+
+interface OtpEntry {
+  code: string;
+  expiresAt: number;
+  attempts: number;
+  lastSentAt: number;
+}
+
+const phoneOtps = new Map<string, OtpEntry>();
+
+export function createStaffOtp(rawPhone: string): { code: string; allowed: boolean; waitSeconds?: number } {
+  const phone = canonicalPhone(rawPhone);
+  const now = Date.now();
+  const existing = phoneOtps.get(phone);
+
+  // Rate limit: must wait 60 seconds between resends
+  if (existing && now - existing.lastSentAt < 60 * 1000) {
+    const waitSeconds = Math.ceil((60 * 1000 - (now - existing.lastSentAt)) / 1000);
+    return { code: '', allowed: false, waitSeconds };
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  phoneOtps.set(phone, {
+    code,
+    expiresAt: now + OTP_TTL_MS,
+    attempts: 0,
+    lastSentAt: now,
+  });
+
+  return { code, allowed: true };
+}
+
+export function verifyStaffOtpCode(
+  rawPhone: string,
+  inputCode: string
+): { valid: boolean; reason?: string } {
+  const phone = canonicalPhone(rawPhone);
+  const entry = phoneOtps.get(phone);
+
+  if (!entry) {
+    return { valid: false, reason: 'No OTP code found for this phone number. Please request a new one.' };
+  }
+
+  if (Date.now() > entry.expiresAt) {
+    phoneOtps.delete(phone);
+    return { valid: false, reason: 'OTP code has expired. Please request a new one.' };
+  }
+
+  if (entry.attempts >= MAX_OTP_ATTEMPTS) {
+    phoneOtps.delete(phone);
+    return { valid: false, reason: 'Too many failed attempts. Please request a new OTP code.' };
+  }
+
+  entry.attempts += 1;
+
+  if (entry.code === inputCode.trim()) {
+    phoneOtps.delete(phone);
+    return { valid: true };
+  }
+
+  return { valid: false, reason: 'Invalid verification code. Please check and try again.' };
+}
+
+export function clearOtps() {
+  phoneOtps.clear();
+}
+
+export function issueToken(role: StaffRole, meta?: { telegramUserId?: string; phoneNumber?: string; name?: string }) {
   const token = randomUUID();
   const expiresAt = Date.now() + SESSION_TTL_MS;
   sessions.set(token, { role, expiresAt, ...meta });

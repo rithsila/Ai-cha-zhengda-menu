@@ -12,7 +12,9 @@ import {
   issueToken, requireStaff, requireManager, staffPin, managerPin,
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
   roleForTelegramId, resolveStaffAccount, adminTelegramIds,
+  resolveStaffByPhone, createStaffOtp, verifyStaffOtpCode, canonicalPhone, adminPhoneNumbers,
 } from './auth';
+import { sendOtpSms } from './sms';
 import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
 } from './telegram-initdata';
@@ -208,6 +210,91 @@ export function createApp() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Login error' });
+    }
+  });
+
+  // Staff Phone OTP Login - Step 1: Send OTP code (only for admin-authorized phone numbers)
+  app.post('/api/auth/staff/send-otp', loginRateLimit, async (req, res) => {
+    try {
+      const { phoneNumber } = req.body || {};
+      const phone = canonicalPhone(phoneNumber);
+
+      if (!phone || !isValidPhone(phone)) {
+        return res.status(400).json({ error: 'Please enter a valid phone number.' });
+      }
+
+      const staff = await resolveStaffByPhone(phone, prisma);
+      if (!staff) {
+        recordFailedLogin(req);
+        return res.status(403).json({
+          error: 'Access denied: Phone number is not authorized. Please ask an Admin or Manager to grant access to your phone number.',
+        });
+      }
+
+      const { code, allowed, waitSeconds } = createStaffOtp(phone);
+      if (!allowed) {
+        return res.status(429).json({
+          error: `Please wait ${waitSeconds || 60} seconds before requesting a new code.`,
+        });
+      }
+
+      const smsResult = await sendOtpSms(phone, code, staff.telegramUserId);
+      if (!smsResult.success) {
+        return res.status(500).json({
+          error: smsResult.error || 'Failed to send verification code. Please try again later.',
+        });
+      }
+
+      res.json({
+        ok: true,
+        message: 'Verification code sent successfully.',
+        phone: phone,
+      });
+    } catch (error) {
+      console.error('Error in send-otp:', error);
+      res.status(500).json({ error: 'Internal server error while sending verification code.' });
+    }
+  });
+
+  // Staff Phone OTP Login - Step 2: Verify OTP code & Issue session token
+  app.post('/api/auth/staff/verify-otp', loginRateLimit, async (req, res) => {
+    try {
+      const { phoneNumber, code } = req.body || {};
+      const phone = canonicalPhone(phoneNumber);
+
+      if (!phone) {
+        return res.status(400).json({ error: 'Phone number is required.' });
+      }
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Verification code is required.' });
+      }
+
+      const staff = await resolveStaffByPhone(phone, prisma);
+      if (!staff) {
+        recordFailedLogin(req);
+        return res.status(403).json({ error: 'Access denied: Phone number is not authorized.' });
+      }
+
+      const otpCheck = verifyStaffOtpCode(phone, code);
+      if (!otpCheck.valid) {
+        recordFailedLogin(req);
+        return res.status(400).json({ error: otpCheck.reason || 'Invalid verification code.' });
+      }
+
+      clearFailedLogins(req);
+      const { token, expiresAt } = issueToken(staff.role, { phoneNumber: phone, name: staff.name });
+
+      res.json({
+        ok: true,
+        token,
+        role: staff.role,
+        name: staff.name,
+        phoneNumber: phone,
+        expiresAt,
+      });
+    } catch (error) {
+      console.error('Error in verify-otp:', error);
+      res.status(500).json({ error: 'Internal server error while verifying code.' });
     }
   });
 
@@ -1118,12 +1205,15 @@ export function createApp() {
         transactionId,
         amount: order.totalAmount,
         currency: 'USD',
-        // ABA wants a real item list; the SDK base64-encodes it as JSON.
-        items: order.items.map((line) => ({
-          name: line.menuItem?.name ?? 'Item',
-          quantity: line.quantity,
-          price: line.price,
-        })),
+        items: Buffer.from(
+          JSON.stringify(
+            order.items.map((line) => ({
+              name: line.menuItem?.name ?? 'Item',
+              quantity: line.quantity,
+              price: line.price,
+            }))
+          )
+        ).toString('base64'),
         // Without this ABA returns no qr_string and no deeplink, and the
         // customer is shown an empty QR box.
         paymentOption: 'abapay_khqr',
@@ -1443,6 +1533,7 @@ export function createApp() {
       const envAdmins = adminTelegramIds().map((id) => ({
         id: `env-${id}`,
         telegramUserId: id,
+        phoneNumber: null,
         name: 'Admin',
         role: 'manager' as const,
         isActive: true,
@@ -1452,7 +1543,7 @@ export function createApp() {
 
       // Combine env admins and DB accounts without duplicate telegram user IDs
       const envIds = new Set(envAdmins.map((a) => a.telegramUserId));
-      const filteredDb = dbAccounts.filter((a) => !envIds.has(a.telegramUserId));
+      const filteredDb = dbAccounts.filter((a) => !a.telegramUserId || !envIds.has(a.telegramUserId));
 
       res.json([...envAdmins, ...filteredDb]);
     } catch (err) {
@@ -1463,32 +1554,63 @@ export function createApp() {
 
   app.post('/api/staff-accounts', requireManager, async (req, res) => {
     try {
-      const { telegramUserId, name, role } = req.body || {};
+      const { telegramUserId, phoneNumber, name, role } = req.body || {};
       const cleanId = typeof telegramUserId === 'string' || typeof telegramUserId === 'number' ? String(telegramUserId).trim() : '';
+      const cleanPhone = phoneNumber ? canonicalPhone(phoneNumber) : '';
       const cleanName = typeof name === 'string' ? name.trim() : '';
       const cleanRole = role === 'manager' ? 'manager' : 'staff';
 
-      if (!cleanId || !/^\d+$/.test(cleanId)) {
-        return res.status(400).json({ error: 'Valid numeric Telegram User ID is required' });
-      }
       if (!cleanName) {
         return res.status(400).json({ error: 'Staff name is required' });
       }
 
-      const account = await prisma.staffAccount.upsert({
-        where: { telegramUserId: cleanId },
-        create: {
-          telegramUserId: cleanId,
-          name: cleanName,
-          role: cleanRole,
-          isActive: true,
-        },
-        update: {
-          name: cleanName,
-          role: cleanRole,
-          isActive: true,
-        }
-      });
+      if (!cleanPhone && !cleanId) {
+        return res.status(400).json({ error: 'Either a valid Phone Number or Telegram User ID is required' });
+      }
+
+      if (cleanId && !/^\d+$/.test(cleanId)) {
+        return res.status(400).json({ error: 'Telegram User ID must be numeric' });
+      }
+
+      if (cleanPhone && !isValidPhone(cleanPhone)) {
+        return res.status(400).json({ error: 'Invalid phone number format' });
+      }
+
+      let account;
+      if (cleanPhone) {
+        account = await prisma.staffAccount.upsert({
+          where: { phoneNumber: cleanPhone },
+          create: {
+            phoneNumber: cleanPhone,
+            telegramUserId: cleanId || null,
+            name: cleanName,
+            role: cleanRole,
+            isActive: true,
+          },
+          update: {
+            name: cleanName,
+            role: cleanRole,
+            telegramUserId: cleanId || undefined,
+            isActive: true,
+          },
+        });
+      } else {
+        account = await prisma.staffAccount.upsert({
+          where: { telegramUserId: cleanId },
+          create: {
+            telegramUserId: cleanId,
+            phoneNumber: null,
+            name: cleanName,
+            role: cleanRole,
+            isActive: true,
+          },
+          update: {
+            name: cleanName,
+            role: cleanRole,
+            isActive: true,
+          },
+        });
+      }
 
       res.json(account);
     } catch (err) {
@@ -1499,9 +1621,23 @@ export function createApp() {
 
   app.put('/api/staff-accounts/:id', requireManager, async (req, res) => {
     try {
-      const { name, role, isActive } = req.body || {};
+      const { name, phoneNumber, telegramUserId, role, isActive } = req.body || {};
       const updateData: any = {};
       if (typeof name === 'string' && name.trim()) updateData.name = name.trim();
+      if (phoneNumber !== undefined) {
+        const cleaned = phoneNumber ? canonicalPhone(phoneNumber) : null;
+        if (cleaned && !isValidPhone(cleaned)) {
+          return res.status(400).json({ error: 'Invalid phone number format' });
+        }
+        updateData.phoneNumber = cleaned;
+      }
+      if (telegramUserId !== undefined) {
+        const cleanId = telegramUserId ? String(telegramUserId).trim() : null;
+        if (cleanId && !/^\d+$/.test(cleanId)) {
+          return res.status(400).json({ error: 'Telegram ID must be numeric' });
+        }
+        updateData.telegramUserId = cleanId;
+      }
       if (role === 'staff' || role === 'manager') updateData.role = role;
       if (typeof isActive === 'boolean') updateData.isActive = isActive;
 
@@ -1567,7 +1703,7 @@ export function createApp() {
           where: { role: 'manager', isActive: true },
           select: { telegramUserId: true },
         });
-        const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers.map((m) => m.telegramUserId)]));
+        const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers.map((m) => m.telegramUserId).filter((id): id is string => Boolean(id))]));
         const alertText = `🚨 <b>New Customer Report / Feedback</b>\n\n<b>From:</b> ${report.userName || 'Customer'}${report.telegramUserId ? ` (<code>${report.telegramUserId}</code>)` : ''}\n<b>Phone:</b> ${report.userPhone || 'Not provided'}\n\n<b>Message:</b>\n${report.message}`;
         for (const managerId of allManagerIds) {
           await sendTelegramNotification(managerId, alertText);

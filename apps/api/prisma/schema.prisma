@@ -127,7 +127,8 @@ model SystemConfig {
 
 model StaffAccount {
   id             String   @id @default(uuid())
-  telegramUserId String   @unique
+  telegramUserId String?  @unique
+  phoneNumber    String?  @unique
   name           String   // Staff or manager name/label
   role           String   @default("staff") // "staff" | "manager"
   isActive       Boolean  @default(true)

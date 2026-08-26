@@ -85,7 +85,7 @@ export const setupBot = () => {
           where: { role: 'manager', isActive: true },
           select: { telegramUserId: true },
         });
-        dbManagers = managers.map((m) => m.telegramUserId);
+        dbManagers = managers.map((m) => m.telegramUserId).filter((id): id is string => Boolean(id));
       } catch (err) {
         console.error('Error fetching manager accounts:', err);
       }

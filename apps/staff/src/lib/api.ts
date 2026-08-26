@@ -5,7 +5,7 @@
  * it, because a tablet in the shop cannot reach the developer's machine.
  */
 export const API_BASE: string =
-  (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000';
+  (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 const SESSION_KEY = 'staff-session';
 
