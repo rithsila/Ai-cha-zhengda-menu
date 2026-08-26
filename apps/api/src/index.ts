@@ -4,6 +4,7 @@ import { setupBot } from './bot';
 import { warnIfDevIdentityAllowed } from './telegram-initdata';
 import { configureSqlite } from './db';
 import { startExpirySweep } from './expiry';
+import { autoSeedIfEmpty } from './seed';
 
 warnIfDevIdentityAllowed();
 
@@ -13,7 +14,10 @@ setupBot();
 const PORT = process.env.PORT || 4000;
 
 // WAL and the other SQLite settings go on before the first request arrives.
-configureSqlite().then(() => {
+configureSqlite().then(async () => {
+  // Automatically populate catalog if launching on a fresh database
+  await autoSeedIfEmpty(prisma);
+
   // Abandoned KHQR orders never become real orders; sweeping them keeps unpaid
   // tickets off the kitchen board and returns the points they reserved.
   startExpirySweep(prisma);

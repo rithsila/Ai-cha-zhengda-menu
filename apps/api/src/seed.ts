@@ -3,19 +3,19 @@ import { CATALOG } from './catalog-data';
 
 const prisma = new PrismaClient();
 
-async function main() {
+export async function seedCatalog(db: PrismaClient = prisma) {
   console.log('Seeding database...');
 
   // Clear existing (FK-safe order)
-  await prisma.orderItem.deleteMany({});
-  await prisma.order.deleteMany({});
-  await prisma.modifierOption.deleteMany({});
-  await prisma.modifierGroup.deleteMany({});
-  await prisma.menuItem.deleteMany({});
+  await db.orderItem.deleteMany({});
+  await db.order.deleteMany({});
+  await db.modifierOption.deleteMany({});
+  await db.modifierGroup.deleteMany({});
+  await db.menuItem.deleteMany({});
 
   // Seed Branches — the shop itself. Delivery is Arakawa-only for now, and the
   // pickup counter is the same address.
-  const shop = await prisma.branch.upsert({
+  const shop = await db.branch.upsert({
     where: { id: 'branch-arakawa' },
     update: { name: 'Ai-Cha & Zhengda — Arakawa', address: 'Shop J03, Ground Floor, Arakawa', isActive: true },
     create: {
@@ -28,14 +28,14 @@ async function main() {
 
   // The two invented branches from the first prototype are hidden, not deleted:
   // old orders still point at them with a foreign key.
-  await prisma.branch.updateMany({
+  await db.branch.updateMany({
     where: { id: { in: ['branch-toul-kork', 'branch-bkk1'] } },
     data: { isActive: false }
   });
 
   // Seed MenuItems from the static catalog, preserving static ids
   for (const item of CATALOG) {
-    await prisma.menuItem.create({
+    await db.menuItem.create({
       data: {
         id: item.id,
         brand: item.brand,
@@ -69,11 +69,25 @@ async function main() {
   console.log(`Seeded successfully! ${CATALOG.length} menu items, branch:`, shop);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+export async function autoSeedIfEmpty(db: PrismaClient = prisma) {
+  try {
+    const count = await db.menuItem.count();
+    if (count === 0) {
+      console.log('Database empty. Auto-seeding catalog and branch...');
+      await seedCatalog(db);
+    }
+  } catch (err) {
+    console.warn('Could not check or run auto-seed:', err);
+  }
+}
+
+if (process.argv[1] && process.argv[1].endsWith('seed.ts')) {
+  seedCatalog(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
