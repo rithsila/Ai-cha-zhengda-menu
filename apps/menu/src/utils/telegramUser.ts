@@ -84,10 +84,10 @@ export function getInitData(): string | null {
  * Telegram itself calls it "unsafe": it is not signed, so it must never be sent
  * to the API as an identity.
  */
-export function getTelegramDisplayUser(): { firstName?: string; lastName?: string } | null {
+export function getTelegramDisplayUser(): { firstName?: string; lastName?: string; photoUrl?: string } | null {
   const globalTg = (window as any)?.Telegram?.WebApp;
   const user = globalTg?.initDataUnsafe?.user || WebApp?.initDataUnsafe?.user;
-  if (user) return { firstName: user.first_name, lastName: user.last_name };
+  if (user) return { firstName: user.first_name, lastName: user.last_name, photoUrl: user.photo_url };
 
   const initData = getInitData();
   if (initData) {
@@ -96,7 +96,7 @@ export function getTelegramDisplayUser(): { firstName?: string; lastName?: strin
       const userRaw = p.get('user');
       if (userRaw) {
         const parsed = JSON.parse(userRaw);
-        return { firstName: parsed.first_name, lastName: parsed.last_name };
+        return { firstName: parsed.first_name, lastName: parsed.last_name, photoUrl: parsed.photo_url };
       }
     } catch {
       // ignore

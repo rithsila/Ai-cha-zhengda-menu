@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Phone, House, Storefront, Sun, Moon, CreditCard, Money } from '@phosphor-icons/react';
+import { User, House, Storefront, Sun, Moon, CreditCard, Money } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { SignInPrompt } from './SignInPrompt';
 import { AddressForm, AddressSummary } from './AddressForm';
@@ -12,6 +12,7 @@ import {
   setDefaultPaymentMethod,
   type PaymentMethod,
 } from '../utils/paymentPrefs';
+import { getTelegramDisplayUser } from '../utils/telegramUser';
 
 interface AccountViewProps {
   onBrowseMenu?: () => void;
@@ -25,6 +26,8 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const tgUser = getTelegramDisplayUser();
   // A profile, address and phone number belong to one person. Without a
   // verified identity every guest would share the same row.
   const signedIn = hasIdentity();
@@ -82,19 +85,41 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto">
       {/* Profile Card */}
-      <div className="bg-tg-secondary-bg rounded-2xl p-5 shadow-sm border border-tg-hint/10 flex items-center gap-4">
-        <div className="w-14 h-14 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary">
-          <Phone size={28} weight="fill" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-tg-text">
-            {profile.contactName || [profile.firstName, profile.lastName].filter(Boolean).join(' ') || 'Telegram User'}
-          </h2>
-          <p className="text-sm text-tg-hint font-medium">
-            {formatPhone(profile.phoneNumber) || t('noPhoneYet', 'No phone linked yet')}
-          </p>
-        </div>
-      </div>
+      {(() => {
+        const photoUrl = profile.photoUrl || tgUser?.photoUrl;
+        const displayName =
+          profile.contactName ||
+          [profile.firstName, profile.lastName].filter(Boolean).join(' ') ||
+          [tgUser?.firstName, tgUser?.lastName].filter(Boolean).join(' ') ||
+          'Telegram User';
+        const initial = (profile.contactName || profile.firstName || tgUser?.firstName || '')
+          .trim()
+          .charAt(0)
+          .toUpperCase();
+
+        return (
+          <div className="bg-tg-secondary-bg rounded-2xl p-5 shadow-sm border border-tg-hint/10 flex items-center gap-4">
+            {photoUrl && !imgError ? (
+              <img
+                src={photoUrl}
+                alt={displayName}
+                onError={() => setImgError(true)}
+                className="w-14 h-14 rounded-full object-cover border border-tg-hint/15 shadow-sm shrink-0"
+              />
+            ) : (
+              <div className="w-14 h-14 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary font-bold text-xl shrink-0">
+                {initial || <User size={28} weight="fill" />}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-bold text-tg-text truncate">{displayName}</h2>
+              <p className="text-sm text-tg-hint font-medium truncate">
+                {formatPhone(profile.phoneNumber) || t('noPhoneYet', 'No phone linked yet')}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Delivery address */}
       <div className="space-y-2">
