@@ -424,14 +424,14 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-tg-bg text-tg-text pb-36">
+    <div className="min-h-screen bg-tg-bg text-tg-text pb-44">
       {/* Top Banner Section */}
       <div 
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
         style={{ backgroundImage: 'url(/banner.png)' }}
       >
-        <div className="absolute inset-0 bg-black/40 dark:bg-black/55 z-0 pointer-events-none"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/75 to-transparent z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-black/20 dark:bg-black/30 z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 dark:from-black/50 to-transparent z-0 pointer-events-none"></div>
         
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
@@ -602,7 +602,7 @@ export default function App() {
         <motion.div 
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-24 left-4 right-4 max-w-sm mx-auto z-30"
+          className="fixed bottom-[6.5rem] left-4 right-4 max-w-sm mx-auto z-30"
         >
           <button 
             onClick={() => setIsCartOpen(true)}
@@ -625,7 +625,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.8 }}
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className={`fixed right-4 z-40 w-12 h-12 flex items-center justify-center hover:scale-110 transition-all duration-300 active:scale-95 cursor-pointer ${cart.length > 0 && !isCartOpen ? 'bottom-40' : 'bottom-24'}`}
+            className={`fixed right-4 z-40 w-12 h-12 flex items-center justify-center hover:scale-110 transition-all duration-300 active:scale-95 cursor-pointer ${cart.length > 0 && !isCartOpen ? 'bottom-[11.5rem]' : 'bottom-24'}`}
           >
             <img src="/images/aicha_scroll_top.png" alt="Scroll to top" className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
           </motion.button>
