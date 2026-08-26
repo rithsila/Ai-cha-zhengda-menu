@@ -30,7 +30,7 @@ type TabId = 'menu' | 'orders' | 'rewards' | 'account';
 const TAB_META: Record<TabId, { titleKey: string; titleFallback: string; subKey: string; subFallback: string }> = {
   menu: { titleKey: 'menuTitle', titleFallback: 'Menu', subKey: 'menuSubtitle', subFallback: 'Tap to order instantly' },
   orders: { titleKey: 'ordersTitle', titleFallback: 'My Orders', subKey: 'ordersSubtitle', subFallback: 'Track your active and past orders' },
-  rewards: { titleKey: 'rewardsTitle', titleFallback: 'Rewards', subKey: 'rewardsSubtitle', subFallback: 'Your points and what you can get' },
+  rewards: { titleKey: 'rewardsTitle', titleFallback: 'Rewards', subKey: 'rewardsSubtitle', subFallback: 'Your stamps and rewards' },
   account: { titleKey: 'accountTitle', titleFallback: 'My Account', subKey: 'accountSubtitle', subFallback: 'Manage your profile' },
 };
 

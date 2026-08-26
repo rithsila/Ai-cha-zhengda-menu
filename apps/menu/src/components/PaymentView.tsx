@@ -8,7 +8,7 @@ import {
   Clock,
   CheckCircle,
   X,
-  Coins,
+  Sparkle,
 } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { SignInPrompt } from './SignInPrompt';
@@ -348,11 +348,16 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                     </p>
                   </div>
                 ) : (
-                  (order.pointsEarned ?? 0) > 0 && (
-                    <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
-                      <Coins size={14} weight="fill" />+{order.pointsEarned} {t('points', 'points')}
-                    </p>
-                  )
+                  (order.pointsEarned ?? 0) > 0 && (() => {
+                    const stamps = (order.pointsEarned ?? 0) / 10;
+                    const displayCount = stamps % 1 === 0 ? stamps : stamps.toFixed(1);
+                    return (
+                      <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
+                        <Sparkle size={14} weight="fill" />
+                        +{displayCount} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
+                      </p>
+                    );
+                  })()
                 )}
               </div>
               );

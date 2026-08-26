@@ -66,7 +66,7 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   if (!signedIn) {
     return (
       <SignInPrompt
-        what={t('signInForAccount', 'Open the shop from our Telegram bot to save your address, phone number and points.')}
+        what={t('signInForAccount', 'Open the shop from our Telegram bot to save your address, phone number and stamps.')}
         onBrowseMenu={onBrowseMenu}
       />
     );

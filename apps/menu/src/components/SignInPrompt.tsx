@@ -30,7 +30,7 @@ export function SignInPrompt({ what, onBrowseMenu }: SignInPromptProps) {
         {what ||
           t(
             'signInRequiredBody',
-            'Open the shop from our Telegram bot to see your orders, points and saved address.'
+            'Open the shop from our Telegram bot to see your orders, stamps and saved address.'
           )}
       </p>
       <p className="text-xs text-tg-hint">

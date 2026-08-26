@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Gift, ShoppingCart, ClockCounterClockwise, Sparkle } from '@phosphor-icons/react';
+import { Gift, ClockCounterClockwise, Sparkle } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { formatCurrency } from '../utils/format';
 import { SignInPrompt } from './SignInPrompt';
@@ -89,7 +89,7 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
   if (!signedIn) {
     return (
       <SignInPrompt
-        what={t('signInForRewards', 'Open the shop from our Telegram bot to collect and spend loyalty points.')}
+        what={t('signInForRewards', 'Open the shop from our Telegram bot to collect stamps and earn free rewards.')}
         onBrowseMenu={onBrowseMenu}
       />
     );
@@ -112,13 +112,13 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         pointsPerDollar={pointsPerDollar}
       />
 
-      {/* Points become a discount at checkout */}
+      {/* 10-Stamp Reward Checkout Notice */}
       <div className="bg-brand-primary/10 rounded-2xl p-4 border border-brand-primary/20 flex gap-3">
         <div className="text-brand-primary flex-shrink-0 mt-0.5">
-          <ShoppingCart size={22} weight="fill" />
+          <Sparkle size={22} weight="fill" />
         </div>
         <p className="text-sm text-tg-text">
-          {t('pointsUsedAtCheckout', 'Use your points at checkout. On the payment screen, move the slider to turn points into money off your order.')}
+          {t('stampRewardCheckoutHint', 'Collect 10 stamps to get a free item on your next order. Claim it directly at checkout!')}
         </p>
       </div>
 
@@ -168,8 +168,8 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
                         <Sparkle size={12} weight="fill" />
                         <span>
                           {stampsUsed > 0
-                            ? `${stampsUsed} Stamps Redeemed`
-                            : `${order.pointsRedeemed ?? 0} Points Used`}
+                            ? `${stampsUsed} ${stampsUsed === 1 ? t('stamp', 'Stamp') : t('stamps', 'Stamps')} ${t('redeemed', 'Redeemed')}`
+                            : `${Math.round(((order.pointsRedeemed ?? 0) / pointsPerStamp) * 10) / 10} ${t('stamps', 'Stamps')} ${t('redeemed', 'Redeemed')}`}
                         </span>
                       </div>
                     </div>

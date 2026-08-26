@@ -8,7 +8,7 @@ import {
   Money,
   CheckCircle,
   X,
-  Coins,
+  Sparkle,
   Clock,
   ShoppingCart,
 } from '@phosphor-icons/react';
@@ -306,14 +306,19 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 ))}
               </ul>
 
-              {/* Points Earned Tag */}
-              {!isCancelled && (order.pointsEarned ?? 0) > 0 && (
-                <div className="mb-3">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
-                    <Coins size={14} weight="fill" />+{order.pointsEarned} {t('points', 'points')}
-                  </span>
-                </div>
-              )}
+              {/* Stamps Earned Tag */}
+              {!isCancelled && (order.pointsEarned ?? 0) > 0 && (() => {
+                const stamps = (order.pointsEarned ?? 0) / 10;
+                const displayCount = stamps % 1 === 0 ? stamps : stamps.toFixed(1);
+                return (
+                  <div className="mb-3">
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
+                      <Sparkle size={14} weight="fill" />
+                      +{displayCount} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Actions: Pay Now for unpaid orders, or Reorder for past orders */}
               {isPending ? (
