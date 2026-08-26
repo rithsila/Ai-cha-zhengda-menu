@@ -21,7 +21,15 @@ export const adminTelegramIds = () => {
   const raw = `${process.env.ADMIN_TELEGRAM_IDS || ''},${process.env.ADMIN_TELEGRAM_ID || ''},${process.env.MANAGER_TELEGRAM_IDS || ''}`;
   return raw
     .split(',')
-    .map((id) => id.replace(/["']/g, '').trim())
+    .map((id) => id.replace(/[@"']/g, '').trim())
+    .filter(Boolean);
+};
+
+export const adminTelegramUsernames = () => {
+  const raw = `${process.env.ADMIN_TELEGRAM_USERNAMES || ''},${process.env.ADMIN_USERNAMES || ''},${process.env.ADMIN_USERNAME || ''},${process.env.ADMIN_TELEGRAM_IDS || ''},${process.env.ADMIN_TELEGRAM_ID || ''}`;
+  return raw
+    .split(',')
+    .map((u) => u.replace(/[@"']/g, '').trim().toLowerCase())
     .filter(Boolean);
 };
 
@@ -54,9 +62,28 @@ export function roleForTelegramId(telegramUserId: string): StaffRole | null {
   return null;
 }
 
-export async function resolveStaffAccount(telegramUserId: string, prisma: any): Promise<{ role: StaffRole; name: string } | null> {
+export async function resolveStaffAccount(
+  telegramUserId: string,
+  prisma: any,
+  username?: string
+): Promise<{ role: StaffRole; name: string } | null> {
+  const cleanId = String(telegramUserId).replace(/[@"']/g, '').trim();
   const admins = adminTelegramIds();
-  if (admins.includes(telegramUserId)) {
+  if (admins.includes(cleanId)) {
+    return { role: 'manager', name: 'Admin' };
+  }
+
+  if (username) {
+    const cleanUser = username.replace(/[@"']/g, '').trim().toLowerCase();
+    const adminUsers = adminTelegramUsernames();
+    if (adminUsers.includes(cleanUser)) {
+      return { role: 'manager', name: username };
+    }
+  }
+
+  // Also check if cleanId matches an admin username string
+  const adminUsers = adminTelegramUsernames();
+  if (adminUsers.includes(cleanId.toLowerCase())) {
     return { role: 'manager', name: 'Admin' };
   }
 

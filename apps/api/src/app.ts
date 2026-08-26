@@ -11,7 +11,7 @@ import {
 import {
   issueToken, requireStaff, requireManager,
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
-  roleForTelegramId, resolveStaffAccount, adminTelegramIds,
+  roleForTelegramId, resolveStaffAccount, adminTelegramIds, adminTelegramUsernames,
   resolveStaffByPhone, createStaffOtp, verifyStaffOtpCode, canonicalPhone, adminPhoneNumbers,
 } from './auth';
 import { sendOtpSms } from './sms';
@@ -195,7 +195,35 @@ export function createApp() {
         return res.status(401).json({ error: 'Please provide a valid Telegram User ID' });
       }
 
-      let account = await resolveStaffAccount(verifiedTelegramId, prisma);
+      let authUsername: string | undefined;
+      if (telegramAuth && typeof telegramAuth === 'object') {
+        authUsername = (telegramAuth as any).username;
+      }
+
+      let account = await resolveStaffAccount(verifiedTelegramId, prisma, authUsername);
+
+      // Auto-bootstrap: If zero staff accounts exist in DB and no ENV admins are set,
+      // the first person to log in becomes the Store Manager automatically.
+      if (!account) {
+        try {
+          const totalStaff = await prisma.staffAccount.count();
+          const noEnvAdmins = adminTelegramIds().length === 0 && adminTelegramUsernames().length === 0;
+          if (totalStaff === 0 && noEnvAdmins) {
+            console.log(`Bootstrapping first staff account as Manager for Telegram ID: ${verifiedTelegramId}`);
+            await prisma.staffAccount.create({
+              data: {
+                telegramUserId: verifiedTelegramId,
+                name: authUsername || 'Store Manager',
+                role: 'manager',
+                isActive: true,
+              },
+            });
+            account = { role: 'manager', name: authUsername || 'Store Manager' };
+          }
+        } catch (e) {
+          console.warn('Could not auto-bootstrap manager:', e);
+        }
+      }
 
       // Fallback in local dev if no admins/staff configured yet
       if (!account && process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && process.env.NODE_ENV !== 'production' && adminTelegramIds().length === 0) {
