@@ -427,7 +427,7 @@ export default function App() {
     <div className="min-h-screen bg-tg-bg text-tg-text pb-28">
       {/* Top Banner Section */}
       <div 
-        className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-6 shadow-sm overflow-hidden"
+        className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
         style={{ backgroundImage: 'url(/banner.png)' }}
       >
         <div className="absolute inset-0 bg-black/40 dark:bg-black/55 z-0 pointer-events-none"></div>
@@ -501,7 +501,7 @@ export default function App() {
         )}
       </div>
 
-      <div className="px-4 pt-6">
+      <div className="px-4 pt-4">
         {activeTab === 'orders' && <OrdersView onReorder={handleReorder} onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'rewards' && <RewardsView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'account' && <AccountView onBrowseMenu={() => setActiveTab('menu')} />}

@@ -8,7 +8,7 @@ interface BrandTabsProps {
 
 export function BrandTabs({ activeBrand, onChange }: BrandTabsProps) {
   return (
-    <div className="flex bg-white/10 backdrop-blur-xl p-1.5 rounded-2xl mb-6 shadow-[0_8px_32px_rgba(0,0,0,0.2)] border border-white/20">
+    <div className="flex bg-white/10 backdrop-blur-xl p-1.5 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] border border-white/20">
       <button
         onClick={() => onChange('ai-cha')}
         className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
