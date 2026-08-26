@@ -201,16 +201,10 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           }`}
         >
           <span
-            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-200 flex items-center justify-center ${
+            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
               isDark ? 'translate-x-7' : 'translate-x-1'
             }`}
-          >
-            {isDark ? (
-              <Moon size={14} weight="fill" className="text-slate-800" />
-            ) : (
-              <Sun size={14} weight="fill" className="text-amber-500" />
-            )}
-          </span>
+          />
         </button>
       </div>
 
