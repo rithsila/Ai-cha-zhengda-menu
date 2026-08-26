@@ -36,6 +36,8 @@ interface Order {
   pickupCode: string | null;
   transactionId?: string | null;
   pointsEarned?: number | null;
+  pointsRedeemed?: number | null;
+  discountApplied?: number | null;
   cancelReason?: string | null;
   items: OrderItem[];
 }
@@ -308,7 +310,13 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
 
               {/* Stamps Earned Tag */}
               {!isCancelled && (order.pointsEarned ?? 0) > 0 && (() => {
-                const stamps = Math.max(1, Math.round((order.pointsEarned ?? 0) / 10));
+                const eligibleCount = order.items?.reduce(
+                  (sum, i) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
+                  0
+                ) ?? 0;
+                const freeClaimed = Math.floor((order.pointsRedeemed ?? 0) / 100);
+                const itemStamps = Math.max(0, eligibleCount - freeClaimed);
+                const stamps = itemStamps > 0 ? itemStamps : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
                 return (
                   <div className="mb-3">
                     <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">

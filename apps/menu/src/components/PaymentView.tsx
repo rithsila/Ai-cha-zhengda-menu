@@ -349,7 +349,8 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                   </div>
                 ) : (
                   (order.pointsEarned ?? 0) > 0 && (() => {
-                    const stamps = Math.max(1, Math.round((order.pointsEarned ?? 0) / 10));
+                    const totalQty = order.items?.reduce((sum, i) => sum + (i.quantity || 1), 0) ?? 0;
+                    const stamps = totalQty > 0 ? totalQty : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
                     return (
                       <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
                         <Sparkle size={14} weight="fill" />
