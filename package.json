@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -n api,menu,staff -c blue,magenta,green \"npm --prefix apps/api run dev\" \"npm --prefix apps/menu run dev\" \"npm --prefix apps/staff run dev\"",
     "build": "npm run build --workspaces --if-present",
-    "build:api": "npm run build --workspace=aba-payway-sdk-unofficial --workspace=api",
+    "build:api": "npm run build --workspace=aba-payway-sdk-unofficial && npm run build --workspace=api",
     "start": "npm run start --workspaces --if-present",
     "start:api": "npm run start --workspace=api"
   },

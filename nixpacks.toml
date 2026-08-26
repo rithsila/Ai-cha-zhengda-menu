@@ -5,7 +5,10 @@ nixPkgs = ["nodejs_20", "openssl"]
 cmds = ["npm ci"]
 
 [phases.build]
-cmds = ["npm run build:api"]
+cmds = [
+  "npm run build --workspace=aba-payway-sdk-unofficial",
+  "npm run build --workspace=api"
+]
 
 [start]
-cmd = "npm run start:api"
+cmd = "npm run start --workspace=api"
