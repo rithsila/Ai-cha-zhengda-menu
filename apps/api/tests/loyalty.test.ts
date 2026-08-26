@@ -39,7 +39,7 @@ describe('order creation reserves points', () => {
     expect(res.body.pointsRedeemed).toBe(100);
     expect(res.body.discountApplied).toBe(1);      // 100 pts / 100 per $ = $1
     expect(res.body.totalAmount).toBe(4);          // 5 - 1
-    expect(res.body.pointsEarned).toBe(40);        // floor(4 * 10)
+    expect(res.body.pointsEarned).toBe(10);        // 1 stamp = 10 pts for 1 item
     const user = await prisma.user.findUnique({ where: { telegramUserId: uid } });
     expect(user?.loyaltyPoints).toBe(100);         // 200 - 100 reserved
   });

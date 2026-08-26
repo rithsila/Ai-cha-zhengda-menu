@@ -181,7 +181,7 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(order.totalAmount).toBe(4.75);
     expect(order.discountApplied).toBe(1.00);
     expect(order.pointsRedeemed).toBe(100);
-    expect(order.pointsEarned).toBe(47);
+    expect(order.pointsEarned).toBe(20); // 2 items = 2 stamps = 20 points
     expect(order.status).toBe('pending');
     expect(order.pickupCode).toMatch(/^A-\d{3}$/);
     expect(order.pointsSettled).toBe(false);
@@ -204,9 +204,9 @@ describe('End-to-End System & Workflow Validation', () => {
     const completedOrder = await prisma.order.findUnique({ where: { id: order.id } });
     expect(completedOrder?.pointsSettled).toBe(true);
 
-    // Points settled: 300 - 100 reserved + 47 earned = 247 points
+    // Points settled: 300 - 100 reserved + 20 earned (2 items) = 220 points
     const userSettled = await prisma.user.findUnique({ where: { telegramUserId: customerTelegramId } });
-    expect(userSettled?.loyaltyPoints).toBe(247);
+    expect(userSettled?.loyaltyPoints).toBe(220);
   });
 
   it('4. Customer places a delivery order with ABA KHQR payment and webhook confirmation', async () => {
@@ -245,9 +245,9 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(paidOrder?.status).toBe('paid');
     expect(paidOrder?.pointsSettled).toBe(true);
 
-    // Earned 30 points on the $3.00 order
+    // Earned 10 points (1 stamp) on the 1-item order
     const afterPoints = (await prisma.user.findUnique({ where: { telegramUserId: customerTelegramId } }))!.loyaltyPoints;
-    expect(afterPoints).toBe(beforePoints + 30);
+    expect(afterPoints).toBe(beforePoints + 10);
   });
 
   it('5. Staff toggles item sold-out status', async () => {

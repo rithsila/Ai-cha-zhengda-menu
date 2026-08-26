@@ -885,23 +885,15 @@ export function createApp() {
 
           const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
 
-          // Points/stamps earned: only from paid portion of items where earnsStamp !== false
-          const totalItemsAmount = pricedItems.reduce((sum, p) => sum + p.price, 0);
-          const eligibleItemsAmount = pricedItems.reduce((sum, p) => {
+          // Stamps earned: 1 stamp (10 points) per paid eligible item (earnsStamp !== false)
+          const eligibleItemsCount = pricedItems.reduce((sum, p) => {
             const m = menuItems.find((item) => item.id === p.menuItemId);
-            return sum + (m && m.earnsStamp !== false ? p.price : 0);
+            return sum + (m && m.earnsStamp !== false ? p.quantity : 0);
           }, 0);
 
-          let pointsEarned = 0;
-          if (claimCount > 0) {
-            // Free item claimed: only remaining paid portion of stamp-eligible items earns stamps
-            const paidStampAmount = Math.max(0, eligibleItemsAmount - discountApplied);
-            pointsEarned = Math.floor(paidStampAmount * EARN_POINTS_PER_DOLLAR);
-          } else {
-            // Normal checkout (with or without points cash discount)
-            const stampRatio = totalItemsAmount > 0 ? eligibleItemsAmount / totalItemsAmount : 1;
-            pointsEarned = Math.floor(finalAmount * EARN_POINTS_PER_DOLLAR * stampRatio);
-          }
+          const paidEligibleCount = Math.max(0, eligibleItemsCount - claimCount);
+          const pointsPerStamp = Math.max(1, Math.round(POINTS_PER_DOLLAR / 10));
+          const pointsEarned = paidEligibleCount * pointsPerStamp;
 
           if (telegramUserId && pointsRedeemed > 0) {
             await tx.user.update({

@@ -308,13 +308,12 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
 
               {/* Stamps Earned Tag */}
               {!isCancelled && (order.pointsEarned ?? 0) > 0 && (() => {
-                const stamps = (order.pointsEarned ?? 0) / 10;
-                const displayCount = stamps % 1 === 0 ? stamps : stamps.toFixed(1);
+                const stamps = Math.max(1, Math.round((order.pointsEarned ?? 0) / 10));
                 return (
                   <div className="mb-3">
                     <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
                       <Sparkle size={14} weight="fill" />
-                      +{displayCount} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
+                      +{stamps} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
                     </span>
                   </div>
                 );
