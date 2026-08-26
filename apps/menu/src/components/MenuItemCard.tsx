@@ -27,14 +27,16 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
            <img 
              src={item.imageFallback} 
              alt={t(item.name)} 
+             loading="lazy"
+             decoding="async"
              className="w-full h-full object-contain p-2" 
            />
          ) : (
            <div className="p-2.5 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-white/50 ring-1 ring-black/5">
              {isAiCha ? (
-               <img src="/images/aicha-icon-cropped.png" alt="Ai-Cha" className="h-10 w-auto object-contain drop-shadow-sm" />
+               <img src="/images/aicha-icon-cropped.webp" alt="Ai-Cha" className="h-10 w-auto object-contain drop-shadow-sm" />
              ) : (
-               <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className="h-10 w-auto object-contain drop-shadow-sm" />
+               <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-10 w-auto object-contain drop-shadow-sm" />
              )}
            </div>
          )}

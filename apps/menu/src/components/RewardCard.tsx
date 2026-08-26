@@ -42,8 +42,10 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
       <div className="relative w-full aspect-[1050/600] rounded-2xl overflow-hidden shadow-xl border-2 border-red-600/20 bg-red-600 select-none">
         {/* Card Template Background */}
         <img
-          src="/images/reward-card.jpg"
+          src="/images/reward-card.webp"
           alt="Ai-Cha & Zhengda Reward Card"
+          loading="eager"
+          decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
         />
 
@@ -65,7 +67,7 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
             >
               {isStamped ? (
                 <img
-                  src="/images/stamp-seal.png"
+                  src="/images/stamp-seal.webp"
                   alt={`Stamp ${slot.id}`}
                   className="w-full h-full object-contain filter drop-shadow-sm transition-transform duration-300 transform animate-in fade-in zoom-in-75"
                   style={{

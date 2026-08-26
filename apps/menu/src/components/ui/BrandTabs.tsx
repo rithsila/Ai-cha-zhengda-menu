@@ -17,7 +17,7 @@ export function BrandTabs({ activeBrand, onChange }: BrandTabsProps) {
             : 'text-white/90 hover:bg-white/10 hover:text-white'
         }`}
       >
-        <img src="/images/aicha-logo.png" alt="Ai-Cha" className={`h-8 w-auto object-contain transition-all duration-300 ${activeBrand === 'ai-cha' ? 'drop-shadow-sm' : 'opacity-70 grayscale hover:grayscale-0'}`} />
+        <img src="/images/aicha-logo.webp" alt="Ai-Cha" className={`h-8 w-auto object-contain transition-all duration-300 ${activeBrand === 'ai-cha' ? 'drop-shadow-sm' : 'opacity-70 grayscale hover:grayscale-0'}`} />
         Ai-Cha
       </button>
       <button
@@ -28,7 +28,7 @@ export function BrandTabs({ activeBrand, onChange }: BrandTabsProps) {
             : 'text-white/90 hover:bg-white/10 hover:text-white'
         }`}
       >
-        <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className={`h-8 w-auto object-contain transition-all duration-300 ${activeBrand === 'zhengda' ? 'drop-shadow-sm' : 'opacity-70 grayscale hover:grayscale-0'}`} />
+        <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className={`h-8 w-auto object-contain transition-all duration-300 ${activeBrand === 'zhengda' ? 'drop-shadow-sm' : 'opacity-70 grayscale hover:grayscale-0'}`} />
         Zhengda
       </button>
     </div>

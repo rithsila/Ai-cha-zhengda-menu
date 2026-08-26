@@ -106,12 +106,12 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           {/* Dual Brand Header Floating Badges */}
           <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md shadow-sm">
             <div className="flex items-center gap-1.5">
-              <img src="/images/aicha-logo.png" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
+              <img src="/images/aicha-logo.webp" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
               <span className="text-xs font-bold text-white tracking-wide">Ai-Cha</span>
             </div>
             <span className="text-white/30 text-xs font-light">✕</span>
             <div className="flex items-center gap-1.5">
-              <img src="/images/zhengda_logo_cropped.png" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
+              <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
               <span className="text-xs font-bold text-white tracking-wide">Zhengda</span>
             </div>
           </div>
@@ -213,7 +213,7 @@ export default function App() {
             name: item.name,
             description: item.description,
             basePrice: item.basePrice,
-            imageFallback: item.image,
+            imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
             isSoldOut: Boolean(item.isSoldOut),
             modifiers: item.modifiers?.map((g: any) => ({
               id: g.key || g.id,
@@ -239,8 +239,13 @@ export default function App() {
 
   useEffect(() => {
     fetchCatalog();
-    const interval = setInterval(fetchCatalog, 5000); // Poll catalog updates every 5s
-    return () => clearInterval(interval);
+    const handleFocus = () => fetchCatalog();
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(fetchCatalog, 60000); // Poll catalog updates every 60s
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, [fetchCatalog]);
 
   // Derived state for current brand's items
@@ -428,7 +433,7 @@ export default function App() {
       {/* Top Banner Section */}
       <div 
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
-        style={{ backgroundImage: 'url(/banner.png)' }}
+        style={{ backgroundImage: 'url(/banner.webp)' }}
       >
         <div className="absolute inset-0 bg-black/20 dark:bg-black/30 z-0 pointer-events-none"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 dark:from-black/50 to-transparent z-0 pointer-events-none"></div>
@@ -627,7 +632,7 @@ export default function App() {
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className={`fixed right-4 z-40 w-11 h-11 flex items-center justify-center hover:scale-110 transition-all duration-300 active:scale-95 cursor-pointer ${cart.length > 0 && !isCartOpen ? 'bottom-[9.5rem]' : 'bottom-20'}`}
           >
-            <img src="/images/aicha_scroll_top.png" alt="Scroll to top" className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
+            <img src="/images/aicha_scroll_top.webp" alt="Scroll to top" className="w-full h-full object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)]" />
           </motion.button>
         )}
       </AnimatePresence>

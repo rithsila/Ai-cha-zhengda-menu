@@ -86,7 +86,8 @@ export const CATALOG: MenuItem[] = [
     category: 'Cones',
     name: 'Matcha Ai-Scream Cone',
     description: 'Crispy cone with matcha soft serve',
-    basePrice: 0.50
+    basePrice: 0.50,
+    imageFallback: '/images/ai-scream-cone-matcha.webp'
   },
   {
     id: 'a2',
@@ -95,6 +96,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Brown Sugar Boba Milk',
     description: 'Classic signature drink',
     basePrice: 1.35,
+    imageFallback: '/images/ai-milk-tea-brown-sugar-pearl.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -104,6 +106,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Passion Fruit Frappe',
     description: 'Refreshing ice blend',
     basePrice: 1.50,
+    imageFallback: '/images/ai-cha-passion-fruit-jasmine.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -113,6 +116,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Fruity Signature Bucket',
     description: '1000ml giant tea',
     basePrice: 2.50,
+    imageFallback: '/images/ai-cha-hawaiian-fruit.webp',
     modifiers: [
       {
         id: 'size',
@@ -170,7 +174,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-scream Cone Sea Salt',
     description: 'Sea salt flavored ice cream cone with a unique sweet-savory taste.',
     basePrice: 0.50,
-    imageFallback: '/images/ai-scream-cone-sea-salt.png'
+    imageFallback: '/images/ai-scream-cone-sea-salt.webp'
     
   },
   {
@@ -180,7 +184,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-scream Cone Matcha',
     description: 'Delicious matcha-flavored cone ice cream.',
     basePrice: 0.50,
-    imageFallback: '/images/ai-scream-cone-matcha.png'
+    imageFallback: '/images/ai-scream-cone-matcha.webp'
     
   },
   {
@@ -190,7 +194,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-scream Cone Vanilla',
     description: 'Sweet vanilla-flavored cone ice cream.',
     basePrice: 0.50,
-    imageFallback: '/images/ai-scream-cone-vanilla.png'
+    imageFallback: '/images/ai-scream-cone-vanilla.webp'
     
   },
   {
@@ -300,7 +304,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-shake Grape',
     description: 'A shake drink with a combination of ice cream, green tea, grape jam, and Nata de Coco topping.',
     basePrice: 1.50,
-    imageFallback: '/images/ai-shake-grape.png',
+    imageFallback: '/images/ai-shake-grape.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -340,7 +344,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-smoothies Strawberry',
     description: 'Smooth ice smoothies with a touch of sweet strawberry flavor.',
     basePrice: 1.50,
-    imageFallback: '/images/ai-smoothies-strawberry.png',
+    imageFallback: '/images/ai-smoothies-strawberry.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -370,7 +374,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-smoothies Grapes',
     description: 'A smooth and sweet smoothie with hints of grape, peach, and green tea, topped with delicious yellow peach jelly.',
     basePrice: 1.50,
-    imageFallback: '/images/ai-smoothies-grapes.png',
+    imageFallback: '/images/ai-smoothies-grapes.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -420,7 +424,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-cha Succulent Grapes',
     description: 'Sweet iced green tea combined with grape jam and Nata de Coco topping.',
     basePrice: 1.50,
-    imageFallback: '/images/ai-cha-succulent-grapes.png',
+    imageFallback: '/images/ai-cha-succulent-grapes.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -450,7 +454,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-cha Yellow Peach Jasmine',
     description: 'A trendy tea drink with a hint of green tea aroma and yellow peach, enhanced by Nata de Coco and chewy jelly toppings.',
     basePrice: 1.50,
-    imageFallback: '/images/ai-cha-yellow-peach-jasmine.png',
+    imageFallback: '/images/ai-cha-yellow-peach-jasmine.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -470,7 +474,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-squash Haw Flakes',
     description: 'A unique beverage with the distinct fruity flavor of Haw Flakes (Sanca) and Nata de Coco topping.',
     basePrice: 1.20,
-    imageFallback: '/images/ai-squash-haw-flakes.png',
+    imageFallback: '/images/ai-squash-haw-flakes.webp',
     modifiers: DRINK_MODIFIERS
   },
   {
@@ -560,7 +564,7 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-milk Tea Pearl Choco',
     description: 'The deliciousness of milk tea with a combination of chocolate syrup and chewy boba topping.',
     basePrice: 1.35,
-    imageFallback: '/images/ai-milk-tea-pearl-choco.png',
+    imageFallback: '/images/ai-milk-tea-pearl-choco.webp',
     modifiers: DRINK_MODIFIERS
   },
 ];
