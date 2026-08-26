@@ -4,7 +4,6 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "prebuild": "npm --prefix ../../packages/aba-payway-sdk-unofficial run build",
     "build": "prisma generate && tsc",
     "start": "prisma db push --skip-generate && node dist/index.js",
     "test": "DATABASE_URL=file:./test.db npx prisma db push --skip-generate --accept-data-loss && DATABASE_URL=file:./test.db ALLOW_UNVERIFIED_TELEGRAM=1 vitest run --no-file-parallelism"
