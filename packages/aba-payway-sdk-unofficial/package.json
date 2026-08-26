@@ -1,0 +1,55 @@
+{
+  "name": "aba-payway-sdk-unofficial",
+  "version": "1.0.0",
+  "description": "Unofficial ABA PayWay payment gateway SDK for Cambodia — KHQR generation, purchase creation, status checking, and webhook verification",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run --exclude '**/integration/**'",
+    "test:watch": "vitest",
+    "test:sandbox": "vitest run tests/integration",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "aba",
+    "payway",
+    "khqr",
+    "cambodia",
+    "payment",
+    "bakong",
+    "qr"
+  ],
+  "author": "rithsila",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rithsila/aba-payway-unofficial.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rithsila/aba-payway-unofficial/issues"
+  },
+  "homepage": "https://github.com/rithsila/aba-payway-unofficial#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "dotenv": "^17.4.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
