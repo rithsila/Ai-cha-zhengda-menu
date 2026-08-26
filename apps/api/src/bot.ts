@@ -22,9 +22,9 @@ export const setupBot = () => {
 
     if (user && user.phoneNumber) {
       return ctx.reply(
-        '👋 Welcome back to Ai-Cha & Zhengda!\n\n' +
-        '• Tap below to open the customer menu.\n' +
-        '• To report an issue or send feedback, type <code>/report your message</code>.',
+        '👋 Welcome back to Ai-Cha & Zhengda Arakawa!\n\n' +
+        '• Tap below to open the menu.\n' +
+        '• To report or feedback, type <code>/report your message</code>.',
         {
           parse_mode: 'HTML',
           reply_markup: {
