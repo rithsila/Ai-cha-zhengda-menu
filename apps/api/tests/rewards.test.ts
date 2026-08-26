@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
+import { issueToken } from '../src/auth';
 
 const app = createApp();
 let managerToken = '';
 const auth = (r: request.Test) => r.set('Authorization', `Bearer ${managerToken}`);
 
 beforeAll(async () => {
-  process.env.MANAGER_PIN = '9999';
-  const login = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-  managerToken = login.body.token;
+  managerToken = issueToken('manager').token;
 });
 
 describe('rewards API', () => {

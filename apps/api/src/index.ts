@@ -1,13 +1,10 @@
 import 'dotenv/config';
 import { createApp, prisma } from './app';
 import { setupBot } from './bot';
-import { assertPinsConfigured } from './auth';
 import { warnIfDevIdentityAllowed } from './telegram-initdata';
 import { configureSqlite } from './db';
 import { startExpirySweep } from './expiry';
 
-// Fail fast rather than boot a production server on the default PINs.
-assertPinsConfigured();
 warnIfDevIdentityAllowed();
 
 const app = createApp();

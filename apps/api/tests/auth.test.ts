@@ -1,32 +1,31 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { clearLoginAttempts } from '../src/auth';
+import { clearSessions, clearLoginAttempts, issueToken, verifyToken } from '../src/auth';
 
 const app = createApp();
 let managerToken = '';
 
 beforeAll(async () => {
-  process.env.STAFF_PIN = '1234';
-  process.env.MANAGER_PIN = '9999';
-  const login = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-  managerToken = login.body.token;
+  clearSessions();
+  const session = issueToken('manager');
+  managerToken = session.token;
 });
 
-describe('POST /api/auth/staff-login', () => {
-  it('accepts correct staff pin', async () => {
-    const res = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+describe('Staff Token Authentication', () => {
+  it('issues valid token with role', () => {
+    const staffSession = issueToken('staff');
+    expect(verifyToken(staffSession.token)).toBe('staff');
   });
-  it('rejects wrong manager pin', async () => {
-    const res = await request(app).post('/api/auth/staff-login').send({ pin: '0000', role: 'manager' });
-    expect(res.status).toBe(401);
-    clearLoginAttempts(); // do not let this one failure creep towards the lockout
+
+  it('verifies manager token correctly', () => {
+    const mgrSession = issueToken('manager');
+    expect(verifyToken(mgrSession.token)).toBe('manager');
   });
-  it('rejects missing role', async () => {
-    const res = await request(app).post('/api/auth/staff-login').send({ pin: '1234' });
-    expect(res.status).toBe(400);
+
+  it('rejects invalid or missing token', () => {
+    expect(verifyToken('non-existent-token')).toBeNull();
+    expect(verifyToken(undefined)).toBeNull();
   });
 });
 

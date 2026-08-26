@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { issueToken } from '../src/auth';
 import { asCustomer } from './helpers/customer';
 
 const app = createApp();
@@ -10,9 +11,7 @@ const itemId = `test-item-${randomUUID()}`;
 let managerToken = '';
 
 beforeAll(async () => {
-  process.env.MANAGER_PIN = '9999';
-  const login = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-  managerToken = login.body.token;
+  managerToken = issueToken('manager').token;
   await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 100 } });
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Cfg Tea', basePrice: 10.0 },

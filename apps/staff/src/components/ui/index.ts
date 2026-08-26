@@ -16,9 +16,6 @@ export type { BadgeProps, BadgeVariant } from './Badge';
 export { Card } from './Card';
 export type { CardProps } from './Card';
 
-export { PinScreen } from './PinScreen';
-export type { PinScreenProps } from './PinScreen';
-
 export { TelegramAuthScreen } from './TelegramAuthScreen';
 
 export { ToastProvider, useToast } from './Toast';

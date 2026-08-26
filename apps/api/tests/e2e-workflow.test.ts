@@ -2,12 +2,11 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
 import crypto from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { issueToken } from '../src/auth';
 import { enableAba, postWebhook, stubAbaFetch, approvedStatus } from './helpers/aba';
 
 const app = createApp();
 const BOT_TOKEN = 'test-bot-token-e2e';
-const MANAGER_PIN = '9999';
-const STAFF_PIN = '1234';
 
 function generateTelegramLogin(fields: Record<string, string>, botToken: string) {
   const checkString = Object.keys(fields).sort().map(k => `${k}=${fields[k]}`).join('\n');
@@ -33,8 +32,6 @@ describe('End-to-End System & Workflow Validation', () => {
 
   beforeAll(async () => {
     process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
-    process.env.MANAGER_PIN = MANAGER_PIN;
-    process.env.STAFF_PIN = STAFF_PIN;
     delete process.env.ABA_WEBHOOK_SECRET; // skip signature check for mock ABA test
 
     // Reset database config
@@ -100,10 +97,8 @@ describe('End-to-End System & Workflow Validation', () => {
     });
     snackItemId = snack.id;
 
-    const staffLogin = await request(app).post('/api/auth/staff-login').send({ pin: STAFF_PIN, role: 'staff' });
-    staffToken = staffLogin.body.token;
-    const managerLogin = await request(app).post('/api/auth/staff-login').send({ pin: MANAGER_PIN, role: 'manager' });
-    managerToken = managerLogin.body.token;
+    staffToken = issueToken('staff').token;
+    managerToken = issueToken('manager').token;
   });
 
   it('1. Customer browses full multi-brand catalog and branches', async () => {
@@ -277,12 +272,7 @@ describe('End-to-End System & Workflow Validation', () => {
   });
 
   it('6. Manager Mode: Config rates, analytics, points adjustment, and rewards management', async () => {
-    // 1. Manager auth verification
-    const loginRes = await request(app).post('/api/auth/staff-login').send({ pin: MANAGER_PIN, role: 'manager' });
-    expect(loginRes.status).toBe(200);
-    expect(loginRes.body.ok).toBe(true);
-
-    // 2. Manager updates loyalty rates
+    // 1. Manager updates loyalty rates
     const updateRateRes = await request(app).put('/api/config')
       .set(managerAuth())
       .send({ key: 'pointsPerDollar', value: '50' });

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } 
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { issueToken } from '../src/auth';
 import { enableAba, disableAba, stubAbaFetch } from './helpers/aba';
 import { asCustomer } from './helpers/customer';
 
@@ -37,8 +38,7 @@ beforeAll(async () => {
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'ACL Tea', basePrice: 4.0 },
   });
-  const login = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
-  staffToken = login.body.token;
+  staffToken = issueToken('staff').token;
 });
 
 beforeEach(() => { enableAba(); stubAbaFetch(); });
