@@ -11,9 +11,6 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
  */
 const sessions = new Map<string, { role: StaffRole; expiresAt: number }>();
 
-export const staffPin = () => process.env.STAFF_PIN || '1234';
-export const managerPin = () => process.env.MANAGER_PIN || '9999';
-
 export const staffTelegramIds = () =>
   (process.env.STAFF_TELEGRAM_IDS || '')
     .split(',')
@@ -302,7 +299,7 @@ export const loginRateLimit: RequestHandler = (req, res, next) => {
   next();
 };
 
-/** Call after a wrong PIN. Locks the IP once it runs out of attempts. */
+/** Call after a failed login. Locks the IP once it runs out of attempts. */
 export function recordFailedLogin(req: { ip?: string; socket?: { remoteAddress?: string } }) {
   const key = clientKey(req);
   const entry = loginAttempts.get(key) ?? { failures: 0, lockedUntil: 0 };
@@ -311,7 +308,7 @@ export function recordFailedLogin(req: { ip?: string; socket?: { remoteAddress?:
   loginAttempts.set(key, entry);
 }
 
-/** Call after a correct PIN — a real staff member should not stay locked out. */
+/** Call after a successful login — a real staff member should not stay locked out. */
 export function clearFailedLogins(req: { ip?: string; socket?: { remoteAddress?: string } }) {
   loginAttempts.delete(clientKey(req));
 }
@@ -321,21 +318,3 @@ export function clearLoginAttempts() {
   loginAttempts.clear();
 }
 
-/**
- * Boot check. In production a missing PIN must stop the server, because the
- * fallback would silently be the published default (1234 / 9999).
- */
-export function assertPinsConfigured() {
-  const missing = ['STAFF_PIN', 'MANAGER_PIN'].filter((k) => !process.env[k]);
-  if (missing.length === 0) return;
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      `Refusing to start: ${missing.join(' and ')} must be set in production. ` +
-      'Without them the dashboard would accept the default PINs 1234 / 9999.'
-    );
-  }
-  console.warn(
-    `WARNING: ${missing.join(' and ')} not set — using the development default PINs ` +
-    '(staff 1234, manager 9999). Set real PINs before deploying.'
-  );
-}

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import crypto, { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
-import { clearLoginAttempts } from '../src/auth';
+import { clearLoginAttempts, issueToken } from '../src/auth';
 import { verifyInitData } from '../src/telegram-initdata';
 import { asCustomer, signInitData } from './helpers/customer';
 
@@ -26,9 +26,6 @@ const staffAuth = () => ({ Authorization: `Bearer ${staffToken}` });
 const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
 
 beforeAll(async () => {
-  process.env.STAFF_PIN = '1234';
-  process.env.MANAGER_PIN = '9999';
-
   await prisma.systemConfig.deleteMany({
     where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
   });
@@ -47,10 +44,8 @@ beforeAll(async () => {
   });
   await prisma.user.create({ data: { telegramUserId: attacker, loyaltyPoints: 0 } });
 
-  const staffLogin = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
-  staffToken = staffLogin.body.token;
-  const managerLogin = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-  managerToken = managerLogin.body.token;
+  staffToken = issueToken('staff').token;
+  managerToken = issueToken('manager').token;
 
   const victimOrder = await request(app).post('/api/orders').set(asCustomer(victim)).send({
     items: [{ menuItemId: itemId, quantity: 1, selectedModifiers: {} }],
@@ -387,35 +382,18 @@ describe('CORS and security headers', () => {
   });
 });
 
-describe('POST /api/auth/staff-login brute force', () => {
+describe('Staff login rate limit brute force', () => {
   afterAll(() => { clearLoginAttempts(); });
 
-  it('locks the caller out with 429 after repeated wrong PINs', async () => {
+  it('locks the caller out with 429 after repeated failed attempts', async () => {
     clearLoginAttempts();
     const codes: number[] = [];
     for (let i = 0; i < 12; i++) {
-      const res = await request(app).post('/api/auth/staff-login').send({ pin: '0000', role: 'manager' });
+      const res = await request(app).post('/api/auth/staff/send-otp').send({ phoneNumber: '+85512999000' });
       codes.push(res.status);
     }
-    expect(codes.filter((c) => c === 401).length).toBe(5); // 5 tries, then the door shuts
+    expect(codes.filter((c) => c === 403).length).toBe(5); // 5 tries, then the door shuts
     expect(codes[codes.length - 1]).toBe(429);
-
-    // Even the right PIN is refused while the lock is on.
-    const correct = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-    expect(correct.status).toBe(429);
-  });
-
-  it('forgets the failures after a successful login', async () => {
-    clearLoginAttempts();
-    for (let i = 0; i < 4; i++) {
-      await request(app).post('/api/auth/staff-login').send({ pin: '0000', role: 'staff' });
-    }
-    const ok = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
-    expect(ok.status).toBe(200);
-
-    // The counter was reset, so the next wrong PIN is a plain 401 again.
-    const again = await request(app).post('/api/auth/staff-login').send({ pin: '0000', role: 'staff' });
-    expect(again.status).toBe(401);
   });
 });
 
@@ -441,10 +419,10 @@ describe('GET /api/orders — no order may be hidden by the branch filter', () =
     const withBranch = await mk(branch.id, 'B-001');
     const noBranch = await mk(null, 'B-002');
 
-    const login = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
+    const staffSession = issueToken('staff');
     const res = await request(app)
       .get(`/api/orders?branchId=${branch.id}`)
-      .set('Authorization', `Bearer ${login.body.token}`);
+      .set('Authorization', `Bearer ${staffSession.token}`);
 
     expect(res.status).toBe(200);
     const ids = res.body.map((o: any) => o.id);

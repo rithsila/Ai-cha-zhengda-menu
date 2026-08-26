@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { issueToken } from '../src/auth';
 
 const app = createApp();
 const uid = `test-${randomUUID()}`;
@@ -10,9 +11,7 @@ let managerToken = '';
 const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
 
 beforeAll(async () => {
-  process.env.MANAGER_PIN = '9999';
-  const login = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-  managerToken = login.body.token;
+  managerToken = issueToken('manager').token;
   await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 50 } });
 });
 

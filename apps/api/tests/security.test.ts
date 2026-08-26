@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
+import { issueToken, verifyToken } from '../src/auth';
 import { asCustomer } from './helpers/customer';
 
 const app = createApp();
@@ -25,7 +26,8 @@ beforeAll(async () => {
 
   await prisma.menuItem.create({
     data: {
-      id: itemId, brand: 'ai-cha', category: 'Test', name: 'Secure Tea', basePrice: 2.0,
+      id: itemId, brand: 'ai-cha', category: 'Test', name: 'Secure Tea',
+      basePrice: 2.0, isSoldOut: false,
       modifiers: {
         create: [{
           key: 'toppings', name: 'Toppings', type: 'multiple',
@@ -44,10 +46,8 @@ beforeAll(async () => {
 
   await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 100 } });
 
-  const login = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
-  staffToken = login.body.token;
-  const managerLogin = await request(app).post('/api/auth/staff-login').send({ pin: '9999', role: 'manager' });
-  managerToken = managerLogin.body.token;
+  staffToken = issueToken('staff').token;
+  managerToken = issueToken('manager').token;
 
   const created = await request(app).post('/api/orders').send({
     items: [{ menuItemId: itemId, quantity: 1, totalPrice: 2.0, selectedModifiers: {} }],
@@ -56,17 +56,12 @@ beforeAll(async () => {
   orderId = created.body.id;
 });
 
-describe('staff login', () => {
-  it('returns a token with an expiry', async () => {
-    const res = await request(app).post('/api/auth/staff-login').send({ pin: '1234', role: 'staff' });
-    expect(res.status).toBe(200);
-    expect(typeof res.body.token).toBe('string');
-    expect(res.body.expiresAt).toBeGreaterThan(Date.now());
-  });
-
-  it('rejects a wrong PIN', async () => {
-    const res = await request(app).post('/api/auth/staff-login').send({ pin: '0000', role: 'staff' });
-    expect(res.status).toBe(401);
+describe('staff token sessions', () => {
+  it('returns a token with an expiry', () => {
+    const session = issueToken('staff');
+    expect(typeof session.token).toBe('string');
+    expect(session.expiresAt).toBeGreaterThan(Date.now());
+    expect(verifyToken(session.token)).toBe('staff');
   });
 });
 

@@ -9,7 +9,7 @@ import {
   isValidBuilding, isValidRoom, isValidName, isValidPhone, normalizePhone, formatAddress,
 } from './address';
 import {
-  issueToken, requireStaff, requireManager, staffPin, managerPin,
+  issueToken, requireStaff, requireManager,
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
   roleForTelegramId, resolveStaffAccount, adminTelegramIds,
   resolveStaffByPhone, createStaffOtp, verifyStaffOtpCode, canonicalPhone, adminPhoneNumbers,
@@ -296,21 +296,6 @@ export function createApp() {
       console.error('Error in verify-otp:', error);
       res.status(500).json({ error: 'Internal server error while verifying code.' });
     }
-  });
-
-  app.post('/api/auth/staff-login', loginRateLimit, (req, res) => {
-    const { pin, role } = req.body || {};
-    if (typeof pin !== 'string' || (role !== 'staff' && role !== 'manager')) {
-      return res.status(400).json({ error: 'pin and role are required' });
-    }
-    const expected = role === 'manager' ? managerPin() : staffPin();
-    if (pin !== expected) {
-      recordFailedLogin(req);
-      return res.status(401).json({ error: 'Invalid PIN' });
-    }
-    clearFailedLogins(req);
-    const { token, expiresAt } = issueToken(role);
-    res.json({ ok: true, token, role, expiresAt });
   });
 
   // ABA PayWay client. Built per call, not once at startup, so the server picks
