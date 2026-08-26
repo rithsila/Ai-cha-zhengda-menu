@@ -47,7 +47,10 @@ function isOriginAllowed(origin?: string): boolean {
     if (
       parsed.hostname === 'localhost' ||
       parsed.hostname === '127.0.0.1' ||
-      parsed.hostname.endsWith('.localhost')
+      parsed.hostname.endsWith('.localhost') ||
+      parsed.hostname.endsWith('.workers.dev') ||
+      parsed.hostname.endsWith('.pages.dev') ||
+      parsed.hostname.includes('aichazhengdaarakawa.com')
     ) {
       return true;
     }
