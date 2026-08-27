@@ -341,7 +341,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <Users className="size-4 text-accent" />
-            <h3 className="font-bold text-ink">Customer Database</h3>
+            <h3 className="font-bold text-ink">Customers</h3>
             <Badge variant="default" className="text-[11px]">
               {pagination ? `${pagination.total} matching` : `${customers.length} records`}
             </Badge>
@@ -524,7 +524,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                           }}
                           className="h-8 px-3 text-xs font-bold"
                         >
-                          {isSelected ? 'Close' : 'Select / Adjust'}
+                          {isSelected ? 'Close' : 'Edit'}
                         </Button>
                       </td>
                     </tr>
