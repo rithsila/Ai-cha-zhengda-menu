@@ -61,20 +61,14 @@ export function RewardCard({
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* Tier badge in bottom of card */}
-        <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none">
-          {isGold ? (
-            <div className="bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 px-2.5 py-0.5 rounded-full text-[11px] font-black shadow-md border border-amber-200/90 backdrop-blur-md flex items-center gap-1">
-              <span>⭐</span>
-              <span>Gold VIP</span>
+        {/* Gold VIP star badge — top-left corner, only for gold */}
+        {isGold && (
+          <div className="absolute -top-1 -left-1 z-10 pointer-events-none">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center shadow-lg border-2 border-white/80 text-base">
+              ⭐
             </div>
-          ) : (
-            <div className="bg-black/55 text-white/95 px-2 py-0.5 rounded-full text-[10px] font-bold border border-white/20 backdrop-blur-md flex items-center gap-1 shadow-sm">
-              <span>🛡️</span>
-              <span>Standard</span>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* 10 Stamp Seal Slots */}
         {STAMP_SLOTS.map((slot, index) => {
