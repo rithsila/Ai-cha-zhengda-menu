@@ -26,6 +26,7 @@ import { OrdersView } from './components/OrdersView';
 import { RewardsView } from './components/RewardsView';
 import { AccountView } from './components/AccountView';
 import { Button } from './components/ui/Button';
+import { DevPersonaBar } from './components/DevPersonaBar';
 
 type TabId = 'menu' | 'orders' | 'rewards' | 'account';
 
@@ -449,6 +450,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-tg-bg text-tg-text pb-44">
+      <DevPersonaBar />
       {/* Top Banner Section */}
       <div 
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"

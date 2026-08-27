@@ -178,12 +178,41 @@ export function createApp() {
       return res.status(403).json({ error: 'Not available in production' });
     }
     try {
-      const { telegramUserId = 'dev_test_customer', firstName = 'Test', lastName = 'Customer' } = req.body || {};
+      const {
+        telegramUserId = 'dev_test_customer',
+        firstName = 'Test',
+        lastName = 'Customer',
+        tier = 'standard',
+        loyaltyPoints = 50,
+        luckyTickets = 2,
+        phoneNumber = '+85512345678',
+        building = 'A',
+        roomNumber = '1110',
+      } = req.body || {};
       const uid = String(telegramUserId).trim();
       await prisma.user.upsert({
         where: { telegramUserId: uid },
-        update: { firstName, lastName },
-        create: { telegramUserId: uid, firstName, lastName, loyaltyPoints: 150 },
+        update: {
+          firstName,
+          lastName,
+          tier: tier === 'gold' ? 'gold' : 'standard',
+          loyaltyPoints: Number.isFinite(Number(loyaltyPoints)) ? Number(loyaltyPoints) : 50,
+          luckyTickets: Number.isFinite(Number(luckyTickets)) ? Number(luckyTickets) : 2,
+          phoneNumber,
+          building,
+          roomNumber,
+        },
+        create: {
+          telegramUserId: uid,
+          firstName,
+          lastName,
+          tier: tier === 'gold' ? 'gold' : 'standard',
+          loyaltyPoints: Number.isFinite(Number(loyaltyPoints)) ? Number(loyaltyPoints) : 50,
+          luckyTickets: Number.isFinite(Number(luckyTickets)) ? Number(luckyTickets) : 2,
+          phoneNumber,
+          building,
+          roomNumber,
+        },
       });
       const { token, expiresAt } = issueCustomerToken(uid);
       res.json({ ok: true, token, telegramUserId: uid, expiresAt });
