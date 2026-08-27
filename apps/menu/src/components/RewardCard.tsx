@@ -30,8 +30,8 @@ export function RewardCard({
   points,
   pointsPerDollar = 100,
   tier = 'standard',
-  orderCount = 0,
-  goldThreshold = 3,
+  orderCount: _orderCount = 0,
+  goldThreshold: _goldThreshold = 3,
 }: RewardCardProps) {
   const { t } = useTranslation();
 
@@ -46,29 +46,13 @@ export function RewardCard({
   const stampsRemaining = 10 - currentStamps;
 
   const isGold = tier === 'gold';
-  const effectiveThreshold = goldThreshold > 0 ? goldThreshold : 3;
-  const currentOrders = Math.min(orderCount, effectiveThreshold);
 
   return (
     <div className="flex flex-col gap-2.5 w-full">
-      {/* Top Header with Stamp Title & Member Badge */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-1.5 font-bold text-xs text-tg-text">
-          <span>🥣</span>
-          <span>{t('loyaltyStampCard', 'Stamp Card')}</span>
-        </div>
-        {isGold ? (
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 font-black text-xs shadow-xs border border-amber-300">
-            <span>⭐</span>
-            <span>{t('goldMember', 'Gold VIP')}</span>
-          </div>
-        ) : (
-          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-tg-secondary-bg text-tg-hint font-bold text-xs border border-tg-hint/15">
-            <span>🛡️</span>
-            <span>{t('standardMember', 'Standard')}</span>
-            <span className="text-[10px] opacity-75">({currentOrders}/{effectiveThreshold})</span>
-          </div>
-        )}
+      {/* Top Header */}
+      <div className="flex items-center gap-1.5 font-bold text-xs text-tg-text px-1">
+        <span>🥣</span>
+        <span>{t('loyaltyStampCard', 'Stamp Card')}</span>
       </div>
 
       {/* Physical Card Mockup Container */}
@@ -81,6 +65,21 @@ export function RewardCard({
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
         />
+
+        {/* Tier badge in bottom of card */}
+        <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none">
+          {isGold ? (
+            <div className="bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 px-2.5 py-0.5 rounded-full text-[11px] font-black shadow-md border border-amber-200/90 backdrop-blur-md flex items-center gap-1">
+              <span>⭐</span>
+              <span>Gold VIP</span>
+            </div>
+          ) : (
+            <div className="bg-black/55 text-white/95 px-2 py-0.5 rounded-full text-[10px] font-bold border border-white/20 backdrop-blur-md flex items-center gap-1 shadow-sm">
+              <span>🛡️</span>
+              <span>Standard</span>
+            </div>
+          )}
+        </div>
 
         {/* 10 Stamp Seal Slots */}
         {STAMP_SLOTS.map((slot, index) => {
