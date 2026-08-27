@@ -173,7 +173,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
             exit={{ opacity: 0, y: -8 }}
             className="bg-green-500/15 border border-green-500/30 rounded-2xl p-4 flex items-start gap-3"
           >
-            <CheckCircle size={24} weight="fill" className="text-green-600 dark:text-green-400 flex-shrink-0" />
+            <CheckCircle size={24} weight="fill" className="text-green-600 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="font-bold text-tg-text">{t('paymentDone', 'Payment done')}</h3>
               <p className="text-sm text-tg-hint">
@@ -295,7 +295,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       {cancelled ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-500/15 text-red-600 dark:text-red-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-500/15 text-red-600">
                           <X size={14} weight="bold" />
                           {t('orderCancelled', 'Cancelled')}
                         </span>

@@ -1,20 +1,5 @@
 @import "tailwindcss";
 
-/*
-  Dark mode strategy
-  ------------------
-  1. Inside Telegram, colors come from the live `--tg-theme-*` variables, which
-     already follow the user's Telegram light/dark (and custom) theme. This is
-     the primary mechanism and keeps the "native Telegram feel".
-  2. A `data-theme="light|dark"` attribute on <html> (set by JS from Telegram's
-     `colorScheme` or, in a plain browser, from `prefers-color-scheme`) drives:
-       - the Tailwind `dark:` variant (for things one Telegram variable cannot
-         express: status chips, shadows, scrims, image overlays), and
-       - the fallback palette below, so the app still renders correctly in a
-         plain browser (dev) where `--tg-theme-*` do not exist.
-*/
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
-
 :root,
 [data-theme="light"] {
   color-scheme: light;
@@ -23,17 +8,6 @@
   --tg-text: #0f172a;
   --tg-hint: #64748b;
   --tg-link: #2563eb;
-  --tg-primary: #e53935;
-  --tg-primary-text: #ffffff;
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-  --tg-bg: #0c1222;
-  --tg-secondary-bg: #162035;
-  --tg-text: #f8fafc;
-  --tg-hint: #94a3b8;
-  --tg-link: #60a5fa;
   --tg-primary: #e53935;
   --tg-primary-text: #ffffff;
 }

@@ -128,20 +128,20 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
     switch (status) {
       case 'pending':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/15 text-yellow-700 dark:text-yellow-300">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/15 text-yellow-700">
             <Clock size={13} weight="bold" />
             {t('pending', 'Pending')}
           </span>
         );
       case 'preparing':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-700 dark:text-blue-300">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-700">
             {t('preparing', 'Preparing')}
           </span>
         );
       case 'ready':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-500/15 text-green-700 dark:text-green-300">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-500/15 text-green-700">
             <CheckCircle size={13} weight="bold" />
             {t('ready', 'Ready')}
           </span>
@@ -154,7 +154,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
         );
       case 'cancelled':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
             <X size={13} weight="bold" />
             {t('cancelled', 'Cancelled')}
           </span>
@@ -206,7 +206,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
             exit={{ opacity: 0, y: -8 }}
             className="bg-green-500/15 border border-green-500/30 rounded-2xl p-4 flex items-start gap-3"
           >
-            <CheckCircle size={24} weight="fill" className="text-green-600 dark:text-green-400 flex-shrink-0" />
+            <CheckCircle size={24} weight="fill" className="text-green-600 flex-shrink-0" />
             <div className="flex-1">
               <h3 className="font-bold text-tg-text">{t('paymentDone', 'Payment done')}</h3>
               <p className="text-sm text-tg-hint">

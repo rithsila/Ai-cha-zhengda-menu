@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, House, Storefront, Sun, Moon, CreditCard, Money } from '@phosphor-icons/react';
+import { User, House, Storefront, CreditCard, Money } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { SignInPrompt } from './SignInPrompt';
 import { AddressForm, AddressSummary } from './AddressForm';
 import { isValidBuilding, isValidRoom, formatPhone, SHOP_UNIT, RESIDENCE_NAME } from '../utils/address';
-import { useTheme } from '../hooks/useTelegramTheme';
 import { useOnlinePaymentState } from '../utils/onlinePayment';
 import {
   getDefaultPaymentMethod,
@@ -20,7 +19,6 @@ interface AccountViewProps {
 
 export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const { t } = useTranslation();
-  const { isDark, toggleTheme } = useTheme();
   const khqrOffered = useOnlinePaymentState() === 'available';
   const [defaultMethod, setMethod] = useState<PaymentMethod>(() => getDefaultPaymentMethod());
   const [profile, setProfile] = useState<any>(null);
@@ -201,36 +199,6 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
             );
           })}
         </div>
-      </div>
-
-      {/* Appearance / Theme Settings */}
-      <div className="bg-tg-secondary-bg rounded-2xl p-5 shadow-sm border border-tg-hint/10 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-            {isDark ? <Moon size={22} weight="fill" /> : <Sun size={22} weight="fill" />}
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-tg-text">{t('appearance', 'Appearance')}</div>
-            <div className="text-xs text-tg-hint font-medium">
-              {isDark ? t('darkMode', 'Dark Mode') : t('lightMode', 'Light Mode')}
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-          className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none cursor-pointer ${
-            isDark ? 'bg-brand-primary' : 'bg-tg-hint/25'
-          }`}
-        >
-          <span
-            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-              isDark ? 'translate-x-7' : 'translate-x-1'
-            }`}
-          />
-        </button>
       </div>
 
       {/* Shop info */}

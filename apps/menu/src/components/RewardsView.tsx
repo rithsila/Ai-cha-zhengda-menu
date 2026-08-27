@@ -182,12 +182,12 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
                           order.status === 'completed'
                             ? 'bg-tg-hint/15 text-tg-hint'
                             : order.status === 'ready'
-                            ? 'bg-green-500/15 text-green-700 dark:text-green-300'
+                            ? 'bg-green-500/15 text-green-700'
                             : order.status === 'preparing'
-                            ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+                            ? 'bg-blue-500/15 text-blue-700'
                             : order.status === 'cancelled'
-                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                            : 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300'
+                            ? 'bg-rose-500/15 text-rose-600'
+                            : 'bg-yellow-500/15 text-yellow-700'
                         }`}
                       >
                         {order.status}

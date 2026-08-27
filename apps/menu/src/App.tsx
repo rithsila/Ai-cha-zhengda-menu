@@ -435,8 +435,8 @@ export default function App() {
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
         style={{ backgroundImage: 'url(/banner.webp)' }}
       >
-        <div className="absolute inset-0 bg-black/20 dark:bg-black/30 z-0 pointer-events-none"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 dark:from-black/50 to-transparent z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-black/20 z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent z-0 pointer-events-none"></div>
         
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
@@ -582,7 +582,7 @@ export default function App() {
       </div>
 
       {/* Bottom Navigation (Apple Liquid Glass Compact Dock) */}
-      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] bg-gradient-to-b from-white/30 via-white/20 to-white/10 dark:from-slate-850/80 dark:via-slate-900/80 dark:to-slate-950/85 backdrop-blur-2xl border border-white/40 dark:border-white/20 shadow-[0_12px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-1 px-2 flex justify-between items-center z-20">
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] bg-gradient-to-b from-white/30 via-white/20 to-white/10 backdrop-blur-2xl border border-white/40 shadow-[0_12px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-1 px-2 flex justify-between items-center z-20">
         {TABS.map(({ id, Icon, labelKey, labelFallback }) => {
           const isActive = activeTab === id;
           return (
