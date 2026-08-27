@@ -508,9 +508,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const openCount = openOrders.length;
   const showBranch = selectedBranch === '' && branches.length > 1;
 
-  const currentBranchName =
-    branches.find((b) => b.id === selectedBranch)?.name || 'All Branches';
-
   const navItems = [
     {
       id: 'orders' as TabId,
@@ -730,9 +727,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                       ? 'Menu & Stock'
                       : 'Admin'}
                 </h2>
-                <Badge variant="default" className="hidden sm:inline-flex">
-                  {currentBranchName}
-                </Badge>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
                 {activeTab === 'orders'
