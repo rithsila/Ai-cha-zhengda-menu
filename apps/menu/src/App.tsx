@@ -27,6 +27,7 @@ import { RewardsView } from './components/RewardsView';
 import { AccountView } from './components/AccountView';
 import { Button } from './components/ui/Button';
 import { DevPersonaBar } from './components/DevPersonaBar';
+import { LuckyWheelIcon } from './components/ui/LuckyWheelIcon';
 
 type TabId = 'menu' | 'orders' | 'rewards' | 'account';
 
@@ -198,6 +199,19 @@ export default function App() {
   const [pickupCode, setPickupCode] = useState('');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
+  const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
+  const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/lucky-draw/config')
+      .then(async (res) => {
+        if (res.ok) {
+          const cfg = await res.json();
+          setLuckyDrawEnabled(cfg.enabled !== false);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -477,6 +491,17 @@ export default function App() {
                 <MagnifyingGlass size={20} weight={isSearchVisible ? "bold" : "regular"} />
               </button>
             )}
+            {activeTab === 'rewards' && luckyDrawEnabled && (
+              <button 
+                type="button"
+                onClick={() => setLuckyDrawOpen(true)} 
+                aria-label={t('spinLuckyWheel', 'Lucky Draw Wheel')}
+                title={t('spinLuckyWheel', 'Lucky Draw Wheel')}
+                className="flex items-center justify-center p-0.5 rounded-full hover:scale-110 active:scale-95 transition-transform drop-shadow-md focus:outline-none"
+              >
+                <LuckyWheelIcon size={38} />
+              </button>
+            )}
             <button onClick={cycleLanguage} className="bg-black/30 hover:bg-black/40 border border-white/20 backdrop-blur-md p-3 rounded-xl text-white flex items-center gap-2 font-bold text-sm transition-colors shadow-sm">
               <Translate size={20} /> {i18n.language.toUpperCase()}
             </button>
@@ -547,7 +572,13 @@ export default function App() {
 
       <div className="px-4 pt-4">
         {activeTab === 'orders' && <OrdersView onReorder={handleReorder} onBrowseMenu={() => setActiveTab('menu')} />}
-        {activeTab === 'rewards' && <RewardsView onBrowseMenu={() => setActiveTab('menu')} />}
+        {activeTab === 'rewards' && (
+          <RewardsView
+            onBrowseMenu={() => setActiveTab('menu')}
+            forceOpenLuckyDraw={luckyDrawOpen}
+            onCloseLuckyDraw={() => setLuckyDrawOpen(false)}
+          />
+        )}
         {activeTab === 'account' && <AccountView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'menu' && (
           <>

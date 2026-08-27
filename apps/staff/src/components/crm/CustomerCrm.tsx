@@ -20,7 +20,6 @@ import {
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Card, EmptyState, Skeleton, useToast } from '../ui';
 import { CustomerDetailDrawer } from './CustomerDetailDrawer';
-import { LuckyDrawModal } from './LuckyDrawModal';
 import { TrustConfigModal } from './TrustConfigModal';
 import type { CustomerSummary, CustomersResponse } from './types';
 
@@ -49,7 +48,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
   // Modals & Selected customer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [configModalOpen, setConfigModalOpen] = useState(false);
-  const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -114,16 +112,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
     setCustomers((prev) =>
       prev.map((c) => (c.telegramUserId === updated.telegramUserId ? { ...c, ...updated } : c))
     );
-  };
-
-  const handleSelectCustomerFromDraw = (telegramUserId: string) => {
-    setSelectedCustomerId(telegramUserId);
-    // If user not in current list, search specifically for them
-    const found = customers.find((c) => c.telegramUserId === telegramUserId);
-    if (!found) {
-      setSearchInput(telegramUserId);
-      setDebouncedSearch(telegramUserId);
-    }
   };
 
   return (
@@ -305,16 +293,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
           >
             <Settings className="size-3.5" />
             Settings
-          </Button>
-
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => setLuckyDrawOpen(true)}
-            className="h-10 gap-1.5 font-bold text-xs bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white border-0 shadow-sm"
-          >
-            <Dices className="size-4" />
-            Lucky Draw
           </Button>
 
           <Button
@@ -572,23 +550,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
         isOpen={configModalOpen}
         onClose={() => setConfigModalOpen(false)}
         onSaved={fetchCustomers}
-      />
-
-      {/* Lucky Draw Modal */}
-      <LuckyDrawModal
-        isOpen={luckyDrawOpen}
-        onClose={() => setLuckyDrawOpen(false)}
-        onSelectCustomer={handleSelectCustomerFromDraw}
-        summaryData={
-          summary
-            ? {
-                totalCustomers: summary.totalCustomers,
-                goldCount: summary.goldCount,
-                standardCount: summary.standardCount,
-                totalLuckyTickets: summary.totalLuckyTickets,
-              }
-            : undefined
-        }
       />
     </div>
   );

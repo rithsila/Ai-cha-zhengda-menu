@@ -24,7 +24,22 @@ export function DevPersonaBar() {
     }
     apiFetch(ME.profile())
       .then(async (res) => {
-        if (res.ok) setProfile(await res.json());
+        if (res.ok) {
+          setProfile(await res.json());
+        } else if (res.status === 401 && import.meta.env.DEV) {
+          await loginAsDevCustomer({
+            telegramUserId: 'dev_standard_user',
+            firstName: 'Bob',
+            lastName: 'Sok',
+            tier: 'standard',
+            loyaltyPoints: 20,
+            luckyTickets: 5,
+            phoneNumber: '+85598765432',
+            building: 'B',
+            roomNumber: '0512',
+          });
+          window.location.reload();
+        }
       })
       .catch(() => {});
   }, [signedIn]);

@@ -342,7 +342,7 @@ describe('Customer CRM, Trust Tiers, Lucky Draw & Search Backend', () => {
           {
             telegramUserId: customerB,
             phoneNumber: '+85588445566',
-            username: 'bob_phnompenh',
+            username: `bob_${customerB}`,
             firstName: 'Bob',
             lastName: 'Rath',
             contactName: 'Bob R.',
@@ -357,7 +357,7 @@ describe('Customer CRM, Trust Tiers, Lucky Draw & Search Backend', () => {
             telegramUserId: customerC,
             phoneNumber: '+85512778899',
             username: 'charlie_arakawa',
-            firstName: 'Charlie',
+            firstName: `Charlie_${customerC}`,
             lastName: 'Heng',
             contactName: 'Charlie H.',
             building: 'C',
@@ -420,7 +420,7 @@ describe('Customer CRM, Trust Tiers, Lucky Draw & Search Backend', () => {
       // Search by username
       const userRes = await request(app)
         .get('/api/customers')
-        .query({ search: 'bob_phnompenh' })
+        .query({ search: `bob_${customerB}` })
         .set(managerAuth());
       expect(userRes.status).toBe(200);
       expect(userRes.body.customers.length).toBe(1);
@@ -429,7 +429,7 @@ describe('Customer CRM, Trust Tiers, Lucky Draw & Search Backend', () => {
       // Search by firstName
       const nameRes = await request(app)
         .get('/api/customers')
-        .query({ search: 'Charlie' })
+        .query({ search: `Charlie_${customerC}` })
         .set(managerAuth());
       expect(nameRes.status).toBe(200);
       expect(nameRes.body.customers.length).toBe(1);

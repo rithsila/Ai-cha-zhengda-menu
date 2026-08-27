@@ -33,7 +33,7 @@ import { sendTelegramNotification } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
-import { uploadToR2, isR2Configured } from './r2';
+import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes } from './lucky-draw';
 
 // The tuned SQLite client lives in db.ts; re-exported here because every
 // caller (and every test) already imports it from this module.
@@ -1835,6 +1835,104 @@ export function createApp() {
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to update lucky tickets' });
+    }
+  });
+
+  // Customer Lucky Draw Config & Prize Segments
+  app.get('/api/lucky-draw/config', async (req, res) => {
+    try {
+      const enabled = (await getConfigString(prisma, 'luckyDrawEnabled', '1')) === '1';
+      const costPerSpin = await getConfigNumber(prisma, 'luckyTicketsCostPerSpin', 5);
+      const prizes = await getLuckyWheelPrizes(prisma);
+      res.json({
+        enabled,
+        costPerSpin,
+        prizes,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch lucky draw config' });
+    }
+  });
+
+  // Customer Lucky Draw Spin
+  app.post('/api/lucky-draw/spin', requireCustomer, async (req, res) => {
+    try {
+      const telegramUserId = (req as any).telegramUserId;
+      if (!telegramUserId) {
+        return res.status(401).json({ error: 'Telegram sign-in required' });
+      }
+
+      const enabled = (await getConfigString(prisma, 'luckyDrawEnabled', '1')) === '1';
+      if (!enabled) {
+        return res.status(400).json({ error: 'Lucky draw is currently not active' });
+      }
+
+      const costPerSpin = await getConfigNumber(prisma, 'luckyTicketsCostPerSpin', 5);
+      const prizes = await getLuckyWheelPrizes(prisma);
+
+      const user = await prisma.user.findUnique({
+        where: { telegramUserId },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User profile not found' });
+      }
+
+      if ((user.luckyTickets || 0) < costPerSpin) {
+        return res.status(400).json({
+          error: `Not enough lucky tickets. You have ${user.luckyTickets || 0} tickets, but need ${costPerSpin} to spin.`,
+          requiredTickets: costPerSpin,
+          currentTickets: user.luckyTickets || 0,
+        });
+      }
+
+      const prize = pickRandomPrize(prizes);
+
+      // Deduct tickets and award prize
+      const updatedUser = await withWriteRetry(async () => {
+        const updatePayload: any = {
+          luckyTickets: { decrement: costPerSpin },
+        };
+
+        if (prize.type === 'points' && prize.value > 0) {
+          updatePayload.loyaltyPoints = { increment: prize.value };
+        } else if (prize.type === 'tickets' && prize.value > 0) {
+          updatePayload.luckyTickets = { decrement: costPerSpin - prize.value };
+        }
+
+        return prisma.user.update({
+          where: { telegramUserId },
+          data: updatePayload,
+        });
+      });
+
+      const claimCode = prize.type === 'item' ? `LUCKY-${Date.now().toString(36).toUpperCase()}` : undefined;
+
+      res.json({
+        ok: true,
+        prize: {
+          id: prize.id,
+          name: prize.name,
+          label: prize.label,
+          icon: prize.icon,
+          color: prize.color,
+          type: prize.type,
+          value: prize.value,
+          segmentIndex: prize.segmentIndex,
+          claimCode,
+        },
+        user: {
+          telegramUserId: updatedUser.telegramUserId,
+          luckyTickets: updatedUser.luckyTickets,
+          loyaltyPoints: updatedUser.loyaltyPoints,
+          tier: updatedUser.tier,
+        },
+        costPerSpin,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to complete lucky draw spin' });
     }
   });
 

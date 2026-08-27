@@ -142,6 +142,13 @@ const resources = {
       cashLockedForStandard: "Cash on Delivery is reserved for Gold members. Please pay via KHQR.",
       ordersToGold: "orders to Gold VIP",
       luckyTickets: "Lucky Tickets",
+      luckyDrawWheel: "Lucky Draw Wheel",
+      spinLuckyWheel: "Spin Lucky Wheel",
+      spinNow: "Spin Now",
+      needMoreTicketsToSpin: "Need {{count}} more tickets to spin",
+      ticketsRequiredPerSpin: "{{cost}} Tickets / Spin",
+      earnTicketsHint: "Earn lucky tickets with every order!",
+      youWon: "You Won",
 
       // Categories
       "Cones": "Cones",
@@ -426,6 +433,13 @@ const resources = {
       cashLockedForStandard: "ការទូទាត់សាច់ប្រាក់សម្រាប់តែសមាជិក Gold។ សូមទូទាត់តាម KHQR។",
       ordersToGold: "ការកម្ម៉ង់ទៀតដើម្បីក្លាយជា Gold VIP",
       luckyTickets: "សន្លឹកឆ្នោតផ្សងសំណាង",
+      luckyDrawWheel: "កង់បង្វិលផ្សងសំណាង",
+      spinLuckyWheel: "បង្វិលកង់ផ្សងសំណាង",
+      spinNow: "បង្វិលឥឡូវនេះ",
+      needMoreTicketsToSpin: "ត្រូវការ {{count}} សន្លឹកទៀតដើម្បីបង្វិល",
+      ticketsRequiredPerSpin: "{{cost}} សន្លឹក / បង្វិល ១ ដង",
+      earnTicketsHint: "ទទួលបានសន្លឹកឆ្នោតគ្រប់ការកម្ម៉ង់!",
+      youWon: "អ្នកបានឈ្នះ",
 
       // Categories
       "Cones": "កោណ",
@@ -710,6 +724,13 @@ const resources = {
       cashLockedForStandard: "货到付款仅限黄金会员使用。请使用KHQR扫码支付。",
       ordersToGold: "笔订单升级为黄金会员",
       luckyTickets: "抽奖券",
+      luckyDrawWheel: "幸运大转盘",
+      spinLuckyWheel: "转动大转盘",
+      spinNow: "立即抽奖",
+      needMoreTicketsToSpin: "还需要 {{count}} 张抽奖券即可抽奖",
+      ticketsRequiredPerSpin: "{{cost}} 券 / 次",
+      earnTicketsHint: "每笔订单都可获得抽奖券！",
+      youWon: "您获得了",
 
       // Categories
       "Cones": "冰淇淋甜筒",

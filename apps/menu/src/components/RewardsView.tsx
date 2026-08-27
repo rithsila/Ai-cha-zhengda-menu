@@ -3,8 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Gift, ClockCounterClockwise, Sparkle } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { formatCurrency } from '../utils/format';
+import { loginAsDevCustomer, clearWebLoginToken } from '../utils/telegramUser';
 import { SignInPrompt } from './SignInPrompt';
 import { RewardCard } from './RewardCard';
+import { CustomerLuckyWheelModal, type LuckyPrize } from './CustomerLuckyWheelModal';
+import { LuckyWheelIcon } from './ui/LuckyWheelIcon';
 
 const DEFAULT_EARN_PER_DOLLAR = 10;
 const DEFAULT_POINTS_PER_DOLLAR = 100;
@@ -28,9 +31,11 @@ function shortDate(value: string): string {
 
 interface RewardsViewProps {
   onBrowseMenu?: () => void;
+  forceOpenLuckyDraw?: boolean;
+  onCloseLuckyDraw?: () => void;
 }
 
-export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
+export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw }: RewardsViewProps) {
   const { t } = useTranslation();
   // Points belong to one account. A guest has none to show.
   const signedIn = hasIdentity();
@@ -41,8 +46,18 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
   const [goldThreshold, setGoldThreshold] = useState(3);
   const [earnPerDollar, setEarnPerDollar] = useState(DEFAULT_EARN_PER_DOLLAR);
   const [pointsPerDollar, setPointsPerDollar] = useState(DEFAULT_POINTS_PER_DOLLAR);
+  const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
+  const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
+  const [luckyCostPerSpin, setLuckyCostPerSpin] = useState(5);
+  const [luckyPrizes, setLuckyPrizes] = useState<LuckyPrize[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (forceOpenLuckyDraw) {
+      setLuckyDrawOpen(true);
+    }
+  }, [forceOpenLuckyDraw]);
 
   useEffect(() => {
     if (!signedIn) {
@@ -51,16 +66,36 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
     }
     const fetchData = async () => {
       try {
-        const [userRes, ordersRes, cfgRes] = await Promise.all([
+        const [userRes, ordersRes, cfgRes, luckyRes] = await Promise.all([
           apiFetch(ME.profile()),
           apiFetch(ME.orders()),
-          apiFetch('/api/config')
+          apiFetch('/api/config'),
+          apiFetch('/api/lucky-draw/config')
         ]);
 
         if (userRes.ok) {
           const user = await userRes.json();
           setUserProfile(user);
           setPoints(Number(user.loyaltyPoints) || 0);
+        } else if (userRes.status === 401) {
+          if (import.meta.env.DEV) {
+            await loginAsDevCustomer({
+              telegramUserId: 'dev_standard_user',
+              firstName: 'Bob',
+              lastName: 'Sok',
+              tier: 'standard',
+              loyaltyPoints: 20,
+              luckyTickets: 5,
+              phoneNumber: '+85598765432',
+              building: 'B',
+              roomNumber: '0512',
+            });
+            window.location.reload();
+            return;
+          }
+          clearWebLoginToken();
+          setLoading(false);
+          return;
         } else {
           setFailed(true);
         }
@@ -83,6 +118,13 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
           setEarnPerDollar(readConfigNumber(rows, 'earnPointsPerDollar', DEFAULT_EARN_PER_DOLLAR));
           setPointsPerDollar(readConfigNumber(rows, 'pointsPerDollar', DEFAULT_POINTS_PER_DOLLAR));
           setGoldThreshold(readConfigNumber(rows, 'goldMinOrdersThreshold', 3));
+        }
+
+        if (luckyRes.ok) {
+          const luckyData = await luckyRes.json();
+          setLuckyDrawEnabled(luckyData.enabled !== false);
+          if (luckyData.costPerSpin) setLuckyCostPerSpin(luckyData.costPerSpin);
+          if (Array.isArray(luckyData.prizes)) setLuckyPrizes(luckyData.prizes);
         }
       } catch (err) {
         console.error('Failed to fetch rewards data', err);
@@ -125,27 +167,57 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         goldThreshold={goldThreshold}
       />
 
-      {/* Lucky Draw Tickets Counter Card — only show when user has tickets */}
-      {(userProfile?.luckyTickets || 0) > 0 && (
-        <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 rounded-2xl p-4 border border-amber-500/25 shadow-sm flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-xl shadow-md text-white">
-              🎟️
-            </div>
-            <div>
-              <div className="font-extrabold text-base text-tg-text flex items-center gap-1.5">
-                <span>🎟️ {userProfile?.luckyTickets}</span>
-                <span>{t('luckyTickets', 'Lucky Tickets')}</span>
+      {/* Clean Lucky Tickets Balance & Progress Card */}
+      {luckyDrawEnabled && (
+        <div
+          onClick={() => setLuckyDrawOpen(true)}
+          className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 hover:border-amber-500/30 transition-all cursor-pointer flex flex-col gap-2.5 active:scale-[0.99]"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <LuckyWheelIcon size={34} />
+              <div>
+                <span className="font-extrabold text-base text-tg-text block">
+                  {t('luckyTickets', 'Lucky Tickets')}
+                </span>
+                <span className="text-xs text-tg-hint font-medium">
+                  {userProfile?.luckyTickets || 0} / {luckyCostPerSpin} {t('ticketsForSpin', 'tickets for 1 spin')}
+                </span>
               </div>
-              <p className="text-xs text-tg-hint mt-0.5">
-                {userProfile?.tier === 'gold'
-                  ? t('goldPerk', 'Gold Perk: Cash on Delivery Unlocked')
-                  : t('standardMember', 'Standard Member')}
-              </p>
+            </div>
+
+            <div className="text-right">
+              <span className="text-xl font-black text-amber-500 font-mono">
+                {userProfile?.luckyTickets || 0} 🎟️
+              </span>
             </div>
           </div>
-          <div className="text-2xl animate-bounce" role="img" aria-label="Celebration">
-            🎉
+
+          {/* Progress Bar */}
+          <div className="w-full bg-tg-hint/15 h-2 rounded-full overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-amber-400 to-amber-500 h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${Math.min(100, Math.round(((userProfile?.luckyTickets || 0) / luckyCostPerSpin) * 100))}%`,
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-tg-hint">
+            <span>
+              {(userProfile?.luckyTickets || 0) >= luckyCostPerSpin ? (
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                  ✨ Tap to spin the wheel!
+                </span>
+              ) : (
+                <span>
+                  Collect {Math.max(0, luckyCostPerSpin - (userProfile?.luckyTickets || 0))} more tickets to spin
+                </span>
+              )}
+            </span>
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              Win Free Drinks &amp; Prizes
+            </span>
           </div>
         </div>
       )}
@@ -249,6 +321,26 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
           </div>
         )}
       </div>
+
+      {/* Customer Lucky Wheel Modal */}
+      <CustomerLuckyWheelModal
+        isOpen={luckyDrawOpen}
+        onClose={() => {
+          setLuckyDrawOpen(false);
+          onCloseLuckyDraw?.();
+        }}
+        userTickets={userProfile?.luckyTickets || 0}
+        costPerSpin={luckyCostPerSpin}
+        prizes={luckyPrizes}
+        onSpinSuccess={({ remainingTickets, loyaltyPoints: newPoints, prize: _prize }) => {
+          setUserProfile((prev: any) => ({
+            ...prev,
+            luckyTickets: remainingTickets,
+            loyaltyPoints: newPoints,
+          }));
+          setPoints(newPoints);
+        }}
+      />
     </div>
   );
 }

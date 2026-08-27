@@ -32,6 +32,8 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
   luckyDrawEnabled: '1',
   luckyTicketsPerGoldOrder: 2,
   luckyTicketsPerStandardOrder: 1,
+  luckyTicketsCostPerSpin: 5,
+  luckyWheelPrizes: '[]',
 };
 
 /**
@@ -148,7 +150,8 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
     key === 'deliveryFee' ||
     key === 'goldMinOrdersThreshold' ||
     key === 'luckyTicketsPerGoldOrder' ||
-    key === 'luckyTicketsPerStandardOrder'
+    key === 'luckyTicketsPerStandardOrder' ||
+    key === 'luckyTicketsCostPerSpin'
   ) {
     const num = Number(strVal);
     const nonNegativeKeys = ['deliveryFee', 'goldMinOrdersThreshold', 'luckyTicketsPerGoldOrder', 'luckyTicketsPerStandardOrder'];
@@ -192,6 +195,22 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
       return { valid: true, normalizedValue: '0' };
     }
     return { valid: false, normalizedValue: '', error: `${key} must be "1" (enabled) or "0" (disabled)` };
+  }
+
+  // JSON lucky wheel prizes array
+  if (key === 'luckyWheelPrizes') {
+    if (!strVal || strVal === '[]') {
+      return { valid: true, normalizedValue: '[]' };
+    }
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      if (!Array.isArray(parsed)) {
+        return { valid: false, normalizedValue: '', error: 'luckyWheelPrizes must be a JSON array' };
+      }
+      return { valid: true, normalizedValue: JSON.stringify(parsed) };
+    } catch {
+      return { valid: false, normalizedValue: '', error: 'luckyWheelPrizes must be valid JSON array' };
+    }
   }
 
   return { valid: true, normalizedValue: strVal };
