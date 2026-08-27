@@ -180,7 +180,7 @@ function BoardLegend() {
               {[
                 ['1', 'Switch to Orders Board'],
                 ['2', 'Switch to Menu Stock'],
-                ['3', 'Switch to Manager Hub'],
+                ['3', 'Switch to Admin'],
                 ['R', 'Force Refresh data'],
                 ['M', 'Toggle Alert Chime'],
               ].map(([key, what]) => (
@@ -204,7 +204,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<TabId>('orders');
   const sessionRole = loadSession()?.role;
   const isManager = sessionRole === 'manager';
-  const [managerUnlocked, setManagerUnlocked] = useState(() => isManager);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -526,10 +525,8 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
     },
     {
       id: 'manager' as TabId,
-      label: 'Manager Hub',
+      label: 'Admin',
       icon: <BarChart3 className="size-5" />,
-      badge: managerUnlocked ? 'Unlocked' : undefined,
-      badgeVariant: managerUnlocked ? 'ready' : undefined,
       shortcut: '3',
     },
   ];
@@ -729,7 +726,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     ? 'Live Orders'
                     : activeTab === 'menu'
                       ? 'Menu & Stock'
-                      : 'Manager Portal'}
+                      : 'Admin'}
                 </h2>
                 <Badge variant="default" className="hidden sm:inline-flex">
                   {currentBranchName}
@@ -785,8 +782,8 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           {activeTab === 'menu' ? (
             <MenuManagement />
           ) : activeTab === 'manager' ? (
-            isManager || managerUnlocked ? (
-              <ManagerDashboard onLock={() => setManagerUnlocked(false)} />
+            isManager ? (
+              <ManagerDashboard />
             ) : (
               <div className="mx-auto max-w-md pt-8">
                 <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
@@ -794,9 +791,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     <ShieldAlert className="size-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-ink">Manager Hub Restricted</h3>
+                    <h3 className="text-lg font-bold text-ink">Admin Restricted</h3>
                     <p className="mt-1 text-xs text-ink-soft leading-relaxed">
-                      Your Telegram account is logged in as <strong>Staff</strong>. Manager analytics, customer points, and team access management require a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
+                      Your Telegram account is logged in as <strong>Staff</strong>. Analytics, customer points, and team access management require a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
                     </p>
                   </div>
                   <Button

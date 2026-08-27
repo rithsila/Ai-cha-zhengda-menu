@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
   Award,
@@ -9,15 +9,13 @@ import {
   Coins,
   DollarSign,
   History,
-  Lock,
   MessageSquare,
   Phone,
   Plus,
   Receipt,
   Search,
-  Settings2,
   Shield,
-  Sliders,
+  Sparkles,
   Trash2,
   TrendingUp,
   User,
@@ -28,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import type { MenuItemFull } from './MenuItemEditModal';
 import {
   Badge,
   Button,
@@ -101,24 +100,13 @@ type StaffAccount = {
 
 const PANEL_ID = 'manager-panel';
 
-type ManagerSubTab = 'analytics' | 'feedback' | 'loyalty' | 'rewards' | 'staff' | 'settings';
-
-
-function rateError(value: string): string | null {
-  const trimmed = value.trim();
-  if (trimmed === '') return 'Enter a number.';
-  const parsed = Number(trimmed);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return 'Must be a whole number of 1 or more.';
-  }
-  return null;
-}
+type ManagerSubTab = 'analytics' | 'feedback' | 'loyalty' | 'rewards' | 'staff';
 
 function displayName(user: User): string {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
 }
 
-export function ManagerDashboard({ onLock }: { onLock: () => void }) {
+export function ManagerDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<ManagerSubTab>('analytics');
   const [range, setRange] = useState<Range>('week');
@@ -139,18 +127,22 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const [saving, setSaving] = useState(false);
   const [recent, setRecent] = useState<RecentAdjustment[]>([]);
 
-  // Rewards: add + toggle
+  // Rewards: add + toggle + menu item picker
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newCost, setNewCost] = useState('');
+  const [newImage, setNewImage] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Loyalty rates
-  const [rates, setRates] = useState({ pointsPerDollar: '100', earnPointsPerDollar: '10' });
-  const [savingRates, setSavingRates] = useState(false);
+  // Catalog items for reward selector
+  const [catalogItems, setCatalogItems] = useState<MenuItemFull[]>([]);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedCatalogItem, setSelectedCatalogItem] = useState<MenuItemFull | null>(null);
+  const [itemDropdownOpen, setItemDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Staff & Manager Accounts
   const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
@@ -235,12 +227,12 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     setLoading(true);
     setAnalyticsError(null);
     setRewardsError(false);
-    const [analyticsResult, rewardsResult, configResult] = await Promise.allSettled([
+    const [analyticsResult, rewardsResult, catalogResult] = await Promise.allSettled([
       apiFetch<AnalyticsData>(
         `/api/analytics/sales?days=${RANGES.find((r) => r.id === range)!.days}`,
       ),
       apiFetch<Reward[]>('/api/rewards?includeInactive=1'),
-      apiFetch<{ key: string; value: string }[]>('/api/config'),
+      apiFetch<MenuItemFull[]>('/api/catalog?includeInactive=false'),
     ]);
     if (analyticsResult.status === 'fulfilled') {
       setAnalytics(analyticsResult.value);
@@ -253,12 +245,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     } else {
       setRewardsError(true);
     }
-    if (configResult.status === 'fulfilled') {
-      const rows = configResult.value;
-      setRates((prev) => ({
-        ...prev,
-        ...Object.fromEntries(rows.filter((r) => r.key in prev).map((r) => [r.key, r.value])),
-      }));
+    if (catalogResult.status === 'fulfilled') {
+      setCatalogItems(catalogResult.value);
     }
     fetchStaffAccounts();
     fetchFeedbacks();
@@ -354,6 +342,40 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
     }
   };
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setItemDropdownOpen(false);
+      }
+    }
+    if (itemDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [itemDropdownOpen]);
+
+  const filteredCatalogItems = useMemo(() => {
+    if (!catalogSearch.trim()) return catalogItems.slice(0, 10);
+    const q = catalogSearch.toLowerCase();
+    return catalogItems.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        (item.category && item.category.toLowerCase().includes(q)) ||
+        (item.brand && item.brand.toLowerCase().includes(q)),
+    );
+  }, [catalogItems, catalogSearch]);
+
+  const handleSelectCatalogItem = (item: MenuItemFull) => {
+    setSelectedCatalogItem(item);
+    setNewName(`Free ${item.name}`);
+    setNewDescription(item.description || `${item.category} • Redeemable for loyalty points`);
+    setNewImage(item.image || null);
+    setItemDropdownOpen(false);
+    setCatalogSearch('');
+  };
+
   const handleAddReward = async (e: FormEvent) => {
     e.preventDefault();
     const name = newName.trim();
@@ -363,9 +385,10 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       return;
     }
     if (!Number.isInteger(cost) || cost < 1) {
-      setAddError('Points cost must be a whole number of 1 or more.');
+      setAddError('Stamps cost must be a whole number of 1 or more.');
       return;
     }
+    const pointsCost = cost <= 50 ? cost * 10 : cost;
     setAdding(true);
     setAddError(null);
     try {
@@ -375,7 +398,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
         body: JSON.stringify({
           name,
           description: newDescription.trim() || undefined,
-          pointsCost: cost,
+          pointsCost,
+          image: newImage || undefined,
           isActive: true,
         }),
       });
@@ -384,6 +408,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       setNewName('');
       setNewDescription('');
       setNewCost('');
+      setNewImage(null);
+      setSelectedCatalogItem(null);
+      setCatalogSearch('');
       setAddOpen(false);
     } catch (err) {
       const status = (err as Error & { status?: number }).status;
@@ -422,39 +449,6 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
       });
     } finally {
       setTogglingId(null);
-    }
-  };
-
-  const rateErrors = {
-    pointsPerDollar: rateError(rates.pointsPerDollar),
-    earnPointsPerDollar: rateError(rates.earnPointsPerDollar),
-  };
-  const ratesValid = !rateErrors.pointsPerDollar && !rateErrors.earnPointsPerDollar;
-
-  const handleSaveRates = async () => {
-    if (!ratesValid) return;
-    setSavingRates(true);
-    try {
-      for (const [key, value] of Object.entries(rates)) {
-        await apiFetch('/api/config', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key, value }),
-        });
-      }
-      toast({ title: 'Rates saved successfully', variant: 'success' });
-    } catch (err) {
-      const status = (err as Error & { status?: number }).status;
-      toast({
-        title: "Couldn't save rates",
-        description:
-          status === 401
-            ? 'Manager session expired — unlock again.'
-            : 'Check your connection and try again.',
-        variant: 'error',
-      });
-    } finally {
-      setSavingRates(false);
     }
   };
 
@@ -555,10 +549,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
   const subTabs: Array<{ id: ManagerSubTab; label: string; icon: React.ReactNode; badge?: string | number }> = [
     { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
     { id: 'feedback', label: 'Issues & Feedback', icon: <MessageSquare className="size-4" />, badge: newFeedbackCount > 0 ? `${newFeedbackCount} new` : (feedbacks.length > 0 ? feedbacks.length : undefined) },
-    { id: 'loyalty', label: 'Customer Points', icon: <Users className="size-4" /> },
+    { id: 'loyalty', label: 'Customer Stamps', icon: <Users className="size-4" /> },
     { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
     { id: 'staff', label: 'Staff & Accounts', icon: <Users2 className="size-4" />, badge: staffAccounts.length },
-    { id: 'settings', label: 'Loyalty Rates', icon: <Settings2 className="size-4" /> },
   ];
 
 
@@ -597,28 +590,6 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
             );
           })}
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={fetchDashboardData}
-            loading={loading}
-            aria-label="Refresh manager data"
-          >
-            Refresh
-          </Button>
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={onLock}
-            className="text-danger hover:bg-danger-soft hover:text-danger-strong"
-            aria-label="Lock manager mode"
-          >
-            <Lock className="size-4" aria-hidden="true" />
-            Lock Panel
-          </Button>
-        </div>
       </div>
 
       <div
@@ -646,15 +617,15 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
               </h2>
               <p className="mt-1 text-sm text-ink-soft">
                 {analyticsError === 'session'
-                  ? 'Your manager authentication has expired. Unlock again to view statistics.'
+                  ? 'Your manager authentication has expired. Please retry or sign in again.'
                   : 'Check your server connection and retry.'}
               </p>
               <Button
                 variant="secondary"
                 className="mt-5"
-                onClick={analyticsError === 'session' ? onLock : fetchDashboardData}
+                onClick={fetchDashboardData}
               >
-                {analyticsError === 'session' ? 'Unlock Again' : 'Try Again'}
+                Try Again
               </Button>
             </Card>
           ) : analytics ? (
@@ -972,8 +943,8 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                     <Search className="size-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-ink">Find Customer Account</h3>
-                    <p className="text-xs text-ink-soft">Search user by numeric Telegram User ID</p>
+                    <h3 className="font-bold text-ink">Customer Stamp Cards</h3>
+                    <p className="text-xs text-ink-soft">Search user by numeric Telegram User ID to view and adjust stamps</p>
                   </div>
                 </div>
 
@@ -1015,9 +986,13 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                         </div>
                       </div>
                       <div className="rounded-xl bg-surface px-3 py-1.5 text-right shadow-sm">
-                        <p className="text-[10px] uppercase font-semibold text-ink-faint">Current Points</p>
+                        <p className="text-[10px] uppercase font-semibold text-ink-faint">Current Stamps</p>
                         <p className="text-lg font-black tabular-nums text-accent">
-                          {foundUser.loyaltyPoints} <span className="text-xs font-medium">pts</span>
+                          {Math.floor(foundUser.loyaltyPoints / 10)}{' '}
+                          <span className="text-xs font-medium">stamps</span>
+                        </p>
+                        <p className="text-[10px] text-ink-faint">
+                          {foundUser.loyaltyPoints} pts • {Math.floor(foundUser.loyaltyPoints / 100)} full {Math.floor(foundUser.loyaltyPoints / 100) === 1 ? 'card' : 'cards'}
                         </p>
                       </div>
                     </div>
@@ -1025,25 +1000,26 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                     <div className="mt-4 space-y-4">
                       <div>
                         <label htmlFor="delta-input" className="block text-xs font-bold uppercase tracking-wider text-ink">
-                          Adjust Points (+ / -)
+                          Adjust Points / Stamps (+ / -)
                         </label>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <input
                             id="delta-input"
                             type="number"
-                            step="1"
+                            step="10"
                             value={deltaInput}
                             onChange={(e) => setDeltaInput(e.target.value)}
                             placeholder="0"
                             className="h-11 w-32 rounded-xl border border-border bg-surface px-3 text-center text-lg font-black tabular-nums text-ink outline-none focus:border-accent"
                           />
                           {[
-                            { val: 50, label: '+50' },
-                            { val: 20, label: '+20' },
-                            { val: 10, label: '+10' },
-                            { val: -10, label: '-10' },
-                            { val: -20, label: '-20' },
-                            { val: -50, label: '-50' },
+                            { val: 10, label: '+1 Stamp' },
+                            { val: 20, label: '+2 Stamps' },
+                            { val: 50, label: '+5 Stamps' },
+                            { val: 100, label: '+10 Stamps (1 Card)' },
+                            { val: -10, label: '-1 Stamp' },
+                            { val: -50, label: '-5 Stamps' },
+                            { val: -100, label: '-10 Stamps (-1 Card)' },
                           ].map((item) => (
                             <Button
                               key={item.val}
@@ -1087,21 +1063,23 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                         {delta !== 0 ? (
                           newBalance < 0 ? (
                             <span className="font-semibold text-danger">
-                              ⚠️ Warning: New balance would be negative ({newBalance} pts).
+                              ⚠️ Warning: New balance would be negative ({Math.floor(newBalance / 10)} stamps).
                             </span>
                           ) : (
                             <div className="flex items-center justify-between">
                               <span className="text-ink-soft">Resulting Balance:</span>
                               <span className="font-bold text-ink">
-                                {foundUser.loyaltyPoints} →{' '}
-                                <span className="text-accent">{newBalance} pts</span>{' '}
-                                ({delta > 0 ? `+${delta}` : delta})
+                                {Math.floor(foundUser.loyaltyPoints / 10)} stamps ({foundUser.loyaltyPoints} pts) →{' '}
+                                <span className="text-accent">
+                                  {Math.floor(newBalance / 10)} stamps ({newBalance} pts)
+                                </span>{' '}
+                                ({delta > 0 ? `+${delta / 10} stamps` : `${delta / 10} stamps`})
                               </span>
                             </div>
                           )
                         ) : (
                           <span className="text-xs text-ink-faint">
-                            Type points or click + / - to calculate new balance preview.
+                            Type points or click stamp buttons above to calculate new balance preview.
                           </span>
                         )}
                       </div>
@@ -1131,13 +1109,13 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                   </div>
                   <div>
                     <h3 className="font-bold text-ink">Recent Session Actions</h3>
-                    <p className="text-xs text-ink-soft">Points updated in this session</p>
+                    <p className="text-xs text-ink-soft">Stamps updated in this session</p>
                   </div>
                 </div>
 
                 {recent.length === 0 ? (
                   <p className="mt-6 text-center text-xs text-ink-faint">
-                    No points adjustments applied in this session yet.
+                    No stamp adjustments applied in this session yet.
                   </p>
                 ) : (
                   <ul className="mt-4 divide-y divide-border">
@@ -1159,7 +1137,7 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                               : 'bg-danger-soft text-danger'
                           }`}
                         >
-                          {r.delta > 0 ? `+${r.delta}` : r.delta} pts
+                          {r.delta > 0 ? `+${r.delta / 10} stamps` : `${r.delta / 10} stamps`} ({r.delta > 0 ? `+${r.delta}` : r.delta} pts)
                         </span>
                       </li>
                     ))}
@@ -1194,6 +1172,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                     onClick={() => {
                       setAddOpen(false);
                       setAddError(null);
+                      setSelectedCatalogItem(null);
+                      setNewImage(null);
+                      setCatalogSearch('');
                     }}
                     className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
                   >
@@ -1202,6 +1183,117 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                 </div>
 
                 <form onSubmit={handleAddReward} className="mt-4 space-y-4">
+                  {/* Quick Menu Item Picker */}
+                  <div ref={dropdownRef} className="rounded-xl border border-border bg-surface-sunken/40 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase text-ink flex items-center gap-1.5">
+                        <Sparkles className="size-3.5 text-accent" />
+                        Quick Select from Menu
+                      </label>
+                      {selectedCatalogItem ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCatalogItem(null);
+                            setNewName('');
+                            setNewDescription('');
+                            setNewImage(null);
+                          }}
+                          className="text-xs font-bold text-danger hover:underline"
+                        >
+                          Clear selected item
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-ink-faint">Pick an item to auto-fill</span>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <div className="relative flex items-center">
+                        <Search className="absolute left-3 size-4 text-ink-faint pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Search menu item (e.g. Milk Tea, Sundae, Fries...)"
+                          value={catalogSearch}
+                          onFocus={() => setItemDropdownOpen(true)}
+                          onChange={(e) => {
+                            setCatalogSearch(e.target.value);
+                            setItemDropdownOpen(true);
+                          }}
+                          className="h-10 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-xs font-medium text-ink outline-none focus:border-accent"
+                        />
+                      </div>
+
+                      {itemDropdownOpen && (
+                        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-border bg-surface shadow-xl p-1 space-y-1">
+                          {catalogItems.length === 0 ? (
+                            <p className="p-3 text-center text-xs text-ink-soft">No menu items found</p>
+                          ) : filteredCatalogItems.length === 0 ? (
+                            <p className="p-3 text-center text-xs text-ink-soft">No matching items</p>
+                          ) : (
+                            filteredCatalogItems.map((item) => (
+                              <button
+                                key={item.id || item.name}
+                                type="button"
+                                onClick={() => handleSelectCatalogItem(item)}
+                                className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-surface-sunken transition-colors"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  {item.image ? (
+                                    <img
+                                      src={item.image}
+                                      alt={item.name}
+                                      className="size-8 rounded-lg object-cover shrink-0 border border-border/50"
+                                    />
+                                  ) : (
+                                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-ink-faint">
+                                      <Award className="size-4" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-bold text-ink">{item.name}</p>
+                                    <p className="text-[10px] text-ink-soft capitalize">
+                                      {item.brand} • {item.category}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right shrink-0 ml-2">
+                                  <span className="text-xs font-bold text-ink">
+                                    ${Number(item.basePrice || 0).toFixed(2)}
+                                  </span>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedCatalogItem && (
+                      <div className="flex items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 p-2.5">
+                        {selectedCatalogItem.image ? (
+                          <img
+                            src={selectedCatalogItem.image}
+                            alt={selectedCatalogItem.name}
+                            className="size-10 rounded-lg object-cover border border-accent/40"
+                          />
+                        ) : (
+                          <div className="flex size-10 items-center justify-center rounded-lg bg-accent/20 text-accent">
+                            <Sparkles className="size-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-ink truncate">
+                            Selected: {selectedCatalogItem.name}
+                          </p>
+                          <p className="text-[10px] text-ink-soft capitalize">
+                            {selectedCatalogItem.brand} • {selectedCatalogItem.category} • Base Price: ${Number(selectedCatalogItem.basePrice || 0).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="sm:col-span-2">
                       <label htmlFor="reward-name" className="block text-xs font-bold uppercase text-ink">
@@ -1218,18 +1310,19 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                     </div>
                     <div>
                       <label htmlFor="reward-cost" className="block text-xs font-bold uppercase text-ink">
-                        Points Cost <span className="text-danger">*</span>
+                        Stamps Cost <span className="text-danger">*</span>
                       </label>
                       <input
                         id="reward-cost"
                         type="number"
                         min="1"
                         step="1"
-                        placeholder="100"
+                        placeholder="10"
                         value={newCost}
                         onChange={(e) => setNewCost(e.target.value)}
                         className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
                       />
+                      <p className="mt-1 text-[10px] text-ink-faint">10 stamps = 1 full reward card</p>
                     </div>
                   </div>
 
@@ -1258,6 +1351,9 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                       onClick={() => {
                         setAddOpen(false);
                         setAddError(null);
+                        setSelectedCatalogItem(null);
+                        setNewImage(null);
+                        setCatalogSearch('');
                       }}
                     >
                       Cancel
@@ -1296,9 +1392,17 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                          <Coins className="size-4" />
-                        </div>
+                        {reward.image ? (
+                          <img
+                            src={reward.image}
+                            alt={reward.name}
+                            className="size-9 rounded-xl object-cover border border-border"
+                          />
+                        ) : (
+                          <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                            <Coins className="size-4" />
+                          </div>
+                        )}
                         <Badge variant={reward.isActive ? 'success' : 'default'} dot>
                           {reward.isActive ? 'Active' : 'Inactive'}
                         </Badge>
@@ -1313,7 +1417,12 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
                     <div className="mt-5 flex items-center justify-between border-t border-border pt-3">
                       <div>
                         <span className="text-[10px] font-bold uppercase text-ink-faint">Redeem For</span>
-                        <p className="text-base font-extrabold text-accent">{reward.pointsCost} pts</p>
+                        <p className="text-base font-extrabold text-accent">
+                          {Math.round(reward.pointsCost / 10)} stamps{' '}
+                          <span className="text-xs font-normal text-ink-faint">
+                            ({reward.pointsCost} pts)
+                          </span>
+                        </p>
                       </div>
                       <Button
                         variant={reward.isActive ? 'secondary' : 'success'}
@@ -1555,80 +1664,7 @@ export function ManagerDashboard({ onLock }: { onLock: () => void }) {
               </div>
             )}
           </div>
-        ) : (
-          <div className="max-w-2xl space-y-6">
-            <Card padding="lg" className="border-border bg-surface">
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                  <Sliders className="size-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-ink">Loyalty Conversion Rules</h3>
-                  <p className="text-xs text-ink-soft">Set how customer points translate into currency discounts</p>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-5">
-                {[
-                  {
-                    key: 'pointsPerDollar' as const,
-                    id: 'points-per-dollar',
-                    label: 'Points required for $1 Discount',
-                    desc: 'How many loyalty points a customer must redeem to save $1.00',
-                  },
-                  {
-                    key: 'earnPointsPerDollar' as const,
-                    id: 'earn-points-per-dollar',
-                    label: 'Points Earned per $1 Spent',
-                    desc: 'Points credited to customer account for every $1 spent in store',
-                  },
-                ].map((field) => {
-                  const error = rateErrors[field.key];
-                  return (
-                    <div key={field.key} className="rounded-xl border border-border bg-surface-sunken/30 p-4">
-                      <label htmlFor={field.id} className="block text-sm font-bold text-ink">
-                        {field.label}
-                      </label>
-                      <p className="mt-0.5 text-xs text-ink-soft">{field.desc}</p>
-                      <div className="mt-3 flex items-center gap-3">
-                        <input
-                          id={field.id}
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={rates[field.key]}
-                          aria-invalid={error ? true : undefined}
-                          onChange={(e) =>
-                            setRates((prev) => ({ ...prev, [field.key]: e.target.value }))
-                          }
-                          className={`h-11 w-40 rounded-xl border bg-surface px-3 text-center text-lg font-bold tabular-nums text-ink outline-none ${
-                            error ? 'border-danger' : 'border-border focus:border-accent'
-                          }`}
-                        />
-                        <span className="text-xs font-semibold text-ink-soft">points</span>
-                      </div>
-                      {error && (
-                        <p className="mt-2 text-xs font-semibold text-danger">{error}</p>
-                      )}
-                    </div>
-                  );
-                })}
-
-                <div className="flex justify-end pt-2">
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    disabled={!ratesValid}
-                    loading={savingRates}
-                    onClick={handleSaveRates}
-                  >
-                    Save &amp; Update Rules
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
