@@ -20,6 +20,8 @@ import {
   formatCountdown,
   formatElapsed,
   isAwaitingPayment,
+  isZhengda,
+  parseModifiers,
   paymentExpiryAt,
 } from '../lib/orders';
 import type { Tone } from '../lib/orders';
@@ -34,24 +36,6 @@ const TONE_CLASSES: Record<Tone, string> = {
   warn: 'bg-status-pending-soft text-status-pending',
   late: 'bg-danger-soft text-danger',
 };
-
-function parseModifiers(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return [];
-    }
-    return Object.values(parsed)
-      .filter((value): value is Array<{ name?: string }> => Array.isArray(value))
-      .flatMap((options) => options.map((option) => option?.name ?? String(option)));
-  } catch {
-    return [];
-  }
-}
-
-function isZhengda(brand: string): boolean {
-  return brand.toLowerCase() === 'zhengda';
-}
 
 /** Payment is the one fact staff must not get wrong, so it is the loudest pill. */
 function PaymentTag({ order }: { order: Order }) {

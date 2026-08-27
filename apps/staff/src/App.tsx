@@ -32,6 +32,8 @@ import {
   TONE_THRESHOLDS,
   formatElapsed,
   isAwaitingPayment,
+  isZhengda,
+  parseModifiers,
 } from './lib/orders';
 import {
   Badge,
@@ -978,8 +980,13 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                         return (
                           <li
                             key={order.id}
-                            className="flex flex-col gap-2.5 p-4 hover:bg-surface-sunken/20 transition-colors"
+                            className={`flex flex-col gap-2.5 p-4 border-l-4 ${
+                              order.status === 'cancelled'
+                                ? 'border-danger/60 bg-danger-soft/10'
+                                : 'border-accent/70 hover:bg-surface-sunken/20'
+                            } transition-colors`}
                           >
+                            {/* Top Header: Code, Badges, Price, Reopen Action */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-base font-black tracking-tight text-ink">
@@ -1023,11 +1030,48 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                               </div>
                             </div>
 
-                            {/* Customer and Location Row */}
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
+                            {/* Items List: Clean bulleted items with dot-separated modifiers */}
+                            {order.items && order.items.length > 0 ? (
+                              <ul className="space-y-1.5 py-1">
+                                {order.items.map((item) => {
+                                  const zhengda = isZhengda(item.menuItem?.brand);
+                                  const mods = item.modifiers ? parseModifiers(item.modifiers) : [];
+                                  return (
+                                    <li key={item.id} className="text-sm">
+                                      <div className="flex items-start gap-2">
+                                        <span
+                                          aria-hidden="true"
+                                          className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                                            zhengda ? 'bg-zhengda' : 'bg-accent'
+                                          }`}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="font-bold text-ink">
+                                            {item.quantity}× {item.menuItem?.name || 'Item'}
+                                          </div>
+                                          {mods.length > 0 ? (
+                                            <div className="text-xs text-ink-soft flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
+                                              {mods.map((mod, idx) => (
+                                                <span key={idx} className="inline-flex items-center">
+                                                  {idx > 0 && <span className="mr-1.5 text-ink-faint">·</span>}
+                                                  {mod}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : null}
+
+                            {/* Customer, Location & Timing combined metadata bar */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 pt-2 text-xs text-ink-faint">
                               {order.contactName ? (
                                 <div className="flex items-center gap-1 font-bold text-ink">
-                                  <User className="size-3.5 text-ink-faint shrink-0" />
+                                  <User className="size-3 text-ink-faint shrink-0" />
                                   <span>{order.contactName}</span>
                                 </div>
                               ) : null}
@@ -1037,41 +1081,32 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                   href={`tel:${order.contactPhone}`}
                                   className="inline-flex items-center gap-1 font-bold text-accent hover:underline"
                                 >
-                                  <Phone className="size-3.5 shrink-0" />
+                                  <Phone className="size-3 shrink-0" />
                                   <span>{order.contactPhone}</span>
                                 </a>
                               ) : null}
 
                               {order.deliveryBuilding && order.deliveryRoom ? (
                                 <div className="flex items-center gap-1 font-medium text-ink-soft">
-                                  <Building2 className="size-3.5 text-ink-faint shrink-0" />
+                                  <Building2 className="size-3 text-ink-faint shrink-0" />
                                   <span>Bldg {order.deliveryBuilding} · Rm {order.deliveryRoom}</span>
                                 </div>
                               ) : null}
-                            </div>
 
-                            {/* Timing, Duration and Items */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2 text-xs text-ink-faint">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="tabular-nums">
-                                  Placed: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                                <span>·</span>
-                                <span className="tabular-nums">
-                                  Finished: {new Date(finished).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                                <span>·</span>
-                                <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-md">
-                                  <Clock className="size-3 text-accent" />
-                                  Cook / Prep duration: {durationMins}m
-                                </span>
-                              </div>
+                              <span className="text-border">|</span>
 
-                              {order.items && order.items.length > 0 ? (
-                                <div className="text-ink-soft font-medium truncate max-w-md">
-                                  {order.items.map((i) => `${i.quantity}× ${i.menuItem?.name || 'Item'}`).join(', ')}
-                                </div>
-                              ) : null}
+                              <span className="tabular-nums">
+                                Placed: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span>·</span>
+                              <span className="tabular-nums">
+                                Finished: {new Date(finished).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-md">
+                                <Clock className="size-3 text-accent" />
+                                {durationMins}m prep
+                              </span>
                             </div>
                           </li>
                         );

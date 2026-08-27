@@ -113,3 +113,22 @@ export function formatCountdown(ms: number): string {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
+
+export function parseModifiers(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return [];
+    }
+    return Object.values(parsed)
+      .filter((value): value is Array<{ name?: string }> => Array.isArray(value))
+      .flatMap((options) => options.map((option) => option?.name ?? String(option)));
+  } catch {
+    return [];
+  }
+}
+
+export function isZhengda(brand?: string): boolean {
+  return (brand || '').toLowerCase() === 'zhengda';
+}
+
