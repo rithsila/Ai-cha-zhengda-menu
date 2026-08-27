@@ -335,7 +335,253 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               />
             ) : (
               <>
-                {/* 1. Order Type (Pickup / Delivery) */}
+                {/* 1. Order Summary */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">
+                    {t('orderSummary', 'Order Summary')}
+                  </h3>
+                  <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3">
+                    {cart.map(item => {
+                      const catalogItem = catalogItems.find(i => i.id === item.menuItemId);
+                      const isEligible = catalogItem?.canClaim ?? false;
+                      return (
+                        <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
+                          <div className="flex-1">
+                            <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
+                            {signedIn && userStamps >= 10 && (
+                              <div className="mt-0.5">
+                                {isEligible ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-md">
+                                    🎁 {t('eligibleForStamps', 'Stamp reward eligible')}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center text-[10px] font-medium text-tg-hint bg-tg-bg/70 px-1.5 py-0.5 rounded-md border border-tg-hint/10">
+                                    {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {Object.keys(item.selectedModifiers).length > 0 && (
+                              <div className="text-xs text-tg-hint mt-1">
+                                {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
+                              </div>
+                            )}
+                          </div>
+                          <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Stamp Loyalty Rewards */}
+                {signedIn && userProfile && (
+                  <div className="space-y-2">
+                    {/* Case 1: Has at least 10 stamps AND has eligible claimable items in cart */}
+                    {maxClaimableCount > 0 && (
+                      <div className={`rounded-2xl p-4 border transition-all ${
+                        effectiveClaimCount > 0
+                          ? 'bg-brand-primary/10 border-brand-primary/40 shadow-xs'
+                          : 'bg-tg-secondary-bg border-tg-hint/15'
+                      }`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-brand-primary text-white text-lg shrink-0">
+                              🎁
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm text-tg-text">
+                                {t('claimFreeDrink', 'Claim Free Item (10 Stamps each)')}
+                              </div>
+                              <div className="text-xs text-tg-hint">
+                                {t('stampsAvailableCount', '{{stamps}} stamps available (can claim up to {{max}} free)', {
+                                  stamps: userStamps,
+                                  max: maxClaimableCount,
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {maxClaimableCount === 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => setClaimedCount(effectiveClaimCount > 0 ? 0 : 1)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                                effectiveClaimCount > 0
+                                  ? 'bg-brand-primary text-white shadow-xs'
+                                  : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
+                              }`}
+                            >
+                              {effectiveClaimCount > 0 ? t('applied', 'Applied ✓') : t('apply', 'Apply')}
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 bg-tg-bg border border-tg-hint/20 rounded-xl p-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setClaimedCount(Math.max(0, effectiveClaimCount - 1))}
+                                disabled={effectiveClaimCount <= 0}
+                                className="w-7 h-7 rounded-lg bg-tg-secondary-bg font-bold text-sm flex items-center justify-center disabled:opacity-40 text-tg-text active:scale-95 transition-transform"
+                                aria-label="Decrease free items"
+                              >
+                                -
+                              </button>
+                              <span className="w-5 text-center font-bold text-sm text-tg-text">
+                                {effectiveClaimCount}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setClaimedCount(Math.min(maxClaimableCount, effectiveClaimCount + 1))}
+                                disabled={effectiveClaimCount >= maxClaimableCount}
+                                className="w-7 h-7 rounded-lg bg-brand-primary text-white font-bold text-sm flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform"
+                                aria-label="Increase free items"
+                              >
+                                +
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {effectiveClaimCount > 0 && (
+                          <div className="text-xs font-bold text-brand-primary mt-3 flex flex-col gap-1 border-t border-brand-primary/20 pt-2">
+                            {claimedUnits.map((u, idx) => (
+                              <div key={idx} className="flex items-center justify-between">
+                                <span>🎁 {u.name} (Free)</span>
+                                <span>-{formatCurrency(u.unitPrice)}</span>
+                              </div>
+                            ))}
+                            <div className="text-[11px] text-tg-hint font-normal mt-0.5">
+                              {t('stampsDeducted', 'Using {{stamps}} stamps', {
+                                stamps: effectiveClaimCount * 10,
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Case 2: Customer has >= 10 stamps, but NO claimable items in cart */}
+                    {userStamps >= 10 && totalClaimableUnits === 0 && (
+                      <div className="rounded-2xl p-4 bg-tg-secondary-bg border border-tg-hint/15 flex items-start gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 text-lg shrink-0 mt-0.5">
+                          🎁
+                        </div>
+                        <div className="space-y-1">
+                          <div className="font-bold text-sm text-tg-text">
+                            {t('stampsReady', 'You have {{stamps}} stamps ready!')}
+                          </div>
+                          <div className="text-xs text-tg-hint leading-relaxed">
+                            {t('addClaimableItemHint', 'Add an eligible drink to your cart to claim for free.')}
+                          </div>
+                          <div className="text-[11px] text-amber-600 font-medium pt-0.5">
+                            ⚠️ {t('ineligibleItemsInCartNotice', 'Items currently in your cart are not eligible for stamp rewards.')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Case 3: Customer has less than 10 stamps */}
+                    {userStamps < 10 && userStamps > 0 && (
+                      <div className="rounded-2xl p-3 bg-tg-secondary-bg border border-tg-hint/10 flex items-center justify-between text-xs text-tg-hint">
+                        <span>🥣 {t('yourStamps', 'Your Stamps')}: <strong className="text-tg-text">{userStamps}/10</strong></span>
+                        <span>{t('needMoreStampsCount', '{{count}} more for free item', { count: 10 - userStamps })}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. Pricing Breakdown */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">{t('pricingBreakdown', 'Pricing Breakdown')}</h3>
+                  <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3 border border-tg-hint/15">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-tg-hint">{t('subtotal', 'Subtotal')}</span>
+                      <span className="font-medium text-tg-text">{formatCurrency(total)}</span>
+                    </div>
+
+                    {discountApplied > 0 && (
+                      <div className="flex justify-between items-center text-sm text-brand-primary">
+                        <span>
+                          {t('stampRewardDiscount', '10-Stamp Reward ({{count}} free)', {
+                            count: effectiveClaimCount,
+                          })}
+                        </span>
+                        <span className="font-medium">-{formatCurrency(discountApplied)}</span>
+                      </div>
+                    )}
+
+                    {orderType === 'delivery' && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-tg-hint">{t('deliveryFee', 'Delivery Fee')}</span>
+                        <span className={`font-medium ${deliveryFee === 0 ? 'text-brand-primary' : 'text-tg-text'}`}>
+                          {deliveryFee === 0 ? t('free', 'FREE') : formatCurrency(deliveryFee)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="border-t border-tg-hint/10 my-1" />
+
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-tg-text">{t('totalAmount', 'Total Amount')}</span>
+                      <span className="font-extrabold text-lg text-tg-text">{formatCurrency(finalTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Payment Method */}
+                <div className="flex flex-col gap-3">
+                  <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
+                  {storeStatus.enableKhqr && khqrOffered ? (
+                    <button
+                      onClick={() => setMethod('khqr')}
+                      aria-pressed={method === 'khqr'}
+                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
+                        method === 'khqr'
+                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm'
+                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-base text-tg-text">{t('khqr')}</div>
+                        <div className="text-xs text-tg-hint mt-1">{t('khqrDescription', 'Pay instantly via any Cambodian bank app')}</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        method === 'khqr' ? 'border-brand-primary' : 'border-tg-hint/25'
+                      }`}>
+                        {method === 'khqr' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
+                      </div>
+                    </button>
+                  ) : null}
+
+                  {storeStatus.enableCash ? (
+                    <button 
+                      onClick={() => setMethod('cash')}
+                      aria-pressed={method === 'cash'}
+                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
+                        method === 'cash' 
+                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-base text-tg-text">{t('cash')}</div>
+                        <div className="text-xs text-tg-hint mt-1">{t('cashDescription', 'Pay at counter or upon delivery')}</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        method === 'cash' ? 'border-brand-primary' : 'border-tg-hint/25'
+                      }`}>
+                        {method === 'cash' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
+                      </div>
+                    </button>
+                  ) : null}
+
+                  {!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered) && (
+                    <p className="text-xs text-[#E53935] font-medium bg-[#E53935]/10 p-3 rounded-xl border border-[#E53935]/20 text-center">
+                      {t('noPaymentAvailable', 'No payment methods are available right now.')}
+                    </p>
+                  )}
+                </div>
+
+                {/* 5. Order Type (Pickup / Delivery) & Branch or Address */}
                 <div className="flex flex-col gap-4">
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">{t('orderType', 'Order Type')}</h3>
@@ -434,252 +680,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       </p>
                     </div>
                   )}
-                </div>
-
-                {/* 2. Order Summary */}
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">
-                    {t('orderSummary', 'Order Summary')}
-                  </h3>
-                  <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3">
-                    {cart.map(item => {
-                      const catalogItem = catalogItems.find(i => i.id === item.menuItemId);
-                      const isEligible = catalogItem?.canClaim ?? false;
-                      return (
-                        <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
-                          <div className="flex-1">
-                            <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
-                            {signedIn && userStamps >= 10 && (
-                              <div className="mt-0.5">
-                                {isEligible ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-md">
-                                    🎁 {t('eligibleForStamps', 'Stamp reward eligible')}
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center text-[10px] font-medium text-tg-hint bg-tg-bg/70 px-1.5 py-0.5 rounded-md border border-tg-hint/10">
-                                    {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            {Object.keys(item.selectedModifiers).length > 0 && (
-                              <div className="text-xs text-tg-hint mt-1">
-                                {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
-                              </div>
-                            )}
-                          </div>
-                          <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 3. Stamp Loyalty Rewards */}
-                {signedIn && userProfile && (
-                  <div className="space-y-2">
-                    {/* Case 1: Has at least 10 stamps AND has eligible claimable items in cart */}
-                    {maxClaimableCount > 0 && (
-                      <div className={`rounded-2xl p-4 border transition-all ${
-                        effectiveClaimCount > 0
-                          ? 'bg-brand-primary/10 border-brand-primary/40 shadow-xs'
-                          : 'bg-tg-secondary-bg border-tg-hint/15'
-                      }`}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-brand-primary text-white text-lg shrink-0">
-                              🎁
-                            </div>
-                            <div>
-                              <div className="font-bold text-sm text-tg-text">
-                                {t('claimFreeDrink', 'Claim Free Item (10 Stamps each)')}
-                              </div>
-                              <div className="text-xs text-tg-hint">
-                                {t('stampsAvailableCount', '{{stamps}} stamps available (can claim up to {{max}} free)', {
-                                  stamps: userStamps,
-                                  max: maxClaimableCount,
-                                })}
-                              </div>
-                            </div>
-                          </div>
-
-                          {maxClaimableCount === 1 ? (
-                            <button
-                              type="button"
-                              onClick={() => setClaimedCount(effectiveClaimCount > 0 ? 0 : 1)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                                effectiveClaimCount > 0
-                                  ? 'bg-brand-primary text-white shadow-xs'
-                                  : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
-                              }`}
-                            >
-                              {effectiveClaimCount > 0 ? t('applied', 'Applied ✓') : t('apply', 'Apply')}
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2 bg-tg-bg border border-tg-hint/20 rounded-xl p-1 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => setClaimedCount(Math.max(0, effectiveClaimCount - 1))}
-                                disabled={effectiveClaimCount <= 0}
-                                className="w-7 h-7 rounded-lg bg-tg-secondary-bg font-bold text-sm flex items-center justify-center disabled:opacity-40 text-tg-text active:scale-95 transition-transform"
-                                aria-label="Decrease free items"
-                              >
-                                -
-                              </button>
-                              <span className="w-5 text-center font-bold text-sm text-tg-text">
-                                {effectiveClaimCount}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setClaimedCount(Math.min(maxClaimableCount, effectiveClaimCount + 1))}
-                                disabled={effectiveClaimCount >= maxClaimableCount}
-                                className="w-7 h-7 rounded-lg bg-brand-primary text-white font-bold text-sm flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform"
-                                aria-label="Increase free items"
-                              >
-                                +
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {effectiveClaimCount > 0 && (
-                          <div className="text-xs font-bold text-brand-primary mt-3 flex flex-col gap-1 border-t border-brand-primary/20 pt-2">
-                            {claimedUnits.map((u, idx) => (
-                              <div key={idx} className="flex items-center justify-between">
-                                <span>🎁 {u.name} (Free)</span>
-                                <span>-{formatCurrency(u.unitPrice)}</span>
-                              </div>
-                            ))}
-                            <div className="text-[11px] text-tg-hint font-normal mt-0.5">
-                              {t('stampsDeducted', 'Using {{stamps}} stamps', {
-                                stamps: effectiveClaimCount * 10,
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Case 2: Customer has >= 10 stamps, but NO claimable items in cart */}
-                    {userStamps >= 10 && totalClaimableUnits === 0 && (
-                      <div className="rounded-2xl p-4 bg-tg-secondary-bg border border-tg-hint/15 flex items-start gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 text-lg shrink-0 mt-0.5">
-                          🎁
-                        </div>
-                        <div className="space-y-1">
-                          <div className="font-bold text-sm text-tg-text">
-                            {t('stampsReady', 'You have {{stamps}} stamps ready!', { stamps: userStamps })}
-                          </div>
-                          <div className="text-xs text-tg-hint leading-relaxed">
-                            {t('addClaimableItemHint', 'Add an eligible drink to your cart to claim for free.')}
-                          </div>
-                          <div className="text-[11px] text-amber-600 font-medium pt-0.5">
-                            ⚠️ {t('ineligibleItemsInCartNotice', 'Items currently in your cart are not eligible for stamp rewards.')}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Case 3: Customer has less than 10 stamps */}
-                    {userStamps < 10 && userStamps > 0 && (
-                      <div className="rounded-2xl p-3 bg-tg-secondary-bg border border-tg-hint/10 flex items-center justify-between text-xs text-tg-hint">
-                        <span>🥣 {t('yourStamps', 'Your Stamps')}: <strong className="text-tg-text">{userStamps}/10</strong></span>
-                        <span>{t('needMoreStampsCount', '{{count}} more for free item', { count: 10 - userStamps })}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 4. Payment Method */}
-                <div className="flex flex-col gap-3">
-                  <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
-                  {storeStatus.enableKhqr && khqrOffered ? (
-                    <button
-                      onClick={() => setMethod('khqr')}
-                      aria-pressed={method === 'khqr'}
-                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
-                        method === 'khqr'
-                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm'
-                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-base text-tg-text">{t('khqr')}</div>
-                        <div className="text-xs text-tg-hint mt-1">{t('khqrDescription', 'Pay instantly via any Cambodian bank app')}</div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        method === 'khqr' ? 'border-brand-primary' : 'border-tg-hint/25'
-                      }`}>
-                        {method === 'khqr' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
-                      </div>
-                    </button>
-                  ) : null}
-
-                  {storeStatus.enableCash ? (
-                    <button 
-                      onClick={() => setMethod('cash')}
-                      aria-pressed={method === 'cash'}
-                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
-                        method === 'cash' 
-                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
-                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-base text-tg-text">{t('cash')}</div>
-                        <div className="text-xs text-tg-hint mt-1">{t('cashDescription', 'Pay at counter or upon delivery')}</div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        method === 'cash' ? 'border-brand-primary' : 'border-tg-hint/25'
-                      }`}>
-                        {method === 'cash' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
-                      </div>
-                    </button>
-                  ) : null}
-
-                  {!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered) && (
-                    <p className="text-xs text-[#E53935] font-medium bg-[#E53935]/10 p-3 rounded-xl border border-[#E53935]/20 text-center">
-                      {t('noPaymentAvailable', 'No payment methods are available right now.')}
-                    </p>
-                  )}
-                </div>
-
-                {/* 5. Pricing Breakdown */}
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">{t('pricingBreakdown', 'Pricing Breakdown')}</h3>
-                  <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3 border border-tg-hint/15">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-tg-hint">{t('subtotal', 'Subtotal')}</span>
-                      <span className="font-medium text-tg-text">{formatCurrency(total)}</span>
-                    </div>
-
-                    {discountApplied > 0 && (
-                      <div className="flex justify-between items-center text-sm text-brand-primary">
-                        <span>
-                          {t('stampRewardDiscount', '10-Stamp Reward ({{count}} free)', {
-                            count: effectiveClaimCount,
-                          })}
-                        </span>
-                        <span className="font-medium">-{formatCurrency(discountApplied)}</span>
-                      </div>
-                    )}
-
-                    {orderType === 'delivery' && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-tg-hint">{t('deliveryFee', 'Delivery Fee')}</span>
-                        <span className={`font-medium ${deliveryFee === 0 ? 'text-brand-primary' : 'text-tg-text'}`}>
-                          {deliveryFee === 0 ? t('free', 'FREE') : formatCurrency(deliveryFee)}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="border-t border-tg-hint/10 my-1" />
-
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-tg-text">{t('totalAmount', 'Total Amount')}</span>
-                      <span className="font-extrabold text-lg text-tg-text">{formatCurrency(finalTotal)}</span>
-                    </div>
-                  </div>
                 </div>
               </>
             )}
