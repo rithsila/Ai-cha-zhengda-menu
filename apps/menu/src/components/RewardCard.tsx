@@ -49,11 +49,6 @@ export function RewardCard({
 
   return (
     <div className="flex flex-col gap-2.5 w-full">
-      {/* Top Header */}
-      <div className="flex items-center gap-1.5 font-bold text-xs text-tg-text px-1">
-        <span>🥣</span>
-        <span>{t('loyaltyStampCard', 'Stamp Card')}</span>
-      </div>
 
       {/* Physical Card Mockup Container */}
       <div className="relative w-full aspect-[1050/600] rounded-2xl overflow-hidden shadow-xl border-2 border-red-600/20 bg-red-600 select-none">
