@@ -35,7 +35,10 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
   // Points belong to one account. A guest has none to show.
   const signedIn = hasIdentity();
   const [points, setPoints] = useState<number | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [claimOrders, setClaimOrders] = useState<any[]>([]);
+  const [paidOrderCount, setPaidOrderCount] = useState(0);
+  const [goldThreshold, setGoldThreshold] = useState(3);
   const [earnPerDollar, setEarnPerDollar] = useState(DEFAULT_EARN_PER_DOLLAR);
   const [pointsPerDollar, setPointsPerDollar] = useState(DEFAULT_POINTS_PER_DOLLAR);
   const [loading, setLoading] = useState(true);
@@ -56,6 +59,7 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
 
         if (userRes.ok) {
           const user = await userRes.json();
+          setUserProfile(user);
           setPoints(Number(user.loyaltyPoints) || 0);
         } else {
           setFailed(true);
@@ -63,16 +67,22 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
 
         if (ordersRes.ok) {
           const orders = await ordersRes.json();
-          const claims = (Array.isArray(orders) ? orders : []).filter(
+          const orderList = Array.isArray(orders) ? orders : [];
+          const claims = orderList.filter(
             (o: any) => (o.pointsRedeemed ?? 0) > 0 || (o.discountApplied ?? 0) > 0
           );
           setClaimOrders(claims);
+          const paidCount = orderList.filter(
+            (o: any) => o.status === 'paid' || o.status === 'completed'
+          ).length;
+          setPaidOrderCount(paidCount);
         }
 
         if (cfgRes.ok) {
           const rows: { key: string; value: string }[] = await cfgRes.json();
           setEarnPerDollar(readConfigNumber(rows, 'earnPointsPerDollar', DEFAULT_EARN_PER_DOLLAR));
           setPointsPerDollar(readConfigNumber(rows, 'pointsPerDollar', DEFAULT_POINTS_PER_DOLLAR));
+          setGoldThreshold(readConfigNumber(rows, 'goldMinOrdersThreshold', 3));
         }
       } catch (err) {
         console.error('Failed to fetch rewards data', err);
@@ -105,12 +115,38 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-md mx-auto">
-      {/* 10-Slot Stamp Reward Card */}
+      {/* 10-Slot Stamp Reward Card with Membership Tier */}
       <RewardCard
         points={points ?? 0}
         earnPerDollar={earnPerDollar}
         pointsPerDollar={pointsPerDollar}
+        tier={userProfile?.tier || 'standard'}
+        orderCount={paidOrderCount}
+        goldThreshold={goldThreshold}
       />
+
+      {/* Lucky Draw Tickets Counter Card */}
+      <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 rounded-2xl p-4 border border-amber-500/25 shadow-sm flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-xl shadow-md text-white">
+            🎟️
+          </div>
+          <div>
+            <div className="font-extrabold text-base text-tg-text flex items-center gap-1.5">
+              <span>🎟️ {userProfile?.luckyTickets || 0}</span>
+              <span>{t('luckyTickets', 'Lucky Tickets')}</span>
+            </div>
+            <p className="text-xs text-tg-hint mt-0.5">
+              {userProfile?.tier === 'gold'
+                ? t('goldPerk', 'Gold Perk: Cash on Delivery Unlocked')
+                : t('standardMember', 'Standard Member')}
+            </p>
+          </div>
+        </div>
+        <div className="text-2xl animate-bounce" role="img" aria-label="Celebration">
+          🎉
+        </div>
+      </div>
 
       {/* 10-Stamp Reward Checkout Notice */}
       <div className="bg-brand-primary/10 rounded-2xl p-4 border border-brand-primary/20 flex gap-3">

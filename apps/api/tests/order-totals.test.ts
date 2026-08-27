@@ -8,6 +8,11 @@ const itemId = `test-item-${randomUUID()}`;
 let optionId = '';
 
 beforeAll(async () => {
+  await prisma.systemConfig.upsert({
+    where: { key: 'allowCashForStandard' },
+    update: { value: '1' },
+    create: { key: 'allowCashForStandard', value: '1' },
+  });
   await prisma.menuItem.create({
     data: {
       id: itemId, brand: 'ai-cha', category: 'Test', name: 'Priced Tea', basePrice: 3.0,

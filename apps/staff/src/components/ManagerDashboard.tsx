@@ -8,7 +8,6 @@ import {
   Clock,
   Coins,
   DollarSign,
-  History,
   MessageSquare,
   Phone,
   Plus,
@@ -19,7 +18,6 @@ import {
   Sparkles,
   Trash2,
   TrendingUp,
-  User,
   UserCheck,
   UserPlus,
   Users,
@@ -29,6 +27,8 @@ import {
 import { apiFetch } from '../lib/api';
 import type { MenuItemFull } from './MenuItemEditModal';
 import { StoreSettings } from './StoreSettings';
+import { CustomerCrm } from './crm/CustomerCrm';
+import type { CustomersResponse } from './crm/types';
 import {
   Badge,
   Button,
@@ -54,13 +54,6 @@ type Reward = {
   isActive: boolean;
 };
 
-type User = {
-  telegramUserId: string;
-  firstName: string | null;
-  lastName: string | null;
-  loyaltyPoints: number;
-};
-
 type FeedbackReport = {
   id: string;
   telegramUserId?: string | null;
@@ -70,15 +63,6 @@ type FeedbackReport = {
   status: 'new' | 'reviewed' | 'resolved';
   createdAt: string;
 };
-
-type RecentAdjustment = {
-  id: string;
-  name: string;
-  delta: number;
-  time: number;
-};
-
-const REASONS = ['Correction', 'Promotion', 'Compensation', 'Other'];
 
 type Range = 'today' | 'week' | 'month' | 'all';
 
@@ -104,10 +88,6 @@ const PANEL_ID = 'manager-panel';
 
 type ManagerSubTab = 'analytics' | 'settings' | 'feedback' | 'loyalty' | 'rewards' | 'staff';
 
-function displayName(user: User): string {
-  return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
-}
-
 export function ManagerDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<ManagerSubTab>('analytics');
@@ -115,19 +95,10 @@ export function ManagerDashboard() {
 
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [rewards, setRewards] = useState<Reward[]>([]);
+  const [totalCustomers, setTotalCustomers] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState<'session' | 'network' | null>(null);
   const [rewardsError, setRewardsError] = useState(false);
-
-  // Loyalty: user lookup + points adjustment
-  const [userSearch, setUserSearch] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [foundUser, setFoundUser] = useState<User | null>(null);
-  const [userError, setUserError] = useState<string | null>(null);
-  const [deltaInput, setDeltaInput] = useState('');
-  const [reason, setReason] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [recent, setRecent] = useState<RecentAdjustment[]>([]);
 
   // Rewards: add + toggle + menu item picker
   const [addOpen, setAddOpen] = useState(false);
@@ -229,12 +200,13 @@ export function ManagerDashboard() {
     setLoading(true);
     setAnalyticsError(null);
     setRewardsError(false);
-    const [analyticsResult, rewardsResult, catalogResult] = await Promise.allSettled([
+    const [analyticsResult, rewardsResult, catalogResult, customersResult] = await Promise.allSettled([
       apiFetch<AnalyticsData>(
         `/api/analytics/sales?days=${RANGES.find((r) => r.id === range)!.days}`,
       ),
       apiFetch<Reward[]>('/api/rewards?includeInactive=1'),
       apiFetch<MenuItemFull[]>('/api/catalog?includeInactive=false'),
+      apiFetch<CustomersResponse>('/api/customers?limit=1'),
     ]);
     if (analyticsResult.status === 'fulfilled') {
       setAnalytics(analyticsResult.value);
@@ -250,99 +222,17 @@ export function ManagerDashboard() {
     if (catalogResult.status === 'fulfilled') {
       setCatalogItems(catalogResult.value);
     }
+    if (customersResult.status === 'fulfilled') {
+      setTotalCustomers(customersResult.value.summary.totalCustomers);
+    }
     fetchStaffAccounts();
     fetchFeedbacks();
     setLoading(false);
   }, [range, fetchStaffAccounts, fetchFeedbacks]);
 
-
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
-
-  // Loyalty calculation
-  const parsedDelta =
-    deltaInput.trim() === '' || deltaInput.trim() === '-'
-      ? null
-      : Number(deltaInput.trim());
-  const delta = parsedDelta != null && Number.isFinite(parsedDelta) ? parsedDelta : 0;
-  const newBalance = foundUser ? foundUser.loyaltyPoints + delta : 0;
-  const canSave =
-    foundUser != null &&
-    parsedDelta != null &&
-    delta !== 0 &&
-    reason !== '' &&
-    newBalance >= 0 &&
-    !saving;
-
-  const applyQuick = (amount: number) => {
-    const current = parsedDelta ?? 0;
-    setDeltaInput(String(current + amount));
-  };
-
-  const handleSearchUser = async (e: FormEvent) => {
-    e.preventDefault();
-    const id = userSearch.trim();
-    if (!id) return;
-    setSearching(true);
-    setUserError(null);
-    setFoundUser(null);
-    try {
-      const user = await apiFetch<User>(`/api/users/${encodeURIComponent(id)}`);
-      setFoundUser(user);
-      setDeltaInput('');
-      setReason('');
-    } catch (err) {
-      const status = (err as Error & { status?: number }).status;
-      setUserError(
-        status === 404
-          ? 'No customer found with that ID.'
-          : status === 401
-            ? 'Manager session expired — unlock again.'
-            : 'Could not search right now.',
-      );
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleSavePoints = async () => {
-    if (!foundUser || parsedDelta == null || delta === 0 || newBalance < 0) return;
-    setSaving(true);
-    try {
-      await apiFetch(`/api/users/${encodeURIComponent(foundUser.telegramUserId)}/points`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ points: newBalance }),
-      });
-      const name = displayName(foundUser);
-      const sign = delta > 0 ? '+' : '';
-      toast({
-        title: 'Points updated',
-        description: `${name}: ${foundUser.loyaltyPoints} → ${newBalance} (${sign}${delta})`,
-        variant: 'success',
-      });
-      setRecent((prev) =>
-        [
-          { id: crypto.randomUUID(), name, delta, time: Date.now() },
-          ...prev,
-        ].slice(0, 5),
-      );
-      setFoundUser((prev) => (prev ? { ...prev, loyaltyPoints: newBalance } : prev));
-      setDeltaInput('');
-      setReason('');
-    } catch (err) {
-      const status = (err as Error & { status?: number }).status;
-      toast({
-        title: "Couldn't update points",
-        description:
-          status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
-        variant: 'error',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -552,7 +442,7 @@ export function ManagerDashboard() {
     { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
     { id: 'settings', label: 'Store Settings', icon: <Sliders className="size-4" /> },
     { id: 'feedback', label: 'Issues & Feedback', icon: <MessageSquare className="size-4" />, badge: newFeedbackCount > 0 ? `${newFeedbackCount} new` : (feedbacks.length > 0 ? feedbacks.length : undefined) },
-    { id: 'loyalty', label: 'Customer Stamps', icon: <Users className="size-4" /> },
+    { id: 'loyalty', label: 'Customers & Stamps', icon: <Users className="size-4" />, badge: totalCustomers !== undefined && totalCustomers > 0 ? totalCustomers : undefined },
     { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
     { id: 'staff', label: 'Staff & Accounts', icon: <Users2 className="size-4" />, badge: staffAccounts.length },
   ];
@@ -939,218 +829,7 @@ export function ManagerDashboard() {
             )}
           </div>
         ) : activeTab === 'loyalty' ? (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* User Search and Point Adjuster */}
-            <div className="space-y-6 lg:col-span-7">
-              <Card padding="lg" className="border-border bg-surface">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                    <Search className="size-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-ink">Customer Stamp Cards</h3>
-                    <p className="text-xs text-ink-soft">Search user by numeric Telegram User ID to view and adjust stamps</p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSearchUser} className="mt-4 flex gap-2">
-                  <label className="sr-only" htmlFor="user-id-search">
-                    Telegram user ID
-                  </label>
-                  <input
-                    id="user-id-search"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Enter Telegram User ID (e.g. 123456789)"
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    className="h-11 flex-1 rounded-xl border border-border bg-surface-sunken/40 px-4 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent focus:bg-surface"
-                  />
-                  <Button type="submit" variant="primary" loading={searching}>
-                    Search User
-                  </Button>
-                </form>
-
-                {userError && (
-                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-danger-soft p-3 text-xs font-semibold text-danger">
-                    <CircleAlert className="size-4 shrink-0" />
-                    <span>{userError}</span>
-                  </div>
-                )}
-
-                {foundUser && (
-                  <div className="mt-5 rounded-2xl border border-accent/20 bg-accent-soft/40 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-12 items-center justify-center rounded-2xl bg-accent font-bold text-on-accent">
-                          {(foundUser.firstName?.[0] || 'U').toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-base font-bold text-ink">{displayName(foundUser)}</p>
-                          <p className="text-xs font-mono text-ink-soft">ID: {foundUser.telegramUserId}</p>
-                        </div>
-                      </div>
-                      <div className="rounded-xl bg-surface px-3 py-1.5 text-right shadow-sm">
-                        <p className="text-[10px] uppercase font-semibold text-ink-faint">Current Stamps</p>
-                        <p className="text-lg font-black tabular-nums text-accent">
-                          {Math.floor(foundUser.loyaltyPoints / 10)}{' '}
-                          <span className="text-xs font-medium">stamps</span>
-                        </p>
-                        <p className="text-[10px] text-ink-faint">
-                          {foundUser.loyaltyPoints} pts • {Math.floor(foundUser.loyaltyPoints / 100)} full {Math.floor(foundUser.loyaltyPoints / 100) === 1 ? 'card' : 'cards'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <label htmlFor="delta-input" className="block text-xs font-bold uppercase tracking-wider text-ink">
-                          Adjust Points / Stamps (+ / -)
-                        </label>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <input
-                            id="delta-input"
-                            type="number"
-                            step="10"
-                            value={deltaInput}
-                            onChange={(e) => setDeltaInput(e.target.value)}
-                            placeholder="0"
-                            className="h-11 w-32 rounded-xl border border-border bg-surface px-3 text-center text-lg font-black tabular-nums text-ink outline-none focus:border-accent"
-                          />
-                          {[
-                            { val: 10, label: '+1 Stamp' },
-                            { val: 20, label: '+2 Stamps' },
-                            { val: 50, label: '+5 Stamps' },
-                            { val: 100, label: '+10 Stamps (1 Card)' },
-                            { val: -10, label: '-1 Stamp' },
-                            { val: -50, label: '-5 Stamps' },
-                            { val: -100, label: '-10 Stamps (-1 Card)' },
-                          ].map((item) => (
-                            <Button
-                              key={item.val}
-                              variant="secondary"
-                              size="md"
-                              onClick={() => applyQuick(item.val)}
-                              className="font-bold text-xs"
-                            >
-                              {item.label}
-                            </Button>
-                          ))}
-                          {parsedDelta != null && delta !== 0 ? (
-                            <Button variant="ghost" size="md" onClick={() => setDeltaInput('')}>
-                              Clear
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label htmlFor="reason-select" className="block text-xs font-bold uppercase tracking-wider text-ink">
-                          Adjustment Reason <span className="text-danger">*</span>
-                        </label>
-                        <select
-                          id="reason-select"
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                          className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink outline-none focus:border-accent"
-                        >
-                          <option value="">Select a reason...</option>
-                          {REASONS.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Live Calculation Preview */}
-                      <div className="rounded-xl bg-surface p-3 text-sm font-medium">
-                        {delta !== 0 ? (
-                          newBalance < 0 ? (
-                            <span className="font-semibold text-danger">
-                              ⚠️ Warning: New balance would be negative ({Math.floor(newBalance / 10)} stamps).
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-between">
-                              <span className="text-ink-soft">Resulting Balance:</span>
-                              <span className="font-bold text-ink">
-                                {Math.floor(foundUser.loyaltyPoints / 10)} stamps ({foundUser.loyaltyPoints} pts) →{' '}
-                                <span className="text-accent">
-                                  {Math.floor(newBalance / 10)} stamps ({newBalance} pts)
-                                </span>{' '}
-                                ({delta > 0 ? `+${delta / 10} stamps` : `${delta / 10} stamps`})
-                              </span>
-                            </div>
-                          )
-                        ) : (
-                          <span className="text-xs text-ink-faint">
-                            Type points or click stamp buttons above to calculate new balance preview.
-                          </span>
-                        )}
-                      </div>
-
-                      <Button
-                        variant="success"
-                        size="lg"
-                        className="w-full font-bold"
-                        disabled={!canSave}
-                        loading={saving}
-                        onClick={handleSavePoints}
-                      >
-                        Confirm &amp; Apply Adjustment
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </div>
-
-            {/* Recent Adjustments Log */}
-            <div className="space-y-6 lg:col-span-5">
-              <Card padding="lg" className="border-border bg-surface">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-9 items-center justify-center rounded-xl bg-surface-sunken text-ink">
-                    <History className="size-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-ink">Recent Session Actions</h3>
-                    <p className="text-xs text-ink-soft">Stamps updated in this session</p>
-                  </div>
-                </div>
-
-                {recent.length === 0 ? (
-                  <p className="mt-6 text-center text-xs text-ink-faint">
-                    No stamp adjustments applied in this session yet.
-                  </p>
-                ) : (
-                  <ul className="mt-4 divide-y divide-border">
-                    {recent.map((r) => (
-                      <li key={r.id} className="flex items-center justify-between py-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-ink">{r.name}</p>
-                          <p className="text-xs text-ink-faint">
-                            {new Date(r.time).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-lg px-2 py-1 font-mono text-xs font-bold ${
-                            r.delta > 0
-                              ? 'bg-success-soft text-success'
-                              : 'bg-danger-soft text-danger'
-                          }`}
-                        >
-                          {r.delta > 0 ? `+${r.delta / 10} stamps` : `${r.delta / 10} stamps`} ({r.delta > 0 ? `+${r.delta}` : r.delta} pts)
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-            </div>
-          </div>
+          <CustomerCrm onSummaryChange={(count) => setTotalCustomers(count)} />
         ) : activeTab === 'rewards' ? (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">

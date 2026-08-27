@@ -36,6 +36,9 @@ describe('End-to-End System & Workflow Validation', () => {
 
     // Reset database config
     await prisma.systemConfig.deleteMany({});
+    await prisma.systemConfig.create({
+      data: { key: 'allowCashForStandard', value: '1' },
+    });
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
     await prisma.reward.deleteMany({});
@@ -345,7 +348,7 @@ describe('End-to-End System & Workflow Validation', () => {
     // 4. Give customer exactly 100 points (10 stamps)
     await prisma.user.update({
       where: { telegramUserId: customerTelegramId },
-      data: { loyaltyPoints: 100 },
+      data: { loyaltyPoints: 100, tier: 'gold' },
     });
 
     // 5. Customer places order: 1 Jasmine Tea ($2.50, claimable) + 1 Snack ($3.00, no stamps)

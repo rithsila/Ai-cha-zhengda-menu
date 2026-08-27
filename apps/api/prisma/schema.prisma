@@ -8,15 +8,20 @@ datasource db {
 }
 
 model User {
-  telegramUserId String  @id
+  telegramUserId String   @id
   phoneNumber    String?
   username       String?
   firstName      String?
   lastName       String?
-  loyaltyPoints  Int     @default(0)
-  contactName    String? // name to call at the door
-  building       String? // Arakawa building, "A".."G"
-  roomNumber     String? // 4 digits, "1110" = floor 11, room 10
+  loyaltyPoints  Int      @default(0)
+  contactName    String?  // name to call at the door
+  building       String?  // Arakawa building, "A".."G"
+  roomNumber     String?  // 4 digits, "1110" = floor 11, room 10
+  tier           String   @default("standard") // "standard" (untrusted/new) | "gold" (trusted/VIP)
+  luckyTickets   Int      @default(0)
+  trustNotes     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
   orders         Order[]
 }
 

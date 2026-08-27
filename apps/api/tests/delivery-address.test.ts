@@ -12,6 +12,11 @@ const VALID = { contactName: 'Sok Dara', phoneNumber: '+85512345678', building: 
 const ORDER_ITEMS = [{ menuItemId: itemId, quantity: 1, selectedModifiers: {} }];
 
 beforeAll(async () => {
+  await prisma.systemConfig.upsert({
+    where: { key: 'allowCashForStandard' },
+    update: { value: '1' },
+    create: { key: 'allowCashForStandard', value: '1' },
+  });
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Address Tea', basePrice: 3.0 },
   });

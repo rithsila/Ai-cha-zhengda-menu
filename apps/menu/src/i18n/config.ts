@@ -136,6 +136,12 @@ const resources = {
       eligibleForStamps: "Stamp reward eligible",
       notEligibleForStamps: "Not eligible for stamp rewards",
       ineligibleItemsInCartNotice: "Items in your cart are not eligible for stamp rewards.",
+      goldMember: "Gold Member",
+      standardMember: "Standard Member",
+      goldPerk: "Gold Perk: Cash on Delivery Unlocked",
+      cashLockedForStandard: "Cash on Delivery is reserved for Gold members. Please pay via KHQR.",
+      ordersToGold: "orders to Gold VIP",
+      luckyTickets: "Lucky Tickets",
 
       // Categories
       "Cones": "Cones",
@@ -414,6 +420,12 @@ const resources = {
       eligibleForStamps: "អាចប្តូរយករង្វាន់ត្រាបាន",
       notEligibleForStamps: "មិនអាចប្តូរយកដោយប្រើត្រាទេ",
       ineligibleItemsInCartNotice: "ទំនិញក្នុងកន្ត្រកបច្ចុប្បន្នមិនអាចប្រើត្រាបានទេ។",
+      goldMember: "សមាជិក Gold",
+      standardMember: "សមាជិកធម្មតា",
+      goldPerk: "អត្ថប្រយោជន៍ Gold: ទូទាត់សាច់ប្រាក់បាន",
+      cashLockedForStandard: "ការទូទាត់សាច់ប្រាក់សម្រាប់តែសមាជិក Gold។ សូមទូទាត់តាម KHQR។",
+      ordersToGold: "ការកម្ម៉ង់ទៀតដើម្បីក្លាយជា Gold VIP",
+      luckyTickets: "សន្លឹកឆ្នោតផ្សងសំណាង",
 
       // Categories
       "Cones": "កោណ",
@@ -692,6 +704,12 @@ const resources = {
       eligibleForStamps: "可兑换印章奖励",
       notEligibleForStamps: "不可使用印章兑换",
       ineligibleItemsInCartNotice: "购物车中的商品不可使用印章兑换。",
+      goldMember: "黄金会员",
+      standardMember: "普通会员",
+      goldPerk: "黄金特权: 支持货到付款",
+      cashLockedForStandard: "货到付款仅限黄金会员使用。请使用KHQR扫码支付。",
+      ordersToGold: "笔订单升级为黄金会员",
+      luckyTickets: "抽奖券",
 
       // Categories
       "Cones": "冰淇淋甜筒",

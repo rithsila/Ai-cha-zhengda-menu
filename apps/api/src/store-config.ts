@@ -27,6 +27,11 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
   enableDelivery: '1',
   enableCash: '1',
   enableKhqr: '1',
+  goldMinOrdersThreshold: 3,
+  allowCashForStandard: '0',
+  luckyDrawEnabled: '1',
+  luckyTicketsPerGoldOrder: 2,
+  luckyTicketsPerStandardOrder: 1,
 };
 
 /**
@@ -137,9 +142,17 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
   const strVal = String(value ?? '').trim();
 
   // Numeric keys
-  if (key === 'pointsPerDollar' || key === 'earnPointsPerDollar' || key === 'deliveryFee') {
+  if (
+    key === 'pointsPerDollar' ||
+    key === 'earnPointsPerDollar' ||
+    key === 'deliveryFee' ||
+    key === 'goldMinOrdersThreshold' ||
+    key === 'luckyTicketsPerGoldOrder' ||
+    key === 'luckyTicketsPerStandardOrder'
+  ) {
     const num = Number(strVal);
-    const min = key === 'deliveryFee' ? 0 : 1;
+    const nonNegativeKeys = ['deliveryFee', 'goldMinOrdersThreshold', 'luckyTicketsPerGoldOrder', 'luckyTicketsPerStandardOrder'];
+    const min = nonNegativeKeys.includes(key) ? 0 : 1;
     if (!Number.isFinite(num) || num < min) {
       return { valid: false, normalizedValue: '', error: `${key} must be a number of at least ${min}` };
     }
@@ -164,7 +177,14 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
   }
 
   // Boolean toggles ('1' or '0')
-  if (key === 'enablePickup' || key === 'enableDelivery' || key === 'enableCash' || key === 'enableKhqr') {
+  if (
+    key === 'enablePickup' ||
+    key === 'enableDelivery' ||
+    key === 'enableCash' ||
+    key === 'enableKhqr' ||
+    key === 'allowCashForStandard' ||
+    key === 'luckyDrawEnabled'
+  ) {
     if (strVal === '1' || strVal === 'true' || value === true) {
       return { valid: true, normalizedValue: '1' };
     }
@@ -176,3 +196,9 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
 
   return { valid: true, normalizedValue: strVal };
 }
+
+export async function getConfigString(prisma: PrismaClient, key: string, fallback: string): Promise<string> {
+  const row = await prisma.systemConfig.findUnique({ where: { key } });
+  return row ? row.value : fallback;
+}
+

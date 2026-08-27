@@ -44,7 +44,12 @@ beforeAll(async () => {
     },
   });
 
-  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 100 } });
+  await prisma.systemConfig.upsert({
+    where: { key: 'allowCashForStandard' },
+    update: { value: '1' },
+    create: { key: 'allowCashForStandard', value: '1' },
+  });
+  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 100, tier: 'gold' } });
 
   staffToken = issueToken('staff').token;
   managerToken = issueToken('manager').token;

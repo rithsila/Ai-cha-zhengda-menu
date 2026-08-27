@@ -7,6 +7,7 @@ import {
   settleOrderPoints,
   refundOrderPoints,
   getConfigNumber,
+  getConfigString,
   getConfigValue,
   getStoreStatus,
   validateConfig,
@@ -25,6 +26,7 @@ import {
 import { sendOtpSms } from './sms';
 import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
+  verifyInitData, devIdentityAllowed, TelegramInitDataUser,
 } from './telegram-initdata';
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
 import { sendTelegramNotification } from './bot';
@@ -408,10 +410,39 @@ export function createApp() {
       if (!telegramUserId) {
         return res.status(400).json({ error: 'Missing telegramUserId' });
       }
+
+      // If x-telegram-init-data is present, parse initData and sync/upsert username, firstName, lastName
+      let initDataUser: TelegramInitDataUser | null = null;
+      const rawInitData = req.headers['x-telegram-init-data'];
+      if (typeof rawInitData === 'string' && rawInitData) {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+        initDataUser = verifyInitData(rawInitData, botToken);
+        if (!initDataUser && devIdentityAllowed()) {
+          try {
+            const params = new URLSearchParams(rawInitData);
+            const rawUser = params.get('user');
+            if (rawUser) initDataUser = JSON.parse(rawUser);
+          } catch {}
+        }
+      }
+
+      const updateData: Record<string, string> = {};
+      if (initDataUser) {
+        if (initDataUser.username) updateData.username = initDataUser.username;
+        if (initDataUser.first_name) updateData.firstName = initDataUser.first_name;
+        if (initDataUser.last_name) updateData.lastName = initDataUser.last_name;
+      }
+
       const user = await prisma.user.upsert({
         where: { telegramUserId },
-        update: {},
-        create: { telegramUserId, loyaltyPoints: 0 }
+        update: updateData,
+        create: {
+          telegramUserId,
+          loyaltyPoints: 0,
+          username: initDataUser?.username || null,
+          firstName: initDataUser?.first_name || null,
+          lastName: initDataUser?.last_name || null,
+        }
       });
       res.json(user);
     } catch (error) {
@@ -812,6 +843,14 @@ export function createApp() {
       const saved = telegramUserId
         ? await prisma.user.findUnique({ where: { telegramUserId } })
         : null;
+
+      if (paymentMethod === 'cash') {
+        const allowCashForStandard = await getConfigString(prisma, 'allowCashForStandard', String(CONFIG_DEFAULTS.allowCashForStandard));
+        const userTier = saved?.tier || 'standard';
+        if (userTier === 'standard' && allowCashForStandard !== '1') {
+          return res.status(403).json({ error: 'Cash on delivery is reserved for Gold members. Please pay via KHQR.' });
+        }
+      }
 
       if (orderType === 'delivery') {
         const b = (building ?? saved?.building ?? '').toString().trim().toUpperCase();
@@ -1564,6 +1603,264 @@ export function createApp() {
       res.json({ totalRevenue, orderCount, byDate });
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch analytics' });
+    }
+  });
+
+  // CRM & Customer Management Endpoints (Manager Only)
+  app.get('/api/customers', requireManager, async (req, res) => {
+    try {
+      const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+      const rawTier = typeof req.query.tier === 'string' ? req.query.tier.trim().toLowerCase() : 'all';
+      const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '50'), 10) || 50));
+
+      const where: any = {};
+      if (rawTier === 'standard' || rawTier === 'gold') {
+        where.tier = rawTier;
+      }
+
+      if (search) {
+        where.OR = [
+          { telegramUserId: { contains: search } },
+          { phoneNumber: { contains: search } },
+          { username: { contains: search } },
+          { firstName: { contains: search } },
+          { lastName: { contains: search } },
+          { contactName: { contains: search } },
+        ];
+      }
+
+      const totalMatching = await prisma.user.count({ where });
+
+      const users = await prisma.user.findMany({
+        where,
+        include: {
+          orders: {
+            select: { totalAmount: true, status: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Global summary across all users
+      const allUsers = await prisma.user.findMany({
+        select: { tier: true, loyaltyPoints: true, luckyTickets: true },
+      });
+      const totalCustomers = allUsers.length;
+      const standardCount = allUsers.filter((u) => u.tier === 'standard').length;
+      const goldCount = allUsers.filter((u) => u.tier === 'gold').length;
+      const totalStamps = allUsers.reduce((sum, u) => sum + Math.floor((u.loyaltyPoints || 0) / 10), 0);
+      const totalLuckyTickets = allUsers.reduce((sum, u) => sum + (u.luckyTickets || 0), 0);
+
+      const customers = users.map((u) => {
+        const paidOrders = u.orders.filter((o) => o.status === 'paid' || o.status === 'completed');
+        const totalSpent = Math.round(paidOrders.reduce((sum, o) => sum + o.totalAmount, 0) * 100) / 100;
+        const lastOrderDate = u.orders.length > 0 ? u.orders[0].createdAt : null;
+        return {
+          telegramUserId: u.telegramUserId,
+          phoneNumber: u.phoneNumber,
+          username: u.username,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          contactName: u.contactName,
+          building: u.building,
+          roomNumber: u.roomNumber,
+          tier: u.tier,
+          loyaltyPoints: u.loyaltyPoints,
+          luckyTickets: u.luckyTickets,
+          trustNotes: u.trustNotes,
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+          totalOrders: paidOrders.length,
+          totalSpent,
+          lastOrderDate,
+        };
+      });
+
+      res.json({
+        customers,
+        pagination: {
+          page,
+          limit,
+          total: totalMatching,
+          totalPages: Math.ceil(totalMatching / limit),
+        },
+        summary: {
+          totalCustomers,
+          standardCount,
+          goldCount,
+          totalStamps,
+          totalLuckyTickets,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch customers' });
+    }
+  });
+
+  app.get('/api/customers/:telegramUserId', requireManager, async (req, res) => {
+    try {
+      const telegramUserId = String(req.params.telegramUserId);
+      const user = await prisma.user.findUnique({
+        where: { telegramUserId },
+        include: {
+          orders: {
+            take: 20,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              items: {
+                include: { menuItem: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      const allOrders = await prisma.order.findMany({
+        where: { telegramUserId },
+        select: { totalAmount: true, status: true },
+      });
+      const paidOrders = allOrders.filter((o) => o.status === 'paid' || o.status === 'completed');
+      const totalSpent = Math.round(paidOrders.reduce((sum, o) => sum + o.totalAmount, 0) * 100) / 100;
+      const totalOrders = paidOrders.length;
+
+      res.json({
+        ...user,
+        totalOrders,
+        totalSpent,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch customer details' });
+    }
+  });
+
+  app.put('/api/customers/:telegramUserId/tier', requireManager, async (req, res) => {
+    try {
+      const telegramUserId = String(req.params.telegramUserId);
+      const { tier, trustNotes } = req.body || {};
+
+      if (tier !== 'standard' && tier !== 'gold') {
+        return res.status(400).json({ error: "tier must be 'standard' or 'gold'" });
+      }
+
+      const existing = await prisma.user.findUnique({ where: { telegramUserId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      const updated = await prisma.user.update({
+        where: { telegramUserId },
+        data: {
+          tier,
+          ...(trustNotes !== undefined ? { trustNotes: typeof trustNotes === 'string' ? trustNotes.trim() : null } : {}),
+        },
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to update customer tier' });
+    }
+  });
+
+  app.put('/api/customers/:telegramUserId/lucky-tickets', requireManager, async (req, res) => {
+    try {
+      const telegramUserId = String(req.params.telegramUserId);
+      const { delta, tickets } = req.body || {};
+
+      const existing = await prisma.user.findUnique({ where: { telegramUserId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      let newTickets: number;
+      if (tickets !== undefined) {
+        if (!Number.isInteger(tickets) || tickets < 0) {
+          return res.status(400).json({ error: 'tickets must be a whole number of 0 or more' });
+        }
+        newTickets = tickets;
+      } else if (delta !== undefined) {
+        if (!Number.isInteger(delta)) {
+          return res.status(400).json({ error: 'delta must be an integer' });
+        }
+        newTickets = Math.max(0, existing.luckyTickets + delta);
+      } else {
+        return res.status(400).json({ error: 'tickets or delta is required' });
+      }
+
+      const updated = await prisma.user.update({
+        where: { telegramUserId },
+        data: { luckyTickets: newTickets },
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to update lucky tickets' });
+    }
+  });
+
+  // Lucky Draw Trigger (Manager Only)
+  app.post('/api/lucky-draw/draw', requireManager, async (req, res) => {
+    try {
+      const { prizeName, tierFilter } = req.body || {};
+      const filterTier = typeof tierFilter === 'string' ? tierFilter.trim().toLowerCase() : 'all';
+
+      const whereClause: any = {
+        luckyTickets: { gt: 0 },
+      };
+      if (filterTier === 'standard' || filterTier === 'gold') {
+        whereClause.tier = filterTier;
+      }
+
+      const eligibleUsers = await prisma.user.findMany({
+        where: whereClause,
+      });
+
+      if (eligibleUsers.length === 0) {
+        return res.status(400).json({ error: 'No eligible participants with tickets found' });
+      }
+
+      const totalTickets = eligibleUsers.reduce((sum, u) => sum + u.luckyTickets, 0);
+      const randomTicket = Math.floor(Math.random() * totalTickets);
+
+      let runningSum = 0;
+      let winner = eligibleUsers[0];
+      for (const u of eligibleUsers) {
+        runningSum += u.luckyTickets;
+        if (runningSum > randomTicket) {
+          winner = u;
+          break;
+        }
+      }
+
+      res.json({
+        winner: {
+          telegramUserId: winner.telegramUserId,
+          phoneNumber: winner.phoneNumber,
+          username: winner.username,
+          firstName: winner.firstName,
+          lastName: winner.lastName,
+          contactName: winner.contactName,
+          tier: winner.tier,
+          luckyTickets: winner.luckyTickets,
+        },
+        prizeName: prizeName ? String(prizeName).trim() : null,
+        totalParticipants: eligibleUsers.length,
+        totalTickets,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to draw winner' });
     }
   });
 

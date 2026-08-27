@@ -13,7 +13,7 @@ let managerToken = '';
 
 beforeAll(async () => {
   managerToken = issueToken('manager').token;
-  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 100 } });
+  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 100, tier: 'gold' } });
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Tea', name: 'Store Test Drink', basePrice: 2.5 },
   });

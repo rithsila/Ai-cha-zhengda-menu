@@ -51,7 +51,7 @@ beforeAll(async () => {
   await prisma.systemConfig.deleteMany({
     where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
   });
-  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: START_POINTS } });
+  await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: START_POINTS, tier: 'gold' } });
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Expiry Tea', basePrice: ITEM_PRICE },
   });
