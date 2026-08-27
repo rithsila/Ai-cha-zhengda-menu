@@ -76,11 +76,23 @@ export async function sendOtpSms(
       }
 
       console.warn('[SMS-PLASGATE-WARN] Response:', data);
-      // If Plasgate returned an error, capture it
+      // If Plasgate returned an error, capture it cleanly as a string
       if (data.error || data.message) {
+        let errorMsg = 'Plasgate SMS delivery failed.';
+        if (typeof data.message === 'string') {
+          errorMsg = data.message;
+        } else if (typeof data.message === 'object' && data.message !== null) {
+          errorMsg = Object.entries(data.message)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ');
+        } else if (typeof data.error === 'string') {
+          errorMsg = data.error;
+        } else if (typeof data.error === 'object' && data.error !== null) {
+          errorMsg = data.error.message || data.error.description || JSON.stringify(data.error);
+        }
         return {
           success: false,
-          error: data.message || data.error || 'Plasgate SMS delivery failed.',
+          error: errorMsg,
         };
       }
     } catch (err: any) {

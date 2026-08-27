@@ -83,6 +83,38 @@ describe('Staff Phone Number & OTP Authentication (Plasgate)', () => {
     delete process.env.PLASGATE_SECRET_KEY;
   });
 
+  it('handles Plasgate error object cleanly without showing [object Object]', async () => {
+    process.env.PLASGATE_PRIVATE_KEY = 'test_private_key';
+    process.env.PLASGATE_SECRET_KEY = 'test_secret_key';
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({ message: { sender: 'Invalid sender' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    await prisma.staffAccount.create({
+      data: {
+        name: 'Sokha Staff',
+        phoneNumber: '+85570433443',
+        role: 'staff',
+        isActive: true,
+      },
+    });
+
+    const sendRes = await request(app)
+      .post('/api/auth/staff/send-otp')
+      .send({ phoneNumber: '070433443' });
+
+    expect(sendRes.status).toBe(500);
+    expect(typeof sendRes.body.error).toBe('string');
+    expect(sendRes.body.error).toContain('sender: Invalid sender');
+
+    delete process.env.PLASGATE_PRIVATE_KEY;
+    delete process.env.PLASGATE_SECRET_KEY;
+  });
+
   it('rejects invalid or wrong OTP code', async () => {
     await prisma.staffAccount.create({
       data: {

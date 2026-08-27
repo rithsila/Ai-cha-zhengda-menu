@@ -130,7 +130,10 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       }
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Access denied: Phone number is not authorized by Admin.');
+        const errorMsg = typeof data.error === 'string'
+          ? data.error
+          : (data.error?.message || (typeof data.error === 'object' ? JSON.stringify(data.error) : 'Access denied: Phone number is not authorized by Admin.'));
+        throw new Error(errorMsg);
       }
 
       setOtpSent(true);
