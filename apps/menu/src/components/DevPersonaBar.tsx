@@ -43,8 +43,8 @@ export function DevPersonaBar() {
     if (type === 'gold') {
       await loginAsDevCustomer({
         telegramUserId: 'dev_gold_vip',
-        firstName: 'Alice (VIP)',
-        lastName: 'Gold',
+        firstName: 'Alice',
+        lastName: 'Chen',
         tier: 'gold',
         loyaltyPoints: 120, // 12 stamps (enough for free drink)
         luckyTickets: 5,
@@ -55,8 +55,8 @@ export function DevPersonaBar() {
     } else {
       await loginAsDevCustomer({
         telegramUserId: 'dev_standard_user',
-        firstName: 'Bob (New)',
-        lastName: 'Standard',
+        firstName: 'Bob',
+        lastName: 'Sok',
         tier: 'standard',
         loyaltyPoints: 20, // 2 stamps
         luckyTickets: 1,
