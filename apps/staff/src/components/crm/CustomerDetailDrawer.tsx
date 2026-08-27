@@ -74,17 +74,19 @@ export function CustomerDetailDrawer({
     }
   }, [toast]);
 
+  const targetUserId = customerSummary?.telegramUserId;
+
   useEffect(() => {
-    if (customerSummary?.telegramUserId) {
-      setTrustNotes(customerSummary.trustNotes || '');
+    if (targetUserId) {
+      setTrustNotes(customerSummary?.trustNotes || '');
       setPointsDelta(0);
       setCustomDeltaInput('');
       setReason('');
-      fetchCustomerDetails(customerSummary.telegramUserId);
+      fetchCustomerDetails(targetUserId);
     } else {
       setDetail(null);
     }
-  }, [customerSummary, fetchCustomerDetails]);
+  }, [targetUserId, fetchCustomerDetails]);
 
   if (!customerSummary) return null;
 

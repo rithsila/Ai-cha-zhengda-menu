@@ -97,8 +97,13 @@ export function ManagerDashboard() {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [totalCustomers, setTotalCustomers] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<'session' | 'network' | null>(null);
   const [rewardsError, setRewardsError] = useState(false);
+
+  const handleSummaryChange = useCallback((count: number) => {
+    setTotalCustomers(count);
+  }, []);
 
   // Rewards: add + toggle + menu item picker
   const [addOpen, setAddOpen] = useState(false);
@@ -194,6 +199,27 @@ export function ManagerDashboard() {
     } finally {
       setFeedbackActionId(null);
     }
+  };
+
+  const fetchAnalytics = useCallback(async (selectedRange: Range) => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const data = await apiFetch<AnalyticsData>(
+        `/api/analytics/sales?days=${RANGES.find((r) => r.id === selectedRange)!.days}`,
+      );
+      setAnalytics(data);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      setAnalyticsError(status === 401 ? 'session' : 'network');
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
+
+  const handleRangeChange = (newRange: Range) => {
+    setRange(newRange);
+    fetchAnalytics(newRange);
   };
 
   const fetchDashboardData = useCallback(async () => {
@@ -491,16 +517,30 @@ export function ManagerDashboard() {
         tabIndex={-1}
         className="flex flex-col gap-6"
       >
-        {loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-80 w-full rounded-2xl sm:col-span-2 lg:col-span-4" />
-          </div>
-        ) : activeTab === 'analytics' ? (
-          analyticsError ? (
+        {activeTab === 'analytics' ? (
+          loading || analyticsLoading ? (
+            <div className="space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-ink">Performance Overview</h3>
+                  <p className="text-xs text-ink-soft">Metrics filtered by chosen date window</p>
+                </div>
+                <Segmented
+                  options={RANGES.map((r) => ({ id: r.id, label: r.label }))}
+                  value={range}
+                  onChange={handleRangeChange}
+                  ariaLabel="Reporting period"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Skeleton className="h-32 w-full rounded-2xl" />
+                <Skeleton className="h-32 w-full rounded-2xl" />
+                <Skeleton className="h-32 w-full rounded-2xl" />
+                <Skeleton className="h-32 w-full rounded-2xl" />
+                <Skeleton className="h-80 w-full rounded-2xl sm:col-span-2 lg:col-span-4" />
+              </div>
+            </div>
+          ) : analyticsError ? (
             <Card padding="lg" className="text-center">
               <CircleAlert className="mx-auto size-10 text-danger" aria-hidden="true" />
               <h2 className="mt-3 text-lg font-bold text-ink">
@@ -532,7 +572,7 @@ export function ManagerDashboard() {
                 <Segmented
                   options={RANGES.map((r) => ({ id: r.id, label: r.label }))}
                   value={range}
-                  onChange={setRange}
+                  onChange={handleRangeChange}
                   ariaLabel="Reporting period"
                 />
               </div>
@@ -829,7 +869,7 @@ export function ManagerDashboard() {
             )}
           </div>
         ) : activeTab === 'loyalty' ? (
-          <CustomerCrm onSummaryChange={(count) => setTotalCustomers(count)} />
+          <CustomerCrm onSummaryChange={handleSummaryChange} />
         ) : activeTab === 'rewards' ? (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">

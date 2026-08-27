@@ -51,8 +51,8 @@ export function StoreSettings() {
   const [loading, setLoading] = useState(true);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
 
-  const fetchConfig = useCallback(async () => {
-    setLoading(true);
+  const fetchConfig = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [statusRes, configRes] = await Promise.all([
         apiFetch<any>('/api/store/status'),
@@ -86,7 +86,7 @@ export function StoreSettings() {
         variant: 'error',
       });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [toast]);
 
@@ -112,8 +112,8 @@ export function StoreSettings() {
         variant: 'success',
       });
 
-      // Refresh store status
-      await fetchConfig();
+      // Refresh store status silently without flashing skeletons
+      await fetchConfig(true);
     } catch (err: any) {
       toast({
         title: `Failed to update ${label}`,
@@ -196,7 +196,7 @@ export function StoreSettings() {
           <Button
             variant="secondary"
             size="md"
-            onClick={fetchConfig}
+            onClick={() => fetchConfig()}
             className="shrink-0 gap-2"
           >
             <RotateCcw className="size-4" />

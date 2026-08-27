@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
   ChevronLeft,
@@ -30,6 +30,8 @@ type CustomerCrmProps = {
 
 export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
   const { toast } = useToast();
+  const onSummaryChangeRef = useRef(onSummaryChange);
+  onSummaryChangeRef.current = onSummaryChange;
 
   // Search & Filter state
   const [searchInput, setSearchInput] = useState('');
@@ -73,7 +75,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
       setCustomers(data.customers);
       setSummary(data.summary);
       setPagination(data.pagination);
-      onSummaryChange?.(data.summary.totalCustomers);
+      onSummaryChangeRef.current?.(data.summary.totalCustomers);
     } catch (err: any) {
       setError(err.message || "Couldn't load customer CRM data");
       toast({
@@ -84,7 +86,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, tierFilter, page, onSummaryChange, toast]);
+  }, [debouncedSearch, tierFilter, page, toast]);
 
   useEffect(() => {
     fetchCustomers();
