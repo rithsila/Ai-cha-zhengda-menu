@@ -9,6 +9,8 @@ import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
 import { apiFetch, hasIdentity } from './utils/api';
 import { refreshOnlinePaymentState } from './utils/onlinePayment';
+import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
+import { loginAsDevCustomer } from './utils/telegramUser';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -150,6 +152,19 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           >
             Or browse as guest →
           </button>
+
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={async () => {
+                await loginAsDevCustomer('dev_test_customer');
+                onContinueAsGuest();
+              }}
+              className="mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-emerald-500/10 flex items-center gap-1.5"
+            >
+              <span>🧪</span> Sign in with Test Account (Dev)
+            </button>
+          )}
         </div>
       </motion.div>
 
@@ -191,10 +206,14 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Ask the server once, on load, whether it can take a QR payment today, so no
-  // screen offers KHQR when ABA has no credentials.
+  const storeStatus = useStoreStatus();
+
+  // Refresh payment and store status periodically
   useEffect(() => {
     refreshOnlinePaymentState();
+    refreshStoreStatus();
+    const interval = setInterval(refreshStoreStatus, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
@@ -502,6 +521,24 @@ export default function App() {
                 <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} />
               </div>
             )}
+
+            {/* Store Closed Banner */}
+            {!storeStatus.isOpen && (
+              <div className="mt-3 px-3.5 py-2.5 rounded-2xl bg-black/45 backdrop-blur-md border border-white/20 text-white flex items-center justify-between text-xs shadow-lg animate-fade-in">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">🕒</span>
+                  <div>
+                    <span className="font-bold block text-red-300 leading-tight">{t('shopClosed', 'Shop Closed')}</span>
+                    <span className="text-white/80 text-[11px]">
+                      {t('shopOpeningHours', 'Operating hours: {{hours}}', { hours: `${storeStatus.openTime} – ${storeStatus.closeTime}` })}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-lg bg-red-500/30 text-red-200 border border-red-400/30 font-bold uppercase tracking-wider">
+                  {t('closed', 'Closed')}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -617,7 +654,9 @@ export default function App() {
               <ShoppingCart size={18} weight="fill" />
               <span>{cart.length} {t('items')}</span>
             </div>
-            <span className="text-sm font-black">{t('checkout')} {formatCurrency(cartTotal)}</span>
+            <span className="text-sm font-black">
+              {!storeStatus.isOpen ? t('shopClosed', 'Shop Closed') : `${t('checkout')} ${formatCurrency(cartTotal)}`}
+            </span>
           </button>
         </motion.div>
       )}

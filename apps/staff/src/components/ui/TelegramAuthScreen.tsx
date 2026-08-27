@@ -318,6 +318,36 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
               </div>
             </form>
           )}
+
+          {/* Dev Quick Login Box for local testing */}
+          {import.meta.env.DEV && (
+            <div className="pt-3 border-t border-border/80 mt-4 text-left">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-accent uppercase tracking-wider mb-1.5">
+                <Sparkles className="size-3.5" /> Local Dev Quick Login
+              </div>
+              <p className="text-[10px] text-ink-faint mb-2.5 leading-relaxed">
+                Telegram Login requires an HTTPS domain in @BotFather. For local development on localhost, use 1-click dev login:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => authenticateTelegram({ telegramUserId: 'dev_manager' } as any)}
+                  disabled={loading}
+                  className="h-9 px-2 rounded-lg bg-surface-sunken hover:bg-surface-elevated border border-border text-[11px] font-bold text-ink flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                >
+                  👑 Store Manager
+                </button>
+                <button
+                  type="button"
+                  onClick={() => authenticateTelegram({ telegramUserId: 'dev_staff' } as any)}
+                  disabled={loading}
+                  className="h-9 px-2 rounded-lg bg-surface-sunken hover:bg-surface-elevated border border-border text-[11px] font-bold text-ink flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                >
+                  🧑‍🍳 Staff Member
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>

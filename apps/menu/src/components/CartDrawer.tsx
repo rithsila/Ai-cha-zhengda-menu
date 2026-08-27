@@ -6,6 +6,7 @@ import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
 import { Button } from './ui/Button';
 import { CATALOG } from '../data/catalog';
+import { useStoreStatus } from '../utils/storeStatus';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ interface CartDrawerProps {
 
 export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, onEdit, onCheckout }: CartDrawerProps) {
   const { t } = useTranslation();
+  const storeStatus = useStoreStatus();
   const total = cart.reduce((sum, item) => sum + item.totalPrice, 0);
 
   useEffect(() => {
@@ -82,7 +84,14 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
                     return (
                       <div key={item.id} className="bg-tg-secondary-bg p-4 rounded-2xl flex flex-col gap-3 relative">
                         <div className="flex justify-between items-start gap-2">
-                          <div className="font-bold flex-1">{t(item.name)}</div>
+                          <div className="flex-1">
+                            <div className="font-bold">{t(item.name)}</div>
+                            {menuItem?.canClaim === false && (
+                              <div className="text-[10px] text-tg-hint font-normal mt-0.5">
+                                {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
+                              </div>
+                            )}
+                          </div>
                           <div className="font-bold">{formatCurrency(item.totalPrice)}</div>
                         </div>
                         
@@ -141,8 +150,17 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
                   <span>{t('total')}</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
-                <Button fullWidth onClick={onCheckout} className="py-4 text-lg">
-                  {t('proceed')}
+                <Button
+                  fullWidth
+                  onClick={onCheckout}
+                  disabled={!storeStatus.isOpen || (!storeStatus.enablePickup && !storeStatus.enableDelivery)}
+                  className="py-4 text-lg"
+                >
+                  {!storeStatus.isOpen
+                    ? t('shopClosed', 'Shop Closed')
+                    : (!storeStatus.enablePickup && !storeStatus.enableDelivery)
+                      ? t('orderingDisabled', 'Ordering Disabled')
+                      : t('proceed')}
                 </Button>
               </div>
             )}

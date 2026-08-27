@@ -44,15 +44,12 @@ export async function refundOrderPoints(prisma: PrismaClient, orderId: string) {
   });
 }
 
-export const CONFIG_DEFAULTS: Record<string, number> = {
-  pointsPerDollar: 100,
-  earnPointsPerDollar: 10,
-  // Free inside Arakawa for now. The shop can raise it later via PUT /api/config.
-  deliveryFee: 0,
-};
-
-export async function getConfigNumber(prisma: PrismaClient, key: string, fallback: number): Promise<number> {
-  const row = await prisma.systemConfig.findUnique({ where: { key } });
-  const n = row ? Number(row.value) : NaN;
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
+export {
+  CONFIG_DEFAULTS,
+  getConfigNumber,
+  getConfigValue,
+  getStoreStatus,
+  getCambodiaTime,
+  isTimeInRange,
+  validateConfig,
+} from './store-config';

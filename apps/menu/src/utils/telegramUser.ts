@@ -43,12 +43,42 @@ export function getWebLoginToken(): string | null {
   }
 }
 
+export function setWebLoginToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function clearWebLoginToken(): void {
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {
     // ignore
   }
+}
+
+export async function loginAsDevCustomer(telegramUserId = 'dev_test_customer'): Promise<boolean> {
+  try {
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000';
+    const res = await fetch(`${apiBase}/api/auth/dev-customer-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegramUserId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.token) {
+        setWebLoginToken(data.token);
+        return true;
+      }
+    }
+  } catch (err) {
+    console.error('Dev login failed:', err);
+  }
+  return false;
 }
 
 /**
@@ -129,15 +159,31 @@ export function getSelfIdHint(): string | null {
   return getDevUserId();
 }
 
+const DEV_USER_KEY = 'dev_telegram_user_id';
+
+export function setDevUserId(id: string | null): void {
+  try {
+    if (id) localStorage.setItem(DEV_USER_KEY, id);
+    else localStorage.removeItem(DEV_USER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 /**
- * Development-only identity. The API accepts `X-Telegram-User-Id` only when it
- * has no bot token to verify signatures with, so this can never work against a
- * real deployment. Set VITE_DEV_TELEGRAM_USER_ID to test outside Telegram.
+ * Development-only identity. The API accepts `X-Telegram-User-Id` in development
+ * mode to allow testing without needing a live Telegram WebApp session.
  */
 export function getDevUserId(): string | null {
   if (!import.meta.env.DEV) return null;
   const globalTg = (window as any)?.Telegram?.WebApp;
   const fromTelegram = (globalTg?.initDataUnsafe?.user?.id || WebApp?.initDataUnsafe?.user?.id)?.toString();
   if (fromTelegram) return fromTelegram;
+  try {
+    const stored = localStorage.getItem(DEV_USER_KEY);
+    if (stored) return stored;
+  } catch {
+    // ignore
+  }
   return (import.meta.env.VITE_DEV_TELEGRAM_USER_ID as string | undefined) || null;
 }

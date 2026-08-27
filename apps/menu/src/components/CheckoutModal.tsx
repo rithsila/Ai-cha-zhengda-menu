@@ -11,6 +11,7 @@ import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
 import { getDefaultPaymentMethod } from '../utils/paymentPrefs';
 import { isOnlinePaymentOffered, refreshOnlinePaymentState, useOnlinePaymentState } from '../utils/onlinePayment';
+import { useStoreStatus, refreshStoreStatus } from '../utils/storeStatus';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -29,7 +30,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const { t } = useTranslation();
   const shouldReduceMotion = useReducedMotion();
   const onlinePaymentState = useOnlinePaymentState();
-  const khqrOffered = onlinePaymentState === 'available';
+  const storeStatus = useStoreStatus();
+  const khqrOffered = onlinePaymentState === 'available' && storeStatus.enableKhqr;
   // A guest may still order for pickup and pay cash; everything tied to an
   // account (points, saved address, delivery) needs a verified identity.
   const signedIn = hasIdentity();
@@ -69,14 +71,14 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     }
   }, [isOpen]);
 
-  // Fetch branches and user profile dynamically when open, reset on close
+  // Fetch branches, config and user profile dynamically when open, reset on close
   useEffect(() => {
     if (!isOpen) {
       // Reset state on close
       setStep(1);
       setError(null);
       setMethod(initialPaymentMethod());
-      setOrderType('pickup');
+      setOrderType(storeStatus.enablePickup ? 'pickup' : 'delivery');
       setEditingAddress(false);
       setClaimedCount(0);
       setBranchId('');
@@ -85,8 +87,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       return;
     }
 
-    // Settle whether the shop can take a QR payment before the payment step is
-    // drawn, so KHQR is never offered when it would only fail.
+    // Refresh payment and live store status
+    refreshStoreStatus();
     refreshOnlinePaymentState();
 
     const fetchData = async () => {
@@ -120,13 +122,25 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       }
     };
     fetchData();
-  }, [isOpen, signedIn]);
+  }, [isOpen, signedIn, storeStatus.enablePickup]);
 
-  // If KHQR turns out to be off while this screen is open, quietly fall back to
-  // cash rather than leaving a selected option that cannot be paid.
+  // Auto-select valid order type based on manager toggles
   useEffect(() => {
-    if (!khqrOffered) setMethod('cash');
-  }, [khqrOffered]);
+    if (!storeStatus.enablePickup && storeStatus.enableDelivery) {
+      setOrderType('delivery');
+    } else if (storeStatus.enablePickup && !storeStatus.enableDelivery) {
+      setOrderType('pickup');
+    }
+  }, [storeStatus.enablePickup, storeStatus.enableDelivery]);
+
+  // Auto-select valid payment method based on manager toggles
+  useEffect(() => {
+    if (!storeStatus.enableCash && storeStatus.enableKhqr && khqrOffered) {
+      setMethod('khqr');
+    } else if (!storeStatus.enableKhqr || !khqrOffered) {
+      setMethod('cash');
+    }
+  }, [storeStatus.enableCash, storeStatus.enableKhqr, khqrOffered]);
 
   const deliveryFee = orderType === 'delivery' ? deliveryFeeRate : 0;
   // A delivery order needs a complete saved profile: room, name and phone.
@@ -163,6 +177,18 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
 
   const handleNext = async () => {
+    if (!storeStatus.isOpen) {
+      setError(t('shopClosedSchedule', 'Shop is currently closed. Opening hours: {{open}} – {{close}}.', { open: storeStatus.openTime, close: storeStatus.closeTime }));
+      return;
+    }
+    if (orderType === 'pickup' && !storeStatus.enablePickup) {
+      setError(t('pickupDisabled', 'Pickup orders are currently turned off.'));
+      return;
+    }
+    if (orderType === 'delivery' && !storeStatus.enableDelivery) {
+      setError(t('deliveryDisabled', 'Delivery orders are currently turned off.'));
+      return;
+    }
     if (orderType === 'pickup' && !branchId) {
       setError(t('selectBranchFirst', 'Please select a branch.'));
       return;
@@ -194,6 +220,27 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   };
 
   const handleConfirm = async () => {
+    if (!storeStatus.isOpen) {
+      setError(t('shopClosedSchedule', 'Shop is currently closed. Opening hours: {{open}} – {{close}}.', { open: storeStatus.openTime, close: storeStatus.closeTime }));
+      return;
+    }
+    if (orderType === 'pickup' && !storeStatus.enablePickup) {
+      setError(t('pickupDisabled', 'Pickup orders are currently turned off.'));
+      return;
+    }
+    if (orderType === 'delivery' && !storeStatus.enableDelivery) {
+      setError(t('deliveryDisabled', 'Delivery orders are currently turned off.'));
+      return;
+    }
+    if (method === 'cash' && !storeStatus.enableCash) {
+      setError(t('cashDisabled', 'Cash payment is currently turned off.'));
+      return;
+    }
+    if (method === 'khqr' && (!storeStatus.enableKhqr || !khqrOffered)) {
+      setError(t('khqrDisabled', 'KHQR payment is currently turned off.'));
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -220,6 +267,12 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        if (errorData?.error) {
+          setError(errorData.error);
+          setIsLoading(false);
+          return;
+        }
         throw new Error('order-failed');
       }
 
@@ -285,25 +338,51 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                 {t('orderSummary', 'Order Summary')}
               </h3>
               <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3">
-                {cart.map(item => (
-                  <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
-                    <div className="flex-1">
-                      <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
-                      {Object.keys(item.selectedModifiers).length > 0 && (
-                        <div className="text-xs text-tg-hint mt-1">
-                          {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
-                        </div>
-                      )}
+                {cart.map(item => {
+                  const catalogItem = catalogItems.find(i => i.id === item.menuItemId);
+                  const isEligible = catalogItem?.canClaim ?? false;
+                  return (
+                    <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
+                      <div className="flex-1">
+                        <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
+                        {signedIn && userStamps >= 10 && (
+                          <div className="mt-0.5">
+                            {isEligible ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-md">
+                                🎁 {t('eligibleForStamps', 'Stamp reward eligible')}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center text-[10px] font-medium text-tg-hint bg-tg-bg/70 px-1.5 py-0.5 rounded-md border border-tg-hint/10">
+                                {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {Object.keys(item.selectedModifiers).length > 0 && (
+                          <div className="text-xs text-tg-hint mt-1">
+                            {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                      <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
                     </div>
-                    <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {error && (
               <div className="bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium text-center">
                 {error}
+              </div>
+            )}
+
+            {!storeStatus.isOpen && (
+              <div className="bg-[#E53935]/10 text-[#E53935] text-sm p-4 rounded-2xl border border-[#E53935]/20 font-medium text-center">
+                <div className="font-bold">{t('shopClosed', 'Shop is currently closed')}</div>
+                <div className="text-xs mt-1 text-tg-hint">
+                  {t('shopOpeningHours', 'Operating hours: {{hours}}', { hours: `${storeStatus.openTime} – ${storeStatus.closeTime}` })}
+                </div>
               </div>
             )}
 
@@ -317,30 +396,44 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               <div className="flex flex-col gap-4">
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">{t('orderType', 'Order Type')}</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      onClick={() => setOrderType('pickup')}
-                      aria-pressed={orderType === 'pickup'}
-                      className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
-                        orderType === 'pickup' 
-                          ? 'bg-brand-primary/10 border-brand-primary/30 text-tg-text shadow-sm' 
-                          : 'bg-tg-secondary-bg border-tg-hint/15 text-tg-hint hover:bg-tg-hint/5'
-                      }`}
-                    >
-                      <Storefront size={20} className={orderType === 'pickup' ? 'text-brand-primary' : ''} /> {t('pickup', 'Pickup')}
-                    </button>
-                    <button 
-                      onClick={() => setOrderType('delivery')}
-                      aria-pressed={orderType === 'delivery'}
-                      className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
-                        orderType === 'delivery' 
-                          ? 'bg-brand-primary/10 border-brand-primary/30 text-tg-text shadow-sm' 
-                          : 'bg-tg-secondary-bg border-tg-hint/15 text-tg-hint hover:bg-tg-hint/5'
-                      }`}
-                    >
-                      <MapPin size={20} className={orderType === 'delivery' ? 'text-brand-primary' : ''} /> {t('delivery', 'Delivery')}
-                    </button>
-                  </div>
+                  {!storeStatus.enablePickup && !storeStatus.enableDelivery ? (
+                    <div className="bg-[#E53935]/10 text-[#E53935] text-xs p-3 rounded-xl text-center font-medium">
+                      {t('orderingDisabled', 'Ordering is temporarily disabled.')}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => storeStatus.enablePickup && setOrderType('pickup')}
+                        disabled={!storeStatus.enablePickup}
+                        aria-pressed={orderType === 'pickup'}
+                        className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
+                          !storeStatus.enablePickup
+                            ? 'opacity-40 bg-tg-secondary-bg border-tg-hint/10 cursor-not-allowed text-tg-hint'
+                            : orderType === 'pickup' 
+                              ? 'bg-brand-primary/10 border-brand-primary/30 text-tg-text shadow-sm' 
+                              : 'bg-tg-secondary-bg border-tg-hint/15 text-tg-hint hover:bg-tg-hint/5'
+                        }`}
+                      >
+                        <Storefront size={20} className={orderType === 'pickup' && storeStatus.enablePickup ? 'text-brand-primary' : ''} />
+                        {t('pickup', 'Pickup')} {!storeStatus.enablePickup ? `(${t('off', 'Off')})` : ''}
+                      </button>
+                      <button 
+                        onClick={() => storeStatus.enableDelivery && setOrderType('delivery')}
+                        disabled={!storeStatus.enableDelivery}
+                        aria-pressed={orderType === 'delivery'}
+                        className={`p-3 rounded-2xl border font-bold flex items-center justify-center gap-2 transition-all ${
+                          !storeStatus.enableDelivery
+                            ? 'opacity-40 bg-tg-secondary-bg border-tg-hint/10 cursor-not-allowed text-tg-hint'
+                            : orderType === 'delivery' 
+                              ? 'bg-brand-primary/10 border-brand-primary/30 text-tg-text shadow-sm' 
+                              : 'bg-tg-secondary-bg border-tg-hint/15 text-tg-hint hover:bg-tg-hint/5'
+                        }`}
+                      >
+                        <MapPin size={20} className={orderType === 'delivery' && storeStatus.enableDelivery ? 'text-brand-primary' : ''} />
+                        {t('delivery', 'Delivery')} {!storeStatus.enableDelivery ? `(${t('off', 'Off')})` : ''}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {orderType === 'pickup' ? (
@@ -488,16 +581,19 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
                     {/* Case 2: Customer has >= 10 stamps, but NO claimable items in cart */}
                     {userStamps >= 10 && totalClaimableUnits === 0 && (
-                      <div className="rounded-2xl p-4 bg-tg-secondary-bg border border-tg-hint/15 flex items-center gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 text-lg shrink-0">
+                      <div className="rounded-2xl p-4 bg-tg-secondary-bg border border-tg-hint/15 flex items-start gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 text-lg shrink-0 mt-0.5">
                           🎁
                         </div>
-                        <div>
+                        <div className="space-y-1">
                           <div className="font-bold text-sm text-tg-text">
                             {t('stampsReady', 'You have {{stamps}} stamps ready!', { stamps: userStamps })}
                           </div>
-                          <div className="text-xs text-tg-hint">
+                          <div className="text-xs text-tg-hint leading-relaxed">
                             {t('addClaimableItemHint', 'Add an eligible drink to your cart to claim for free.')}
+                          </div>
+                          <div className="text-[11px] text-amber-600 font-medium pt-0.5">
+                            ⚠️ {t('ineligibleItemsInCartNotice', 'Items currently in your cart are not eligible for stamp rewards.')}
                           </div>
                         </div>
                       </div>
@@ -515,9 +611,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
                 <div className="flex flex-col gap-3">
                   <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
-                  {/* KHQR hides itself once the server says online payment is
-                      not set up, and comes back on its own when it is. */}
-                  {khqrOffered ? (
+                  {storeStatus.enableKhqr && khqrOffered ? (
                     <button
                       onClick={() => setMethod('khqr')}
                       aria-pressed={method === 'khqr'}
@@ -537,31 +631,35 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         {method === 'khqr' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
                       </div>
                     </button>
-                  ) : (
-                    <p className="text-xs text-tg-hint">
-                      {t('onlinePaymentUnavailable', 'Online payment is not available right now.')}
+                  ) : null}
+
+                  {storeStatus.enableCash ? (
+                    <button 
+                      onClick={() => setMethod('cash')}
+                      aria-pressed={method === 'cash'}
+                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
+                        method === 'cash' 
+                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-base text-tg-text">{t('cash')}</div>
+                        <div className="text-xs text-tg-hint mt-1">{t('cashDescription', 'Pay at counter or upon delivery')}</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        method === 'cash' ? 'border-brand-primary' : 'border-tg-hint/25'
+                      }`}>
+                        {method === 'cash' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
+                      </div>
+                    </button>
+                  ) : null}
+
+                  {!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered) && (
+                    <p className="text-xs text-[#E53935] font-medium bg-[#E53935]/10 p-3 rounded-xl border border-[#E53935]/20 text-center">
+                      {t('noPaymentAvailable', 'No payment methods are available right now.')}
                     </p>
                   )}
-
-                  <button 
-                    onClick={() => setMethod('cash')}
-                    aria-pressed={method === 'cash'}
-                    className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
-                      method === 'cash' 
-                        ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
-                        : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold text-base text-tg-text">{t('cash')}</div>
-                      <div className="text-xs text-tg-hint mt-1">{t('cashDescription', 'Pay at counter or upon delivery')}</div>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      method === 'cash' ? 'border-brand-primary' : 'border-tg-hint/25'
-                    }`}>
-                      {method === 'cash' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
-                    </div>
-                  </button>
                 </div>
 
                 <div className="space-y-2">
@@ -609,12 +707,30 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             {step !== 3 && (
               <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
                 {step === 1 ? (
-                  <Button fullWidth onClick={() => { void handleNext(); }} disabled={isLoading} className="py-4 flex items-center justify-center gap-2">
-                    {t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} />
+                  <Button
+                    fullWidth
+                    onClick={() => { void handleNext(); }}
+                    disabled={isLoading || !storeStatus.isOpen || (!storeStatus.enablePickup && !storeStatus.enableDelivery)}
+                    className="py-4 flex items-center justify-center gap-2"
+                  >
+                    {!storeStatus.isOpen
+                      ? t('shopClosed', 'Shop Closed')
+                      : (!storeStatus.enablePickup && !storeStatus.enableDelivery)
+                        ? t('orderingDisabled', 'Ordering Disabled')
+                        : <>{t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} /></>}
                   </Button>
                 ) : (
-                  <Button fullWidth className="py-4" onClick={handleConfirm} disabled={isLoading}>
-                    {isLoading ? t('processing', 'Processing...') : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
+                  <Button
+                    fullWidth
+                    className="py-4"
+                    onClick={handleConfirm}
+                    disabled={isLoading || !storeStatus.isOpen || (!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered))}
+                  >
+                    {isLoading
+                      ? t('processing', 'Processing...')
+                      : !storeStatus.isOpen
+                        ? t('shopClosed', 'Shop Closed')
+                        : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
                   </Button>
                 )}
               </div>

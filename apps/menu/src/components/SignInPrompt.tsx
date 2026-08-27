@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { PaperPlaneTilt } from '@phosphor-icons/react';
+import { PaperPlaneTilt, Flask } from '@phosphor-icons/react';
+import { loginAsDevCustomer } from '../utils/telegramUser';
 
 interface SignInPromptProps {
   /** What this tab needs an account for, e.g. "your orders". */
@@ -17,6 +18,13 @@ interface SignInPromptProps {
  */
 export function SignInPrompt({ what, onBrowseMenu }: SignInPromptProps) {
   const { t } = useTranslation();
+
+  const handleDevLogin = async () => {
+    const success = await loginAsDevCustomer('dev_test_customer');
+    if (success) {
+      window.location.reload();
+    }
+  };
 
   return (
     <div className="flex flex-col items-center gap-3 text-center px-6 py-12 w-full max-w-md mx-auto">
@@ -43,6 +51,16 @@ export function SignInPrompt({ what, onBrowseMenu }: SignInPromptProps) {
           className="mt-2 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-bold text-white active:scale-95 transition-transform"
         >
           {t('browseMenu', 'Browse Menu')}
+        </button>
+      )}
+
+      {import.meta.env.DEV && (
+        <button
+          type="button"
+          onClick={handleDevLogin}
+          className="mt-4 rounded-xl border border-dashed border-brand-primary/40 bg-brand-primary/5 px-4 py-2.5 text-xs font-bold text-brand-primary active:scale-95 transition-all flex items-center gap-2 shadow-xs"
+        >
+          <Flask size={16} /> Sign in as Test Customer (Dev Mode)
         </button>
       )}
     </div>

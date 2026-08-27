@@ -56,6 +56,14 @@ const resources = {
       pleaseSelect: "Please select",
       selectRequiredOptions: "Please select all required options before adding.",
       noItemsInCategory: "No items in this category yet.",
+      shopClosed: "Shop Closed",
+      shopOpeningHours: "Opening hours: {{hours}}",
+      pickupDisabled: "Pickup is currently unavailable.",
+      deliveryDisabled: "Delivery is currently unavailable.",
+      orderingDisabled: "Ordering is currently disabled.",
+      noPaymentAvailable: "No payment methods available right now.",
+      off: "Off",
+      closed: "Closed",
 
       // Tabs
       tabMenu: "Menu",
@@ -125,6 +133,9 @@ const resources = {
       stampRewardDiscount: "10-Stamp Reward ({{count}} free)",
       applied: "Applied ✓",
       apply: "Apply",
+      eligibleForStamps: "Stamp reward eligible",
+      notEligibleForStamps: "Not eligible for stamp rewards",
+      ineligibleItemsInCartNotice: "Items in your cart are not eligible for stamp rewards.",
 
       // Categories
       "Cones": "Cones",
@@ -323,6 +334,14 @@ const resources = {
       pleaseSelect: "សូមជ្រើសរើស",
       selectRequiredOptions: "សូមជ្រើសរើសជម្រើសដែលតម្រូវអោយមុនពេលបន្ថែម។",
       noItemsInCategory: "មិនទាន់មានមុខទំនិញនៅក្នុងប្រភេទនេះទេ។",
+      shopClosed: "ហាងត្រូវបានបិទ",
+      shopOpeningHours: "ម៉ោងបើកដំណើរការ៖ {{hours}}",
+      pickupDisabled: "ការមកយកផ្ទាល់មិនអាចប្រើបានទេឥឡូវនេះ។",
+      deliveryDisabled: "សេវាដឹកជញ្ជូនមិនអាចប្រើបានទេឥឡូវនេះ។",
+      orderingDisabled: "ការកុម្ម៉ង់ត្រូវបានបិទជាបណ្តោះអាសន្ន។",
+      noPaymentAvailable: "គ្មានវិធីសាស្រ្តទូទាត់ដែលអាចប្រើបានទេ។",
+      off: "បិទ",
+      closed: "បិទ",
 
       // Tabs
       tabMenu: "ម៉ឺនុយ",
@@ -392,6 +411,9 @@ const resources = {
       stampRewardDiscount: "រង្វាន់ត្រា ១០ (ឥតគិតថ្លៃ {{count}} មុខ)",
       applied: "បានប្រើ ✓",
       apply: "ប្រើ",
+      eligibleForStamps: "អាចប្តូរយករង្វាន់ត្រាបាន",
+      notEligibleForStamps: "មិនអាចប្តូរយកដោយប្រើត្រាទេ",
+      ineligibleItemsInCartNotice: "ទំនិញក្នុងកន្ត្រកបច្ចុប្បន្នមិនអាចប្រើត្រាបានទេ។",
 
       // Categories
       "Cones": "កោណ",
@@ -590,6 +612,14 @@ const resources = {
       pleaseSelect: "请选择",
       selectRequiredOptions: "请在添加前选择所有必选项。",
       noItemsInCategory: "该分类暂无商品。",
+      shopClosed: "店铺已打烊",
+      shopOpeningHours: "营业时间：{{hours}}",
+      pickupDisabled: "自取暂不可用。",
+      deliveryDisabled: "外送暂不可用。",
+      orderingDisabled: "点单功能已暂时关闭。",
+      noPaymentAvailable: "当前无可用支付方式。",
+      off: "关闭",
+      closed: "打烊",
 
       // Tabs
       tabMenu: "菜单",
@@ -659,6 +689,9 @@ const resources = {
       stampRewardDiscount: "10章奖励 (免费 {{count}} 份)",
       applied: "已使用 ✓",
       apply: "使用",
+      eligibleForStamps: "可兑换印章奖励",
+      notEligibleForStamps: "不可使用印章兑换",
+      ineligibleItemsInCartNotice: "购物车中的商品不可使用印章兑换。",
 
       // Categories
       "Cones": "冰淇淋甜筒",

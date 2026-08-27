@@ -15,6 +15,7 @@ import {
   Receipt,
   Search,
   Shield,
+  Sliders,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import type { MenuItemFull } from './MenuItemEditModal';
+import { StoreSettings } from './StoreSettings';
 import {
   Badge,
   Button,
@@ -100,7 +102,7 @@ type StaffAccount = {
 
 const PANEL_ID = 'manager-panel';
 
-type ManagerSubTab = 'analytics' | 'feedback' | 'loyalty' | 'rewards' | 'staff';
+type ManagerSubTab = 'analytics' | 'settings' | 'feedback' | 'loyalty' | 'rewards' | 'staff';
 
 function displayName(user: User): string {
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.telegramUserId;
@@ -548,6 +550,7 @@ export function ManagerDashboard() {
 
   const subTabs: Array<{ id: ManagerSubTab; label: string; icon: React.ReactNode; badge?: string | number }> = [
     { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
+    { id: 'settings', label: 'Store Settings', icon: <Sliders className="size-4" /> },
     { id: 'feedback', label: 'Issues & Feedback', icon: <MessageSquare className="size-4" />, badge: newFeedbackCount > 0 ? `${newFeedbackCount} new` : (feedbacks.length > 0 ? feedbacks.length : undefined) },
     { id: 'loyalty', label: 'Customer Stamps', icon: <Users className="size-4" /> },
     { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
@@ -788,6 +791,8 @@ export function ManagerDashboard() {
               </Card>
             </div>
           ) : null
+        ) : activeTab === 'settings' ? (
+          <StoreSettings />
         ) : activeTab === 'feedback' ? (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">

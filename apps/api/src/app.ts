@@ -3,7 +3,15 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { randomUUID } from 'crypto';
 import { ABAPayWay, generateKHQR, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
-import { settleOrderPoints, refundOrderPoints, getConfigNumber, CONFIG_DEFAULTS } from './loyalty';
+import {
+  settleOrderPoints,
+  refundOrderPoints,
+  getConfigNumber,
+  getConfigValue,
+  getStoreStatus,
+  validateConfig,
+  CONFIG_DEFAULTS,
+} from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
 import {
   isValidBuilding, isValidRoom, isValidName, isValidPhone, normalizePhone, formatAddress,
@@ -163,6 +171,24 @@ export function createApp() {
   });
 
   // Direct Staff/Manager Login endpoint via Telegram ID / WebApp / Widget
+  app.post('/api/auth/dev-customer-login', async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Not available in production' });
+    }
+    try {
+      const { telegramUserId = 'dev_test_customer', firstName = 'Test', lastName = 'Customer' } = req.body || {};
+      const uid = String(telegramUserId).trim();
+      await prisma.user.upsert({
+        where: { telegramUserId: uid },
+        update: { firstName, lastName },
+        create: { telegramUserId: uid, firstName, lastName, loyaltyPoints: 150 },
+      });
+      const { token, expiresAt } = issueCustomerToken(uid);
+      res.json({ ok: true, token, telegramUserId: uid, expiresAt });
+    } catch (e) {
+      res.status(500).json({ error: 'Dev customer login failed' });
+    }
+  });
   app.post('/api/auth/staff-telegram-login', loginRateLimit, async (req, res) => {
     try {
       const { telegramUserId, initData, telegramAuth } = req.body || {};
@@ -225,9 +251,15 @@ export function createApp() {
         }
       }
 
-      // Fallback in local dev if no admins/staff configured yet
-      if (!account && process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && process.env.NODE_ENV !== 'production' && adminTelegramIds().length === 0) {
-        account = { role: 'manager', name: 'Dev Admin' };
+      // Fallback in local dev if using dev login or no admins/staff configured yet
+      if (!account && process.env.NODE_ENV !== 'production') {
+        if (verifiedTelegramId === 'dev_manager') {
+          account = { role: 'manager', name: 'Dev Manager' };
+        } else if (verifiedTelegramId === 'dev_staff') {
+          account = { role: 'staff', name: 'Dev Staff' };
+        } else if (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && adminTelegramIds().length === 0) {
+          account = { role: 'manager', name: 'Dev Admin' };
+        }
       }
 
       if (!account) {
@@ -702,6 +734,28 @@ export function createApp() {
       // points. Guest checkout stays open, it just earns and spends nothing.
       const telegramUserId = (req as any).telegramUserId as string | null;
 
+      const storeStatus = await getStoreStatus(prisma);
+      if (!storeStatus.isOpen) {
+        const msg = storeStatus.storeStatus === 'closed'
+          ? 'Shop is temporarily closed.'
+          : `Shop is currently closed. Opening hours: ${storeStatus.openTime} - ${storeStatus.closeTime}`;
+        return res.status(400).json({ error: msg });
+      }
+
+      if (orderType === 'pickup' && !storeStatus.enablePickup) {
+        return res.status(400).json({ error: 'Pickup orders are currently turned off.' });
+      }
+      if (orderType === 'delivery' && !storeStatus.enableDelivery) {
+        return res.status(400).json({ error: 'Delivery orders are currently turned off.' });
+      }
+
+      if (paymentMethod === 'cash' && !storeStatus.enableCash) {
+        return res.status(400).json({ error: 'Cash payment is currently turned off.' });
+      }
+      if (paymentMethod === 'khqr' && !storeStatus.enableKhqr) {
+        return res.status(400).json({ error: 'KHQR payment is currently turned off.' });
+      }
+
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ error: 'Order must contain at least one item' });
       }
@@ -795,12 +849,12 @@ export function createApp() {
         if (p && isValidPhone(p)) orderContactPhone = p;
       }
 
-      const DELIVERY_FEE = await getConfigNumber(prisma, 'deliveryFee', CONFIG_DEFAULTS.deliveryFee);
+      const DELIVERY_FEE = await getConfigNumber(prisma, 'deliveryFee', Number(CONFIG_DEFAULTS.deliveryFee));
       const deliveryFee = orderType === 'delivery' ? DELIVERY_FEE : 0;
       const serverTotal = Math.round((itemsTotal + deliveryFee) * 100) / 100;
 
-      const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', CONFIG_DEFAULTS.pointsPerDollar);
-      const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', CONFIG_DEFAULTS.earnPointsPerDollar);
+      const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', Number(CONFIG_DEFAULTS.pointsPerDollar));
+      const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', Number(CONFIG_DEFAULTS.earnPointsPerDollar));
 
       let requestedPoints = 0;
       // An anonymous order has no balance to spend from.
@@ -1173,8 +1227,25 @@ export function createApp() {
    * hits an error. Public on purpose: it exposes no secret, only "can we take a
    * QR payment today", and the checkout screen needs it before anyone signs in.
    */
-  app.get('/api/payment/methods', (req, res) => {
-    res.json({ cash: true, online: getAbaClient() !== null });
+  app.get('/api/payment/methods', async (req, res) => {
+    try {
+      const status = await getStoreStatus(prisma);
+      res.json({
+        cash: status.enableCash,
+        online: status.enableKhqr && getAbaClient() !== null,
+      });
+    } catch {
+      res.json({ cash: true, online: getAbaClient() !== null });
+    }
+  });
+
+  app.get('/api/store/status', async (req, res) => {
+    try {
+      const status = await getStoreStatus(prisma);
+      res.json(status);
+    } catch {
+      res.status(500).json({ error: 'Failed to check store status' });
+    }
   });
 
   app.post('/api/payment/aba/create', resolveCustomer, async (req, res) => {
@@ -1357,19 +1428,14 @@ export function createApp() {
   app.put('/api/config', requireManager, async (req, res) => {
     try {
       const { key, value } = req.body || {};
-      if (!(key in CONFIG_DEFAULTS)) {
-        return res.status(400).json({ error: `Unknown config key. Allowed: ${Object.keys(CONFIG_DEFAULTS).join(', ')}` });
-      }
-      const num = Number(value);
-      // deliveryFee may legitimately be 0 (free inside Arakawa); the rate keys may not.
-      const min = key === 'deliveryFee' ? 0 : 1;
-      if (!Number.isFinite(num) || num < min) {
-        return res.status(400).json({ error: `value must be a number of at least ${min}` });
+      const validation = validateConfig(key, value);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
       }
       const config = await prisma.systemConfig.upsert({
         where: { key },
-        update: { value: String(value) },
-        create: { key, value: String(value) }
+        update: { value: validation.normalizedValue },
+        create: { key, value: validation.normalizedValue },
       });
       res.json(config);
     } catch (err) {

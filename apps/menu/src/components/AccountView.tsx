@@ -11,7 +11,13 @@ import {
   setDefaultPaymentMethod,
   type PaymentMethod,
 } from '../utils/paymentPrefs';
-import { getTelegramDisplayUser } from '../utils/telegramUser';
+import {
+  getTelegramDisplayUser,
+  setDevUserId,
+  getDevUserId,
+  getWebLoginToken,
+  clearWebLoginToken,
+} from '../utils/telegramUser';
 
 interface AccountViewProps {
   onBrowseMenu?: () => void;
@@ -173,7 +179,7 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           {t('defaultPaymentHint', 'We pick this for you at checkout. You can still change it there.')}
         </p>
 
-        <div className="grid grid-cols-2 gap-3 pt-1">
+        <div className={`grid gap-3 pt-1 ${khqrOffered ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {([
             ...(khqrOffered
               ? [{ key: 'khqr' as const, label: t('khqr', 'KHQR'), Icon: CreditCard }]
@@ -214,6 +220,22 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           </div>
         </div>
       </div>
+
+      {import.meta.env.DEV && (getDevUserId() || getWebLoginToken()) && (
+        <div className="pt-2 flex justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              setDevUserId(null);
+              clearWebLoginToken();
+              window.location.reload();
+            }}
+            className="text-xs text-tg-hint hover:text-brand-primary underline transition-colors"
+          >
+            🧪 Reset Dev User (Back to Guest)
+          </button>
+        </div>
+      )}
     </div>
   );
 }
