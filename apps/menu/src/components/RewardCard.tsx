@@ -50,59 +50,26 @@ export function RewardCard({
   const currentOrders = Math.min(orderCount, effectiveThreshold);
 
   return (
-    <div className="flex flex-col gap-3 w-full">
-      {/* Membership Tier Badge Card */}
-      {isGold ? (
-        <div className="relative overflow-hidden rounded-2xl p-4 bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 border-2 border-amber-400/70 shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-amber-950 font-black text-lg shadow-md">
-              ⭐
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-sm text-amber-600 dark:text-amber-300">
-                  ⭐ {t('goldMember', 'Gold Member')} VIP
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-400/30 text-amber-700 dark:text-amber-300 font-extrabold text-[10px] uppercase tracking-wider border border-amber-400/40">
-                  VIP
-                </span>
-              </div>
-              <p className="text-xs font-semibold text-amber-700/90 dark:text-amber-300/90 mt-0.5">
-                {t('goldPerk', 'Gold Perk: Cash on Delivery Unlocked')}
-              </p>
-            </div>
-          </div>
+    <div className="flex flex-col gap-2.5 w-full">
+      {/* Top Header with Stamp Title & Member Badge */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-1.5 font-bold text-xs text-tg-text">
+          <span>🥣</span>
+          <span>{t('loyaltyStampCard', 'Stamp Card')}</span>
         </div>
-      ) : (
-        <div className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/15 flex flex-col gap-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-tg-hint/15 flex items-center justify-center text-tg-text font-bold text-sm">
-                👤
-              </div>
-              <div>
-                <div className="font-bold text-sm text-tg-text">
-                  {t('standardMember', 'Standard Member')}
-                </div>
-                <div className="text-xs text-tg-hint">
-                  {currentOrders}/{effectiveThreshold} {t('ordersToGold', 'orders to Gold VIP')}
-                </div>
-              </div>
-            </div>
-            <span className="text-xs font-black text-brand-primary bg-brand-primary/10 px-2.5 py-1 rounded-full">
-              {currentOrders}/{effectiveThreshold}
-            </span>
+        {isGold ? (
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-950 font-black text-xs shadow-xs border border-amber-300">
+            <span>⭐</span>
+            <span>{t('goldMember', 'Gold VIP')}</span>
           </div>
-
-          {/* Progress to Gold */}
-          <div className="w-full bg-tg-hint/15 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-amber-400 to-yellow-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, (currentOrders / effectiveThreshold) * 100)}%` }}
-            />
+        ) : (
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-tg-secondary-bg text-tg-hint font-bold text-xs border border-tg-hint/15">
+            <span>🛡️</span>
+            <span>{t('standardMember', 'Standard')}</span>
+            <span className="text-[10px] opacity-75">({currentOrders}/{effectiveThreshold})</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Physical Card Mockup Container */}
       <div className="relative w-full aspect-[1050/600] rounded-2xl overflow-hidden shadow-xl border-2 border-red-600/20 bg-red-600 select-none">
@@ -114,20 +81,6 @@ export function RewardCard({
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover"
         />
-
-        {/* Tier badge on card */}
-        <div className="absolute top-3.5 right-3.5 z-10">
-          {isGold ? (
-            <div className="bg-amber-400/95 text-amber-950 px-2.5 py-1 rounded-full text-[11px] font-black shadow-md border border-amber-200 backdrop-blur-md flex items-center gap-1">
-              <span>⭐</span>
-              <span>Gold VIP</span>
-            </div>
-          ) : (
-            <div className="bg-black/50 text-white/95 px-2.5 py-1 rounded-full text-[10px] font-bold border border-white/20 backdrop-blur-md flex items-center gap-1">
-              <span>Standard</span>
-            </div>
-          )}
-        </div>
 
         {/* 10 Stamp Seal Slots */}
         {STAMP_SLOTS.map((slot, index) => {
