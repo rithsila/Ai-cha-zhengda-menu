@@ -125,28 +125,30 @@ export function RewardsView({ onBrowseMenu }: RewardsViewProps) {
         goldThreshold={goldThreshold}
       />
 
-      {/* Lucky Draw Tickets Counter Card */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 rounded-2xl p-4 border border-amber-500/25 shadow-sm flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-xl shadow-md text-white">
-            🎟️
-          </div>
-          <div>
-            <div className="font-extrabold text-base text-tg-text flex items-center gap-1.5">
-              <span>🎟️ {userProfile?.luckyTickets || 0}</span>
-              <span>{t('luckyTickets', 'Lucky Tickets')}</span>
+      {/* Lucky Draw Tickets Counter Card — only show when user has tickets */}
+      {(userProfile?.luckyTickets || 0) > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 rounded-2xl p-4 border border-amber-500/25 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-xl shadow-md text-white">
+              🎟️
             </div>
-            <p className="text-xs text-tg-hint mt-0.5">
-              {userProfile?.tier === 'gold'
-                ? t('goldPerk', 'Gold Perk: Cash on Delivery Unlocked')
-                : t('standardMember', 'Standard Member')}
-            </p>
+            <div>
+              <div className="font-extrabold text-base text-tg-text flex items-center gap-1.5">
+                <span>🎟️ {userProfile?.luckyTickets}</span>
+                <span>{t('luckyTickets', 'Lucky Tickets')}</span>
+              </div>
+              <p className="text-xs text-tg-hint mt-0.5">
+                {userProfile?.tier === 'gold'
+                  ? t('goldPerk', 'Gold Perk: Cash on Delivery Unlocked')
+                  : t('standardMember', 'Standard Member')}
+              </p>
+            </div>
+          </div>
+          <div className="text-2xl animate-bounce" role="img" aria-label="Celebration">
+            🎉
           </div>
         </div>
-        <div className="text-2xl animate-bounce" role="img" aria-label="Celebration">
-          🎉
-        </div>
-      </div>
+      )}
 
       {/* 10-Stamp Reward Checkout Notice */}
       <div className="bg-brand-primary/10 rounded-2xl p-4 border border-brand-primary/20 flex gap-3">
