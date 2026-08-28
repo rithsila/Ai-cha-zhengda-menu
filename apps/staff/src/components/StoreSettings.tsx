@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Clock,
-  Store,
   Truck,
   ShoppingBag,
   Coins,
@@ -143,32 +142,22 @@ export function StoreSettings() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Live Store Status Summary Banner */}
-      <Card
-        className={`border-2 p-5 transition-all ${
-          config.isOpen
-            ? 'border-success/40 bg-success/5 shadow-xs'
-            : 'border-danger/40 bg-danger/5 shadow-xs'
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div
-              className={`flex size-12 shrink-0 items-center justify-center rounded-2xl text-xl font-bold ${
-                config.isOpen ? 'bg-success text-white' : 'bg-danger text-white'
-              }`}
-            >
-              <Store className="size-6" />
+      {/* 1. Operating Hours & Auto-Schedule */}
+      <Card className="p-5 flex flex-col gap-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <Clock className="size-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-ink">Store Status:</h3>
+                <h3 className="text-base font-bold text-ink">Operating Mode &amp; Hours</h3>
                 <Badge variant={config.isOpen ? 'success' : 'danger'}>
                   <span className="inline-block size-2 rounded-full bg-current mr-1.5 animate-pulse" />
                   {config.isOpen ? 'OPEN FOR ORDERS' : 'CURRENTLY CLOSED'}
                 </Badge>
               </div>
-              <p className="text-xs text-ink-soft mt-1">
+              <p className="text-xs text-ink-soft mt-0.5">
                 {config.storeStatus === 'auto' && (
                   <>
                     Operating hours:{' '}
@@ -197,26 +186,11 @@ export function StoreSettings() {
             variant="secondary"
             size="md"
             onClick={() => fetchConfig()}
-            className="shrink-0 gap-2"
+            className="shrink-0 gap-2 text-xs"
           >
-            <RotateCcw className="size-4" />
+            <RotateCcw className="size-3.5" />
             Refresh
           </Button>
-        </div>
-      </Card>
-
-      {/* 1. Operating Hours & Auto-Schedule */}
-      <Card className="p-5 flex flex-col gap-5">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
-            <Clock className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Operating Mode & Hours</h3>
-            <p className="text-xs text-ink-soft">
-              Controls when the shop automatically opens and closes for customer orders.
-            </p>
-          </div>
         </div>
 
         {/* Mode Selector */}
