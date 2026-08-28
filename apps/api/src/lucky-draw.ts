@@ -109,7 +109,7 @@ export async function getLuckyWheelPrizes(prisma: PrismaClient): Promise<LuckyWh
     const raw = await getConfigString(prisma, 'luckyWheelPrizes', '');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= 2) {
+      if (Array.isArray(parsed) && parsed.length >= 1) {
         return parsed.map((p, idx) => ({
           id: p.id || `prize_${idx}`,
           label: String(p.label || `Prize ${idx + 1}`),
@@ -140,3 +140,58 @@ export function pickRandomPrize(prizes: LuckyWheelPrize[] = LUCKY_WHEEL_PRIZES):
   }
   return prizes[0];
 }
+
+import { randomBytes } from 'crypto';
+
+/** Generates a secure, readable claim code like LUCKY-9K2M4P */
+export function generateClaimCode(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'; // base32 without 0, 1, I, O
+  const bytes = randomBytes(6);
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars[bytes[i] % chars.length];
+  }
+  return `LUCKY-${code}`;
+}
+
+export async function createPrizeClaimRecord(
+  prisma: PrismaClient,
+  opts: {
+    telegramUserId: string;
+    prizeId?: string;
+    prizeName: string;
+    prizeIcon?: string;
+    prizeType?: string;
+    source?: 'wheel_spin' | 'manager_draw';
+    validityDays?: number;
+  }
+) {
+  const validityDays = opts.validityDays ?? 30;
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + validityDays);
+
+  // Generate unique code with collision fallback
+  let code = generateClaimCode();
+  let attempts = 0;
+  while (attempts < 5) {
+    const existing = await prisma.prizeClaim.findUnique({ where: { code } });
+    if (!existing) break;
+    code = generateClaimCode();
+    attempts++;
+  }
+
+  return prisma.prizeClaim.create({
+    data: {
+      code,
+      telegramUserId: opts.telegramUserId,
+      prizeId: opts.prizeId || null,
+      prizeName: opts.prizeName,
+      prizeIcon: opts.prizeIcon || '🎁',
+      prizeType: opts.prizeType || 'item',
+      status: 'pending',
+      source: opts.source || 'wheel_spin',
+      expiresAt,
+    },
+  });
+}
+

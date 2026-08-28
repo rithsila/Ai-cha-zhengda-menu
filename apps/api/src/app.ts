@@ -33,7 +33,7 @@ import { sendTelegramNotification } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
-import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes } from './lucky-draw';
+import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes, createPrizeClaimRecord } from './lucky-draw';
 import { uploadToR2, isR2Configured } from './r2';
 
 // The tuned SQLite client lives in db.ts; re-exported here because every
@@ -1743,12 +1743,15 @@ export function createApp() {
     }
   });
 
-  app.get('/api/customers/:telegramUserId', requireManager, async (req, res) => {
+  app.get('/api/customers/:telegramUserId', requireStaff, async (req, res) => {
     try {
       const telegramUserId = String(req.params.telegramUserId);
       const user = await prisma.user.findUnique({
         where: { telegramUserId },
         include: {
+          prizeClaims: {
+            orderBy: { createdAt: 'desc' },
+          },
           orders: {
             take: 20,
             orderBy: { createdAt: 'desc' },
@@ -1919,7 +1922,17 @@ export function createApp() {
         });
       });
 
-      const claimCode = prize.type === 'item' ? `LUCKY-${Date.now().toString(36).toUpperCase()}` : undefined;
+      let prizeClaim: any = null;
+      if (prize.type === 'item') {
+        prizeClaim = await createPrizeClaimRecord(prisma, {
+          telegramUserId,
+          prizeId: prize.id,
+          prizeName: prize.name,
+          prizeIcon: prize.icon,
+          prizeType: prize.type,
+          source: 'wheel_spin',
+        });
+      }
 
       res.json({
         ok: true,
@@ -1932,7 +1945,9 @@ export function createApp() {
           type: prize.type,
           value: prize.value,
           segmentIndex: prize.segmentIndex,
-          claimCode,
+          claimCode: prizeClaim?.code,
+          claimId: prizeClaim?.id,
+          expiresAt: prizeClaim?.expiresAt,
         },
         user: {
           telegramUserId: updatedUser.telegramUserId,
@@ -1945,6 +1960,36 @@ export function createApp() {
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to complete lucky draw spin' });
+    }
+  });
+
+  // Customer: View my won prizes & claims
+  app.get('/api/me/prizes', requireCustomer, async (req, res) => {
+    try {
+      const telegramUserId = (req as any).telegramUserId;
+      if (!telegramUserId) {
+        return res.status(401).json({ error: 'Telegram sign-in required' });
+      }
+
+      const now = new Date();
+      await prisma.prizeClaim.updateMany({
+        where: {
+          telegramUserId,
+          status: 'pending',
+          expiresAt: { lt: now },
+        },
+        data: { status: 'expired' },
+      });
+
+      const claims = await prisma.prizeClaim.findMany({
+        where: { telegramUserId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      res.json(claims);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch customer prize claims' });
     }
   });
 
@@ -1982,6 +2027,17 @@ export function createApp() {
         }
       }
 
+      let prizeClaim: any = null;
+      if (prizeName && String(prizeName).trim()) {
+        prizeClaim = await createPrizeClaimRecord(prisma, {
+          telegramUserId: winner.telegramUserId,
+          prizeName: String(prizeName).trim(),
+          prizeIcon: '🏆',
+          prizeType: 'item',
+          source: 'manager_draw',
+        });
+      }
+
       res.json({
         winner: {
           telegramUserId: winner.telegramUserId,
@@ -1994,6 +2050,9 @@ export function createApp() {
           luckyTickets: winner.luckyTickets,
         },
         prizeName: prizeName ? String(prizeName).trim() : null,
+        claimCode: prizeClaim?.code,
+        claimId: prizeClaim?.id,
+        expiresAt: prizeClaim?.expiresAt,
         totalParticipants: eligibleUsers.length,
         totalTickets,
       });
@@ -2002,6 +2061,200 @@ export function createApp() {
       res.status(500).json({ error: 'Failed to draw winner' });
     }
   });
+
+  // Staff/Manager: List all prize claims (with filter and search)
+  app.get('/api/lucky-draw/claims', requireStaff, async (req, res) => {
+    try {
+      const { status, search, limit } = req.query;
+      const take = Math.min(100, Math.max(1, Number(limit) || 50));
+
+      const where: any = {};
+      if (status && typeof status === 'string' && status !== 'all') {
+        where.status = status.trim().toLowerCase();
+      }
+
+      if (search && typeof search === 'string' && search.trim()) {
+        const q = search.trim();
+        where.OR = [
+          { code: { contains: q } },
+          { prizeName: { contains: q } },
+          { telegramUserId: { contains: q } },
+          { user: { firstName: { contains: q } } },
+          { user: { lastName: { contains: q } } },
+          { user: { contactName: { contains: q } } },
+          { user: { phoneNumber: { contains: q } } },
+        ];
+      }
+
+      const claims = await prisma.prizeClaim.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+              username: true,
+              tier: true,
+              building: true,
+              roomNumber: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+
+      res.json(claims);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch lucky draw claims' });
+    }
+  });
+
+  // Staff: Verify a gift claim code
+  app.post('/api/lucky-draw/verify-claim', requireStaff, async (req, res) => {
+    try {
+      const { code } = req.body || {};
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Claim code is required' });
+      }
+
+      let rawCode = code.trim().toUpperCase();
+      if (!rawCode.startsWith('LUCKY-') && rawCode.length <= 8) {
+        rawCode = `LUCKY-${rawCode}`;
+      }
+
+      const claim = await prisma.prizeClaim.findUnique({
+        where: { code: rawCode },
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+              username: true,
+              tier: true,
+              building: true,
+              roomNumber: true,
+            },
+          },
+        },
+      });
+
+      if (!claim) {
+        return res.status(404).json({
+          valid: false,
+          error: `Claim code "${rawCode}" not found. Please verify the code.`,
+        });
+      }
+
+      const now = new Date();
+      if (claim.status === 'pending' && claim.expiresAt && claim.expiresAt < now) {
+        await prisma.prizeClaim.update({
+          where: { id: claim.id },
+          data: { status: 'expired' },
+        });
+        claim.status = 'expired';
+      }
+
+      const isValid = claim.status === 'pending';
+
+      res.json({
+        valid: isValid,
+        status: claim.status,
+        claim,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to verify claim code' });
+    }
+  });
+
+  // Staff: Redeem and hand over gift to customer
+  app.post('/api/lucky-draw/redeem-claim', requireStaff, async (req, res) => {
+    try {
+      const { code, notes, staffName } = req.body || {};
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Claim code is required' });
+      }
+
+      let rawCode = code.trim().toUpperCase();
+      if (!rawCode.startsWith('LUCKY-') && rawCode.length <= 8) {
+        rawCode = `LUCKY-${rawCode}`;
+      }
+
+      const claim = await prisma.prizeClaim.findUnique({
+        where: { code: rawCode },
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+            },
+          },
+        },
+      });
+
+      if (!claim) {
+        return res.status(404).json({ error: `Claim code "${rawCode}" not found.` });
+      }
+
+      if (claim.status === 'claimed') {
+        return res.status(400).json({
+          error: `Gift was already claimed on ${claim.claimedAt ? new Date(claim.claimedAt).toLocaleString() : 'earlier date'}${claim.claimedByStaffName ? ` by ${claim.claimedByStaffName}` : ''}.`,
+          claim,
+        });
+      }
+
+      const now = new Date();
+      if (claim.expiresAt && claim.expiresAt < now) {
+        await prisma.prizeClaim.update({
+          where: { id: claim.id },
+          data: { status: 'expired' },
+        });
+        return res.status(400).json({ error: 'This gift claim code has expired.', claim });
+      }
+
+      const updatedClaim = await prisma.prizeClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'claimed',
+          claimedAt: now,
+          claimedByStaffName: staffName ? String(staffName).trim() : 'Store Staff',
+          notes: notes ? String(notes).trim() : null,
+        },
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+            },
+          },
+        },
+      });
+
+      res.json({
+        ok: true,
+        message: `Successfully handed over ${updatedClaim.prizeName}!`,
+        claim: updatedClaim,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to redeem gift claim' });
+    }
+  });
+
 
   // Find-only user lookup (manager only — exposes PII)
   app.get('/api/users/:telegramUserId', requireManager, async (req, res) => {

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Ticket, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { X, Ticket, ArrowCounterClockwise, Copy, Check } from '@phosphor-icons/react';
 import { apiFetch } from '../utils/api';
 import { LuckyWheelIcon } from './ui/LuckyWheelIcon';
 
@@ -49,6 +49,7 @@ export function CustomerLuckyWheelModal({
   const [spinning, setSpinning] = useState(false);
   const [currentRotation, setCurrentRotation] = useState(0);
   const [wonPrize, setWonPrize] = useState<LuckyPrize | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -326,13 +327,35 @@ export function CustomerLuckyWheelModal({
               </p>
             )}
             {wonPrize.type === 'item' && (
-              <div className="mt-1">
+              <div className="mt-2 space-y-2">
                 <p className="text-xs text-tg-hint">
-                  Show code to staff at store counter:
+                  {t('showCodeToStaff', 'Show code to staff at counter to claim:')}
                 </p>
-                <div className="mt-1 font-mono font-bold text-xs bg-tg-bg/70 px-2 py-1 rounded-lg border border-amber-500/30 inline-block text-tg-text">
-                  {wonPrize.claimCode || 'LUCKY-CLAIM'}
+                <div className="flex items-center justify-center gap-2">
+                  <div className="font-mono font-black text-sm bg-tg-bg/80 px-3 py-1.5 rounded-xl border border-amber-500/40 text-tg-text tracking-wider select-all shadow-inner">
+                    {wonPrize.claimCode || 'LUCKY-CLAIM'}
+                  </div>
+                  {wonPrize.claimCode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          navigator.clipboard.writeText(wonPrize.claimCode!);
+                          setCopiedCode(true);
+                          setTimeout(() => setCopiedCode(false), 2000);
+                        } catch {}
+                      }}
+                      className="p-1.5 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 transition-colors flex items-center gap-1 text-xs font-bold"
+                      title="Copy code"
+                    >
+                      {copiedCode ? <Check size={16} weight="bold" /> : <Copy size={16} weight="bold" />}
+                      <span>{copiedCode ? t('copied', 'Copied') : t('copy', 'Copy')}</span>
+                    </button>
+                  )}
                 </div>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                  ✓ {t('giftSavedToWallet', 'Saved to your My Gifts box in Rewards tab')}
+                </p>
               </div>
             )}
           </div>

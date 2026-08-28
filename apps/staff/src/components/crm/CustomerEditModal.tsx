@@ -3,6 +3,7 @@ import {
   CheckCircle,
   Clock,
   Coins,
+  Gift,
   Lock,
   Minus,
   Package,
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Card, Skeleton, useToast } from '../ui';
-import type { CustomerDetail, CustomerSummary, CustomerTier } from './types';
+import type { CustomerDetail, CustomerSummary, CustomerTier, PrizeClaimItem } from './types';
 
 const REASONS = [
   'Correction',
@@ -28,7 +29,7 @@ const REASONS = [
   'Other',
 ];
 
-type CustomerTab = 'type' | 'stamps' | 'tickets' | 'orders';
+type CustomerTab = 'type' | 'stamps' | 'tickets' | 'gifts' | 'orders';
 
 export type CustomerEditModalProps = {
   customerSummary: CustomerSummary | null;
@@ -285,6 +286,40 @@ export function CustomerEditModal({
     }
   };
 
+  // Redeem a won gift item for this customer
+  const [redeemingCode, setRedeemingCode] = useState<string | null>(null);
+  const handleRedeemCustomerGift = async (code: string) => {
+    setRedeemingCode(code);
+    try {
+      const res = await apiFetch<{ ok: boolean; message: string; claim: PrizeClaimItem }>(
+        '/api/lucky-draw/redeem-claim',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, staffName: 'CRM Manager' }),
+        }
+      );
+
+      toast({
+        title: '🎉 Gift Redeemed!',
+        description: `${res.claim.prizeName} was marked as handed over!`,
+        variant: 'success',
+      });
+
+      if (targetUserId) {
+        fetchCustomerDetails(targetUserId);
+      }
+    } catch (err: any) {
+      toast({
+        title: "Couldn't redeem gift",
+        description: err.message,
+        variant: 'error',
+      });
+    } finally {
+      setRedeemingCode(null);
+    }
+  };
+
   const displayName =
     customerSummary.contactName ||
     [customerSummary.firstName, customerSummary.lastName].filter(Boolean).join(' ') ||
@@ -459,6 +494,19 @@ export function CustomerEditModal({
             >
               <Ticket className="size-3.5" />
               <span>Tickets ({currentTickets})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('gifts')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                activeTab === 'gifts'
+                  ? 'bg-accent text-on-accent shadow-xs'
+                  : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+              }`}
+            >
+              <Gift className="size-3.5" />
+              <span>Gifts {detail?.prizeClaims ? `(${detail.prizeClaims.length})` : ''}</span>
             </button>
 
             <button
@@ -758,7 +806,97 @@ export function CustomerEditModal({
             </div>
           )}
 
-          {/* TAB 4: RECENT ORDERS */}
+          {/* TAB 4: WON GIFTS & PRIZES */}
+          {activeTab === 'gifts' && (
+            <div className="space-y-3">
+              {loading && !detail ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                  <Skeleton className="h-16 w-full rounded-xl" />
+                </div>
+              ) : !detail?.prizeClaims || detail.prizeClaims.length === 0 ? (
+                <div className="py-10 text-center">
+                  <Gift className="mx-auto size-9 text-ink-faint" />
+                  <p className="mt-2 text-sm font-bold text-ink">No won gifts yet</p>
+                  <p className="text-xs text-ink-soft">
+                    Won gifts from Lucky Wheel or Manager Raffle will appear here.
+                  </p>
+                </div>
+              ) : (
+                detail.prizeClaims.map((claim) => {
+                  const isPending = claim.status === 'pending';
+                  const isClaimed = claim.status === 'claimed';
+
+                  return (
+                    <div
+                      key={claim.id}
+                      className="rounded-xl border border-border bg-surface-sunken/30 p-3.5 space-y-2.5 transition-all hover:bg-surface-sunken/60"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-2xl border border-amber-500/20 shadow-xs">
+                            {claim.prizeIcon || '🎁'}
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-bold text-ink bg-surface px-2 py-0.5 rounded-md border border-border">
+                                {claim.code}
+                              </span>
+                              <Badge
+                                variant={
+                                  isPending ? 'success' : isClaimed ? 'neutral' : 'danger'
+                                }
+                                className="text-[10px] uppercase font-bold"
+                              >
+                                {claim.status}
+                              </Badge>
+                            </div>
+                            <h4 className="font-bold text-xs text-ink mt-1">
+                              {claim.prizeName}
+                            </h4>
+                            <p className="text-[11px] text-ink-faint mt-0.5">
+                              Won {new Date(claim.createdAt).toLocaleDateString()}
+                              {claim.source === 'manager_draw' ? ' · 🏆 Raffle' : ' · 🎲 Wheel'}
+                              {claim.expiresAt && isPending
+                                ? ` · Expires ${new Date(claim.expiresAt).toLocaleDateString()}`
+                                : ''}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 1-Tap Hand Over Action */}
+                        {isPending && (
+                          <Button
+                            type="button"
+                            variant="success"
+                            size="md"
+                            loading={redeemingCode === claim.code}
+                            onClick={() => handleRedeemCustomerGift(claim.code)}
+                            className="h-8 px-3 text-xs font-bold gap-1 shrink-0"
+                          >
+                            <CheckCircle className="size-3.5" />
+                            Hand Over Gift
+                          </Button>
+                        )}
+
+                        {isClaimed && (
+                          <div className="text-right text-[11px] text-ink-soft">
+                            <span className="font-semibold text-success block">✓ Handed Over</span>
+                            <span className="text-ink-faint">
+                              {claim.claimedAt ? new Date(claim.claimedAt).toLocaleDateString() : ''}
+                              {claim.claimedByStaffName ? ` by ${claim.claimedByStaffName}` : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: RECENT ORDERS */}
           {activeTab === 'orders' && (
             <div className="space-y-3">
               {loading && !detail ? (

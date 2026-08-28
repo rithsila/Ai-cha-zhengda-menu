@@ -320,12 +320,22 @@ export function LuckyDrawModal({
                 </div>
 
                 {result.prizeName && (
-                  <div className="mt-4 rounded-xl bg-surface-sunken/60 p-3 border border-border">
-                    <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider">Prize Won</p>
-                    <p className="text-sm font-bold text-accent flex items-center justify-center gap-1.5 mt-0.5">
-                      <Sparkles className="size-4" />
-                      {result.prizeName}
-                    </p>
+                  <div className="mt-4 rounded-xl bg-surface-sunken/60 p-3 border border-border space-y-2">
+                    <div>
+                      <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider">Prize Won</p>
+                      <p className="text-sm font-bold text-accent flex items-center justify-center gap-1.5 mt-0.5">
+                        <Sparkles className="size-4" />
+                        {result.prizeName}
+                      </p>
+                    </div>
+                    {result.claimCode && (
+                      <div className="pt-2 border-t border-border/60">
+                        <p className="text-[10px] uppercase font-bold text-ink-faint">Generated Claim Voucher Code</p>
+                        <p className="mt-0.5 font-mono text-sm font-black text-amber-600 dark:text-amber-400 bg-surface px-2.5 py-1 rounded-lg border border-amber-500/30 inline-block">
+                          {result.claimCode}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 

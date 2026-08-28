@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Gift, ClockCounterClockwise, Sparkle } from '@phosphor-icons/react';
+import { Gift, ClockCounterClockwise, Sparkle, Check } from '@phosphor-icons/react';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { formatCurrency } from '../utils/format';
 import { loginAsDevCustomer, clearWebLoginToken } from '../utils/telegramUser';
 import { SignInPrompt } from './SignInPrompt';
 import { RewardCard } from './RewardCard';
 import { CustomerLuckyWheelModal, type LuckyPrize } from './CustomerLuckyWheelModal';
+import { CustomerPrizeModal, type CustomerPrizeClaim } from './CustomerPrizeModal';
 import { LuckyWheelIcon } from './ui/LuckyWheelIcon';
 
 const DEFAULT_POINTS_PER_DOLLAR = 100;
@@ -48,8 +49,23 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
   const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
   const [luckyCostPerSpin, setLuckyCostPerSpin] = useState(5);
   const [luckyPrizes, setLuckyPrizes] = useState<LuckyPrize[]>([]);
+  const [userPrizes, setUserPrizes] = useState<CustomerPrizeClaim[]>([]);
+  const [selectedClaim, setSelectedClaim] = useState<CustomerPrizeClaim | null>(null);
+  const [giftFilter, setGiftFilter] = useState<'all' | 'pending' | 'claimed'>('all');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+
+  const fetchUserPrizes = async () => {
+    try {
+      const res = await apiFetch('/api/me/prizes');
+      if (res.ok) {
+        const data = await res.json();
+        setUserPrizes(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user prize claims:', err);
+    }
+  };
 
   useEffect(() => {
     if (forceOpenLuckyDraw) {
@@ -64,11 +80,12 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
     }
     const fetchData = async () => {
       try {
-        const [userRes, ordersRes, cfgRes, luckyRes] = await Promise.all([
+        const [userRes, ordersRes, cfgRes, luckyRes, prizesRes] = await Promise.all([
           apiFetch(ME.profile()),
           apiFetch(ME.orders()),
           apiFetch('/api/config'),
-          apiFetch('/api/lucky-draw/config')
+          apiFetch('/api/lucky-draw/config'),
+          apiFetch('/api/me/prizes'),
         ]);
 
         if (userRes.ok) {
@@ -122,6 +139,11 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
           setLuckyDrawEnabled(luckyData.enabled !== false);
           if (luckyData.costPerSpin) setLuckyCostPerSpin(luckyData.costPerSpin);
           if (Array.isArray(luckyData.prizes)) setLuckyPrizes(luckyData.prizes);
+        }
+
+        if (prizesRes.ok) {
+          const prizeList = await prizesRes.json();
+          setUserPrizes(Array.isArray(prizeList) ? prizeList : []);
         }
       } catch (err) {
         console.error('Failed to fetch rewards data', err);
@@ -227,6 +249,143 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
           {t('stampRewardCheckoutHint', 'Collect 10 stamps to get a free item on your next order. Claim it directly at checkout!')}
         </p>
       </div>
+
+      {/* My Won Gifts & Prizes Section (Only shown when customer has won gifts) */}
+      {userPrizes.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-tg-text">
+              <Gift size={24} className="text-amber-500" weight="fill" />
+              {t('myWonGifts', 'My Won Gifts')}
+              <span className="text-xs bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                {userPrizes.length}
+              </span>
+            </h3>
+
+            <div className="flex items-center gap-1 bg-tg-secondary-bg p-1 rounded-xl border border-tg-hint/15 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setGiftFilter('all')}
+                className={`px-2 py-0.5 rounded-lg transition-colors ${
+                  giftFilter === 'all' ? 'bg-brand-primary text-white' : 'text-tg-hint hover:text-tg-text'
+                }`}
+              >
+                {t('all', 'All')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGiftFilter('pending')}
+                className={`px-2 py-0.5 rounded-lg transition-colors ${
+                  giftFilter === 'pending' ? 'bg-emerald-600 text-white' : 'text-tg-hint hover:text-tg-text'
+                }`}
+              >
+                {t('available', 'Available')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGiftFilter('claimed')}
+                className={`px-2 py-0.5 rounded-lg transition-colors ${
+                  giftFilter === 'claimed' ? 'bg-tg-hint/20 text-tg-text' : 'text-tg-hint hover:text-tg-text'
+                }`}
+              >
+                {t('claimed', 'Claimed')}
+              </button>
+            </div>
+          </div>
+
+          {(() => {
+            const filteredPrizes = userPrizes.filter((p) => {
+              if (giftFilter === 'pending') return p.status === 'pending';
+              if (giftFilter === 'claimed') return p.status === 'claimed' || p.status === 'expired';
+              return true;
+            });
+
+            if (filteredPrizes.length === 0) {
+              return (
+                <div className="text-center p-6 bg-tg-secondary-bg rounded-2xl text-tg-hint border border-tg-hint/10 text-xs">
+                  No gifts found for selected filter.
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid gap-3">
+                {filteredPrizes.map((prize) => {
+                  const isPending = prize.status === 'pending';
+                  const isClaimed = prize.status === 'claimed';
+                  const isExpired = prize.status === 'expired';
+
+                  return (
+                    <div
+                      key={prize.id}
+                      onClick={() => setSelectedClaim(prize)}
+                      className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 hover:border-amber-500/30 transition-all cursor-pointer flex flex-col gap-3 active:scale-[0.99]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 flex items-center justify-center text-2xl shrink-0 shadow-xs">
+                            {prize.prizeIcon || '🎁'}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-sm text-tg-text truncate">
+                              {prize.prizeName}
+                            </h4>
+                            <p className="text-xs text-tg-hint mt-0.5 flex items-center gap-1.5">
+                              <span>{shortDate(prize.createdAt)}</span>
+                              {prize.source === 'manager_draw' && (
+                                <span className="font-medium text-amber-600 dark:text-amber-400">
+                                  · 🏆 Raffle Win
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Status Pill */}
+                        <div className="shrink-0">
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                              <Sparkle size={11} weight="fill" />
+                              {t('available', 'Available')}
+                            </span>
+                          )}
+                          {isClaimed && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-tg-hint/15 text-tg-hint font-bold text-xs">
+                              <Check size={11} weight="bold" />
+                              {t('claimed', 'Claimed')}
+                            </span>
+                          )}
+                          {isExpired && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 font-bold text-xs">
+                              {t('expired', 'Expired')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Claim Code Strip */}
+                      <div className="border-t border-tg-hint/10 pt-2.5 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-tg-hint font-medium">
+                            {t('claimCode', 'Code')}:
+                          </span>
+                          <span className="font-mono font-bold bg-tg-bg px-2 py-0.5 rounded-md border border-amber-500/20 text-tg-text select-all">
+                            {prize.code}
+                          </span>
+                        </div>
+
+                        <span className="text-xs font-bold text-brand-primary inline-flex items-center gap-1">
+                          {isPending ? t('tapToClaim', 'Show to Staff →') : t('viewDetails', 'View Details →')}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Claim History */}
       <div>
@@ -335,7 +494,15 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
             loyaltyPoints: newPoints,
           }));
           setPoints(newPoints);
+          fetchUserPrizes();
         }}
+      />
+
+      {/* Customer Prize Detail Modal */}
+      <CustomerPrizeModal
+        claim={selectedClaim}
+        isOpen={!!selectedClaim}
+        onClose={() => setSelectedClaim(null)}
       />
     </div>
   );

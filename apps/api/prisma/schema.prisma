@@ -23,6 +23,7 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
   orders         Order[]
+  prizeClaims    PrizeClaim[]
 }
 
 model Branch {
@@ -151,3 +152,27 @@ model FeedbackReport {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
 }
+
+model PrizeClaim {
+  id                 String    @id @default(uuid())
+  code               String    @unique // e.g. "LUCKY-XXXXXX"
+  telegramUserId     String
+  user               User      @relation(fields: [telegramUserId], references: [telegramUserId], onDelete: Cascade)
+  prizeId            String?
+  prizeName          String
+  prizeIcon          String    @default("🎁")
+  prizeType          String    @default("item") // "item" | "drink" | "snack" | "discount"
+  status             String    @default("pending") // "pending" | "claimed" | "expired"
+  source             String    @default("wheel_spin") // "wheel_spin" | "manager_draw"
+  expiresAt          DateTime?
+  claimedAt          DateTime?
+  claimedByStaffId   String?
+  claimedByStaffName String?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  @@index([telegramUserId])
+  @@index([status])
+}
+

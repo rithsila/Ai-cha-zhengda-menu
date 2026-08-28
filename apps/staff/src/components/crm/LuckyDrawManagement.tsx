@@ -5,6 +5,7 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  Search,
   ShieldCheck,
   Sparkles,
   Ticket,
@@ -14,7 +15,8 @@ import {
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Card, Switch, useToast } from '../ui';
 import { LuckyDrawModal } from './LuckyDrawModal';
-import type { CustomersResponse, SystemConfigItem } from './types';
+import { VerifyGiftClaimModal } from './VerifyGiftClaimModal';
+import type { CustomersResponse, PrizeClaimItem, SystemConfigItem } from './types';
 
 export interface LuckyWheelPrizeItem {
   id: string;
@@ -47,6 +49,8 @@ export function LuckyDrawManagement() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [luckyDrawModalOpen, setLuckyDrawModalOpen] = useState(false);
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
+  const [verifyInitialCode, setVerifyInitialCode] = useState('');
 
   // Stats from customer CRM
   const [summary, setSummary] = useState<CustomersResponse['summary'] | null>(null);
@@ -60,10 +64,29 @@ export function LuckyDrawManagement() {
   const [luckyTicketsCostPerSpin, setLuckyTicketsCostPerSpin] = useState<number>(5);
   const [prizes, setPrizes] = useState<LuckyWheelPrizeItem[]>(DEFAULT_LUCKY_PRIZES);
 
+  // Claims list and filtering
+  const [claims, setClaims] = useState<PrizeClaimItem[]>([]);
+  const [claimsFilter, setClaimsFilter] = useState<'all' | 'pending' | 'claimed'>('all');
+  const [claimsSearch, setClaimsSearch] = useState('');
+  const [loadingClaims, setLoadingClaims] = useState(false);
+
   const savePrizesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchClaims = async () => {
+    setLoadingClaims(true);
+    try {
+      const data = await apiFetch<PrizeClaimItem[]>('/api/lucky-draw/claims?limit=50');
+      setClaims(Array.isArray(data) ? data : []);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingClaims(false);
+    }
+  };
 
   const loadData = () => {
     setLoading(true);
+    fetchClaims();
 
     Promise.all([
       apiFetch<SystemConfigItem[]>('/api/config'),
@@ -270,7 +293,20 @@ export function LuckyDrawManagement() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              setVerifyInitialCode('');
+              setVerifyModalOpen(true);
+            }}
+            className="h-10 gap-2 font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs border-0"
+          >
+            <Gift className="size-4" />
+            🎁 Verify / Redeem Gift
+          </Button>
+
           <Button
             variant="secondary"
             size="md"
@@ -278,7 +314,7 @@ export function LuckyDrawManagement() {
             className="h-10 gap-2 font-bold text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 shadow-xs"
           >
             <Trophy className="size-4 text-amber-500" />
-            🎉 Spin Lucky Draw / Pick Winner
+            🎉 Draw Raffle Winner
           </Button>
         </div>
       </div>
@@ -678,10 +714,230 @@ export function LuckyDrawManagement() {
         </div>
       </div>
 
+      {/* Customer Gift Claims & Redemptions Log */}
+      <Card padding="lg" className="border-border bg-surface shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <h4 className="font-extrabold text-base text-ink flex items-center gap-2">
+              <Gift className="size-4 text-amber-500" />
+              Gift Claims &amp; Redemption Log
+              {claims.length > 0 && (
+                <Badge variant="neutral" className="text-[10px] font-mono">
+                  {claims.length}
+                </Badge>
+              )}
+            </h4>
+            <p className="text-xs text-ink-soft">
+              Track won items, customer redemption status, and staff handovers
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1 bg-surface-sunken p-1 rounded-xl border border-border text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setClaimsFilter('all')}
+                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  claimsFilter === 'all' ? 'bg-accent text-on-accent' : 'text-ink-soft hover:text-ink'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setClaimsFilter('pending')}
+                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  claimsFilter === 'pending' ? 'bg-emerald-600 text-white' : 'text-ink-soft hover:text-ink'
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                type="button"
+                onClick={() => setClaimsFilter('claimed')}
+                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  claimsFilter === 'claimed' ? 'bg-ink/10 text-ink' : 'text-ink-soft hover:text-ink'
+                }`}
+              >
+                Claimed
+              </button>
+            </div>
+
+            {/* Quick Search */}
+            <div className="relative">
+              <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+              <input
+                type="text"
+                placeholder="Search code, customer..."
+                value={claimsSearch}
+                onChange={(e) => setClaimsSearch(e.target.value)}
+                className="h-8 pl-8 pr-3 rounded-lg border border-border bg-surface text-xs text-ink outline-none focus:border-accent w-44"
+              />
+            </div>
+
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={fetchClaims}
+              loading={loadingClaims}
+              className="h-8 px-2.5 text-xs font-bold gap-1"
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {(() => {
+          const filtered = claims.filter((c) => {
+            if (claimsFilter === 'pending' && c.status !== 'pending') return false;
+            if (claimsFilter === 'claimed' && c.status !== 'claimed') return false;
+            if (claimsSearch.trim()) {
+              const q = claimsSearch.toLowerCase();
+              const matchCode = c.code.toLowerCase().includes(q);
+              const matchPrize = c.prizeName.toLowerCase().includes(q);
+              const matchName = (
+                (c.user?.contactName || '') +
+                (c.user?.firstName || '') +
+                (c.user?.phoneNumber || '')
+              )
+                .toLowerCase()
+                .includes(q);
+              return matchCode || matchPrize || matchName;
+            }
+            return true;
+          });
+
+          if (claims.length === 0 && !loadingClaims) {
+            return (
+              <div className="py-10 text-center text-ink-soft">
+                <Gift className="size-8 mx-auto text-ink-faint mb-2" />
+                <p className="font-bold text-sm text-ink">No prize claims recorded yet</p>
+                <p className="text-xs text-ink-faint">
+                  When customers spin items on the wheel or win manager raffles, claims appear here.
+                </p>
+              </div>
+            );
+          }
+
+          if (filtered.length === 0) {
+            return (
+              <div className="py-8 text-center text-ink-soft text-xs">
+                No claims match your filter or search.
+              </div>
+            );
+          }
+
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border text-[11px] font-bold uppercase text-ink-faint">
+                    <th className="pb-2.5">Claim Code</th>
+                    <th className="pb-2.5">Prize Item</th>
+                    <th className="pb-2.5">Recipient Customer</th>
+                    <th className="pb-2.5">Status</th>
+                    <th className="pb-2.5">Won Date</th>
+                    <th className="pb-2.5">Handover Details</th>
+                    <th className="pb-2.5 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60 font-medium">
+                  {filtered.map((claim) => {
+                    const isPending = claim.status === 'pending';
+                    const isClaimed = claim.status === 'claimed';
+                    const isExpired = claim.status === 'expired';
+
+                    const custName =
+                      claim.user?.contactName ||
+                      [claim.user?.firstName, claim.user?.lastName].filter(Boolean).join(' ') ||
+                      `Customer #${claim.telegramUserId}`;
+
+                    return (
+                      <tr key={claim.id} className="hover:bg-surface-sunken/40 transition-colors">
+                        <td className="py-3 font-mono font-bold text-ink">
+                          <span className="bg-surface-sunken px-2 py-0.5 rounded border border-border">
+                            {claim.code}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{claim.prizeIcon || '🎁'}</span>
+                            <div>
+                              <p className="font-bold text-ink truncate max-w-[180px]">{claim.prizeName}</p>
+                              <p className="text-[10px] text-ink-faint capitalize">
+                                {claim.source === 'manager_draw' ? '🏆 Raffle Draw' : '🎲 Wheel Spin'}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <div>
+                            <p className="font-bold text-ink">{custName}</p>
+                            <p className="text-[10px] text-ink-faint">
+                              {claim.user?.phoneNumber || ''}{' '}
+                              {claim.user?.building ? `(Bldg ${claim.user.building})` : ''}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <Badge
+                            variant={isPending ? 'success' : isClaimed ? 'neutral' : 'danger'}
+                            className="text-[10px] uppercase font-bold"
+                          >
+                            {claim.status}
+                          </Badge>
+                        </td>
+                        <td className="py-3 text-ink-soft text-[11px]">
+                          {new Date(claim.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 text-[11px] text-ink-soft">
+                          {isClaimed ? (
+                            <div>
+                              <span className="font-semibold text-success block">✓ Handed Over</span>
+                              <span className="text-ink-faint">
+                                {claim.claimedAt ? new Date(claim.claimedAt).toLocaleDateString() : ''}
+                                {claim.claimedByStaffName ? ` (${claim.claimedByStaffName})` : ''}
+                              </span>
+                            </div>
+                          ) : isExpired ? (
+                            <span className="text-danger font-semibold">Expired</span>
+                          ) : (
+                            <span className="text-ink-faint">
+                              Expires {claim.expiresAt ? new Date(claim.expiresAt).toLocaleDateString() : '—'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 text-right">
+                          <Button
+                            variant={isPending ? 'primary' : 'ghost'}
+                            size="md"
+                            onClick={() => {
+                              setVerifyInitialCode(claim.code);
+                              setVerifyModalOpen(true);
+                            }}
+                            className="h-7 px-2.5 text-xs font-bold"
+                          >
+                            {isPending ? 'Hand Over' : 'View'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </Card>
+
       {/* Lucky Draw Live Spinner Modal */}
       <LuckyDrawModal
         isOpen={luckyDrawModalOpen}
-        onClose={() => setLuckyDrawModalOpen(false)}
+        onClose={() => {
+          setLuckyDrawModalOpen(false);
+          fetchClaims();
+        }}
         summaryData={
           summary
             ? {
@@ -692,6 +948,19 @@ export function LuckyDrawManagement() {
               }
             : undefined
         }
+      />
+
+      {/* Staff Verify & Redeem Gift Modal */}
+      <VerifyGiftClaimModal
+        isOpen={verifyModalOpen}
+        initialCode={verifyInitialCode}
+        onClose={() => {
+          setVerifyModalOpen(false);
+          fetchClaims();
+        }}
+        onClaimRedeemed={() => {
+          fetchClaims();
+        }}
       />
     </div>
   );

@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronDown,
   Clock,
+  Gift,
   LayoutDashboard,
   ListPlus,
   LogOut,
@@ -26,6 +27,7 @@ import { MenuManagement } from './components/MenuManagement';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { OrderCard } from './components/OrderCard';
 import { CancelOrderModal } from './components/CancelOrderModal';
+import { VerifyGiftClaimModal } from './components/crm/VerifyGiftClaimModal';
 import {
   PAID_STATUSES,
   STALE_AFTER_MS,
@@ -223,6 +225,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [muted, setMutedState] = useState(() => isMuted());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [verifyGiftModalOpen, setVerifyGiftModalOpen] = useState(false);
 
   const failuresRef = useRef(0);
   const knownIdsRef = useRef<Set<string> | null>(null);
@@ -642,6 +645,25 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               </button>
             );
           })}
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setVerifyGiftModalOpen(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25 hover:bg-amber-500/20 transition-all shadow-2xs"
+            >
+              <div className="flex items-center gap-2.5">
+                <Gift className="size-4 text-amber-500" />
+                <span>Redeem Gift Voucher</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold bg-amber-500/20 px-1.5 py-0.5 rounded">
+                Scan
+              </span>
+            </button>
+          </div>
         </nav>
 
         {/* Sidebar Footer Controls */}
@@ -1123,6 +1145,11 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         onClose={() => setCancelModalOrder(null)}
         onConfirm={handleConfirmCancel}
         loading={cancelModalOrder ? updatingIds.has(cancelModalOrder.id) : false}
+      />
+
+      <VerifyGiftClaimModal
+        isOpen={verifyGiftModalOpen}
+        onClose={() => setVerifyGiftModalOpen(false)}
       />
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">

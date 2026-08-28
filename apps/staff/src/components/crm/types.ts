@@ -38,8 +38,38 @@ export type CustomerDetailOrder = {
   }>;
 };
 
+export type PrizeClaimItem = {
+  id: string;
+  code: string;
+  telegramUserId: string;
+  prizeId?: string | null;
+  prizeName: string;
+  prizeIcon: string;
+  prizeType: string;
+  status: 'pending' | 'claimed' | 'expired';
+  source: string;
+  expiresAt?: string | null;
+  claimedAt?: string | null;
+  claimedByStaffId?: string | null;
+  claimedByStaffName?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  user?: {
+    telegramUserId: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    contactName?: string | null;
+    phoneNumber?: string | null;
+    username?: string | null;
+    tier?: CustomerTier;
+    building?: string | null;
+    roomNumber?: string | null;
+  };
+};
+
 export type CustomerDetail = CustomerSummary & {
   orders: CustomerDetailOrder[];
+  prizeClaims?: PrizeClaimItem[];
 };
 
 export type CustomersResponse = {
@@ -79,6 +109,10 @@ export type LuckyDrawWinner = {
 export type LuckyDrawResult = {
   winner: LuckyDrawWinner;
   prizeName: string | null;
+  claimCode?: string | null;
+  claimId?: string | null;
+  expiresAt?: string | null;
   totalParticipants: number;
   totalTickets: number;
 };
+

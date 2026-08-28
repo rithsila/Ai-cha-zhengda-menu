@@ -41,6 +41,7 @@ describe('End-to-End System & Workflow Validation', () => {
     });
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.prizeClaim.deleteMany({});
     await prisma.reward.deleteMany({});
     await prisma.modifierOption.deleteMany({});
     await prisma.modifierGroup.deleteMany({});
