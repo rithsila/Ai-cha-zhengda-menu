@@ -223,6 +223,31 @@ export default function App() {
 
   const storeStatus = useStoreStatus();
 
+  const menuTabs = useMemo(() => {
+    if (storeStatus.menuTabsConfig !== undefined && storeStatus.menuTabsConfig !== null) {
+      try {
+        const parsed = typeof storeStatus.menuTabsConfig === 'string'
+          ? JSON.parse(storeStatus.menuTabsConfig)
+          : storeStatus.menuTabsConfig;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((t: any) => t.enabled === true);
+        }
+      } catch {}
+    }
+    return [
+      { id: 'ai-cha', label: 'Ai-Cha', icon: '/images/aicha-logo.webp', enabled: true },
+      { id: 'zhengda', label: 'Zhengda', icon: '/images/zhengda_logo_cropped.webp', enabled: true },
+    ];
+  }, [storeStatus.menuTabsConfig]);
+
+  // Keep activeBrand in sync if current brand is not among enabled tabs
+  useEffect(() => {
+    if (menuTabs.length > 0 && !menuTabs.some((t) => t.id === activeBrand)) {
+      setActiveBrand(menuTabs[0].id);
+      setActiveCategory('All');
+    }
+  }, [menuTabs, activeBrand]);
+
   // Refresh payment and store status periodically
   useEffect(() => {
     refreshOnlinePaymentState();
@@ -232,7 +257,7 @@ export default function App() {
   }, []);
 
   const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchCatalog = useCallback(async () => {
     try {
@@ -284,8 +309,11 @@ export default function App() {
 
   // Derived state for current brand's items
   const brandItems = useMemo(() => {
+    if (menuTabs.length === 0) {
+      return dynamicCatalog;
+    }
     return dynamicCatalog.filter((i) => i.brand === activeBrand);
-  }, [activeBrand, dynamicCatalog]);
+  }, [activeBrand, dynamicCatalog, menuTabs]);
 
   const categories = useMemo(() => {
     return ['All', ...new Set(brandItems.map((i) => i.category))];
@@ -468,7 +496,7 @@ export default function App() {
       {/* Top Banner Section */}
       <div 
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
-        style={{ backgroundImage: 'url(/banner.webp)' }}
+        style={{ backgroundImage: `url(${storeStatus.menuBannerUrl || '/banner.webp'})` }}
       >
         <div className="absolute inset-0 bg-black/20 z-0 pointer-events-none"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent z-0 pointer-events-none"></div>
@@ -545,7 +573,7 @@ export default function App() {
             {!searchQuery && (
               <div className="mt-2">
                 {/* Brand Tabs */}
-                <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} />
+                <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} tabs={menuTabs} />
               </div>
             )}
 

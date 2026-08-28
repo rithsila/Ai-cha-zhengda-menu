@@ -6,7 +6,7 @@ import type { HTMLMotionProps } from 'motion/react';
 
 export interface ButtonProps extends Omit<HTMLMotionProps<"button">, "ref"> {
   variant?: 'primary' | 'secondary';
-  brand?: 'ai-cha' | 'zhengda';
+  brand?: 'ai-cha' | 'zhengda' | string;
   fullWidth?: boolean;
 }
 
@@ -23,7 +23,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     let textClass = 'text-white';
 
     if (variant === 'primary') {
-      bgClass = brand === 'ai-cha' ? 'bg-brand-primary' : 'bg-brand-zhengda';
+      bgClass = brand === 'zhengda' ? 'bg-brand-zhengda' : 'bg-brand-primary';
     } else {
       bgClass = 'bg-tg-secondary-bg';
       textClass = 'text-tg-text';

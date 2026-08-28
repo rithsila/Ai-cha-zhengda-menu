@@ -111,6 +111,51 @@ describe('GET /api/store/status and PUT /api/config', () => {
     expect(payRes.body.cash).toBe(false);
   });
 
+  it('allows manager to update menu banner URL and menu tabs config', async () => {
+    const defaultRes = await request(app).get('/api/store/status');
+    expect(defaultRes.body.menuBannerUrl).toBe('/banner.webp');
+    expect(defaultRes.body.menuTabsConfig).toContain('ai-cha');
+
+    await putConfig({ key: 'menuBannerUrl', value: '/custom-banner.jpg' });
+    const customTabs = [
+      { id: 'tea', label: 'Milk Tea', icon: '/tea.png', enabled: true },
+      { id: 'chicken', label: 'Fried Chicken', icon: '/chicken.png', enabled: true },
+      { id: 'coffee', label: 'Coffee', icon: '/coffee.png', enabled: true },
+    ];
+    await putConfig({ key: 'menuTabsConfig', value: JSON.stringify(customTabs) });
+
+    const updatedRes = await request(app).get('/api/store/status');
+    expect(updatedRes.body.menuBannerUrl).toBe('/custom-banner.jpg');
+    const parsedTabs = JSON.parse(updatedRes.body.menuTabsConfig);
+    expect(parsedTabs).toHaveLength(3);
+    expect(parsedTabs[2].label).toBe('Coffee');
+  });
+
+  it('allows manager to update shop info and social media badges', async () => {
+    const defaultRes = await request(app).get('/api/store/status');
+    expect(defaultRes.body.shopName).toBe('Our shop');
+    expect(defaultRes.body.shopAddress).toBe('J03, Ground Floor, Arakawa');
+
+    await putConfig({ key: 'shopName', value: 'Ai-Cha & Zhengda Arakawa Flagship' });
+    await putConfig({ key: 'shopAddress', value: 'Building B, Ground Floor, Unit J03' });
+    await putConfig({ key: 'shopDeliveryNote', value: 'Free express delivery to all rooms' });
+    await putConfig({ key: 'shopSocialsEnabled', value: '1' });
+    const socials = [
+      { id: 'telegram', label: 'Telegram', url: 'https://t.me/mybot', enabled: true },
+      { id: 'facebook', label: 'Facebook', url: 'https://facebook.com/aicha', enabled: true },
+    ];
+    await putConfig({ key: 'shopSocialLinks', value: JSON.stringify(socials) });
+
+    const statusRes = await request(app).get('/api/store/status');
+    expect(statusRes.body.shopName).toBe('Ai-Cha & Zhengda Arakawa Flagship');
+    expect(statusRes.body.shopAddress).toBe('Building B, Ground Floor, Unit J03');
+    expect(statusRes.body.shopDeliveryNote).toBe('Free express delivery to all rooms');
+    expect(statusRes.body.shopSocialsEnabled).toBe(true);
+    const parsedSocials = JSON.parse(statusRes.body.shopSocialLinks);
+    expect(parsedSocials).toHaveLength(2);
+    expect(parsedSocials[1].id).toBe('facebook');
+  });
+
   afterEach(async () => {
     await prisma.systemConfig.deleteMany();
   });

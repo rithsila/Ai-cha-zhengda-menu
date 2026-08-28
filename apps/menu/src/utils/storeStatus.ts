@@ -1,6 +1,13 @@
 import { useSyncExternalStore } from 'react';
 import { API_BASE } from './api';
 
+export interface SocialBadgeItem {
+  id: string;
+  label: string;
+  url: string;
+  enabled: boolean;
+}
+
 export interface StoreStatusData {
   isOpen: boolean;
   storeStatus: 'auto' | 'open' | 'closed';
@@ -12,6 +19,13 @@ export interface StoreStatusData {
   enableKhqr: boolean;
   currentTime?: string;
   reason?: string;
+  menuBannerUrl?: string;
+  menuTabsConfig?: string;
+  shopName?: string;
+  shopAddress?: string;
+  shopDeliveryNote?: string;
+  shopSocialsEnabled?: boolean;
+  shopSocialLinks?: string;
 }
 
 const DEFAULT_STORE_STATUS: StoreStatusData = {
@@ -23,6 +37,11 @@ const DEFAULT_STORE_STATUS: StoreStatusData = {
   enableDelivery: true,
   enableCash: true,
   enableKhqr: true,
+  menuBannerUrl: '/banner.webp',
+  shopName: 'Our shop',
+  shopAddress: 'J03, Ground Floor, Arakawa',
+  shopDeliveryNote: 'Delivery inside Arakawa is free',
+  shopSocialsEnabled: true,
 };
 
 let currentStatus: StoreStatusData = DEFAULT_STORE_STATUS;
