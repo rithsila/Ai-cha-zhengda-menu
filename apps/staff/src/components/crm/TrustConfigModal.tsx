@@ -176,7 +176,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
 
       toast({
         title: 'Settings saved',
-        description: 'Trust tiers and Lucky Draw rules updated.',
+        description: 'Customer settings and Lucky Draw rules updated.',
         variant: 'success',
       });
       onSaved?.();
@@ -216,7 +216,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
             </div>
             <div>
               <h3 id="trust-config-title" className="text-base font-bold text-ink">
-                Trust Tiers &amp; Lucky Draw Settings
+                Customer & Lucky Draw Settings
               </h3>
               <p className="text-xs text-ink-soft">
                 Configure payment rules, tickets, and wheel prize segments
@@ -239,11 +239,11 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
           </div>
         ) : (
           <div className="space-y-6 pt-5">
-            {/* Section 1: Customer Trust & Tiers */}
+            {/* Section 1: Customer Type & Payment Rules */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-bold text-ink">
                 <ShieldCheck className="size-4 text-accent" />
-                <span>Customer Trust &amp; Payment Rules</span>
+                <span>Customer Type &amp; Payment Rules</span>
               </div>
 
               <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
@@ -253,7 +253,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                       Orders for Gold VIP Promotion
                     </label>
                     <p className="text-[11px] text-ink-soft">
-                      Number of completed/paid orders needed to auto-promote customer to Gold tier.
+                      Number of completed/paid orders needed to auto-promote customer to Gold.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -340,7 +340,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                   <div>
                     <label htmlFor="std-tickets-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
                       <Ticket className="size-3.5 text-ink-soft" />
-                      Tickets per Standard Tier Order
+                      Tickets per Standard Order
                     </label>
                     <p className="text-[11px] text-ink-soft">
                       Number of lucky draw tickets earned by Standard customers per order.

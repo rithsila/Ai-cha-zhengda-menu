@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Clock,
   Coins,
+  Dices,
   DollarSign,
   MessageSquare,
   Phone,
@@ -28,6 +29,7 @@ import { apiFetch } from '../lib/api';
 import type { MenuItemFull } from './MenuItemEditModal';
 import { StoreSettings } from './StoreSettings';
 import { CustomerCrm } from './crm/CustomerCrm';
+import { LuckyDrawManagement } from './crm/LuckyDrawManagement';
 import type { CustomersResponse } from './crm/types';
 import {
   Badge,
@@ -86,7 +88,7 @@ type StaffAccount = {
 
 const PANEL_ID = 'manager-panel';
 
-type ManagerSubTab = 'analytics' | 'settings' | 'feedback' | 'loyalty' | 'rewards' | 'staff';
+type ManagerSubTab = 'analytics' | 'settings' | 'feedback' | 'loyalty' | 'luckydraw' | 'rewards' | 'staff';
 
 export function ManagerDashboard() {
   const { toast } = useToast();
@@ -468,7 +470,8 @@ export function ManagerDashboard() {
     { id: 'analytics', label: 'Sales & Analytics', icon: <BarChart3 className="size-4" /> },
     { id: 'settings', label: 'Store Settings', icon: <Sliders className="size-4" /> },
     { id: 'feedback', label: 'Issues & Feedback', icon: <MessageSquare className="size-4" />, badge: newFeedbackCount > 0 ? `${newFeedbackCount} new` : (feedbacks.length > 0 ? feedbacks.length : undefined) },
-    { id: 'loyalty', label: 'Customers & Stamps', icon: <Users className="size-4" />, badge: totalCustomers !== undefined && totalCustomers > 0 ? totalCustomers : undefined },
+    { id: 'loyalty', label: 'Customers', icon: <Users className="size-4" />, badge: totalCustomers !== undefined && totalCustomers > 0 ? totalCustomers : undefined },
+    { id: 'luckydraw', label: 'Lucky Draw', icon: <Dices className="size-4" /> },
     { id: 'rewards', label: 'Reward Catalog', icon: <Award className="size-4" />, badge: rewards.length },
     { id: 'staff', label: 'Staff & Accounts', icon: <Users2 className="size-4" />, badge: staffAccounts.length },
   ];
@@ -870,6 +873,8 @@ export function ManagerDashboard() {
           </div>
         ) : activeTab === 'loyalty' ? (
           <CustomerCrm onSummaryChange={handleSummaryChange} />
+        ) : activeTab === 'luckydraw' ? (
+          <LuckyDrawManagement />
         ) : activeTab === 'rewards' ? (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">

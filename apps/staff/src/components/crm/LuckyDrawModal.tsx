@@ -4,7 +4,6 @@ import {
   Phone,
   RotateCcw,
   Sparkles,
-  Star,
   Ticket,
   Trophy,
   User,
@@ -219,9 +218,7 @@ export function LuckyDrawModal({
                         : 'border-border bg-surface-sunken/40 text-ink hover:bg-surface-sunken'
                     }`}
                   >
-                    <span className="text-xs font-bold flex items-center gap-1">
-                      <Star className="size-3 fill-current" /> Gold
-                    </span>
+                    <span className="text-xs font-bold">Gold</span>
                     <span className="text-[10px] opacity-80">
                       {summaryData ? `(${summaryData.goldCount})` : ''}
                     </span>
@@ -303,10 +300,7 @@ export function LuckyDrawModal({
                     }`}
                   >
                     {result.winner.tier === 'gold' ? (
-                      <>
-                        <Star className="size-3 fill-current text-amber-500" />
-                        ⭐ Gold Member
-                      </>
+                      'Gold Member'
                     ) : (
                       'Standard Member'
                     )}

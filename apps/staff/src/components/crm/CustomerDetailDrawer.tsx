@@ -11,9 +11,8 @@ import {
   Plus,
   Receipt,
   Save,
-  Shield,
   ShieldCheck,
-  Star,
+  Sparkles,
   Ticket,
   X,
 } from 'lucide-react';
@@ -132,7 +131,7 @@ export function CustomerDetailDrawer({
       setDetail((prev) => (prev ? { ...prev, tier: targetTier, trustNotes: updated.trustNotes } : null));
       onCustomerUpdated(updated);
       toast({
-        title: targetTier === 'gold' ? 'Promoted to ⭐ Gold Tier' : 'Demoted to Standard Tier',
+        title: targetTier === 'gold' ? 'Promoted to Gold' : 'Changed to Standard',
         description:
           targetTier === 'gold'
             ? 'Customer is now trusted for Cash on Delivery!'
@@ -271,29 +270,19 @@ export function CustomerDetailDrawer({
                   : 'bg-surface-sunken text-ink ring-1 ring-border'
               }`}
             >
-              {isGold ? '⭐' : (customerSummary.firstName?.[0] || customerSummary.contactName?.[0] || 'U').toUpperCase()}
+              {(customerSummary.firstName?.[0] || customerSummary.contactName?.[0] || 'U').toUpperCase()}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-black text-ink">{displayName}</h3>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-black ${
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-black ${
                     isGold
                       ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                       : 'bg-surface-sunken text-ink-soft border border-border'
                   }`}
                 >
-                  {isGold ? (
-                    <>
-                      <Star className="size-3 fill-current text-amber-500" />
-                      ⭐ Gold (Trusted Cash)
-                    </>
-                  ) : (
-                    <>
-                      <Shield className="size-3 text-ink-soft" />
-                      Standard (Pay First)
-                    </>
-                  )}
+                  {isGold ? 'Gold' : 'Standard'}
                 </span>
               </div>
 
@@ -360,17 +349,17 @@ export function CustomerDetailDrawer({
 
       {/* Action Sections: 2-Column Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Trust Tier Switch & Stamp Adjuster */}
+        {/* Left Column: Customer Type Switch & Stamp Adjuster */}
         <div className="space-y-6 lg:col-span-6">
-          {/* Trust Tier Control Card */}
+          {/* Customer Tier Control Card */}
           <Card padding="lg" className="border-border bg-surface">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="size-4 text-accent" />
-                <h4 className="font-bold text-ink">Trust Tier Control</h4>
+                <h4 className="font-bold text-ink">Customer Type</h4>
               </div>
               <Badge variant={isGold ? 'success' : 'default'}>
-                {isGold ? '⭐ Gold Trusted' : 'Standard'}
+                {isGold ? 'Gold' : 'Standard'}
               </Badge>
             </div>
 
@@ -378,13 +367,13 @@ export function CustomerDetailDrawer({
               <div className="rounded-xl bg-surface-sunken/50 p-3 text-xs leading-relaxed text-ink-soft">
                 {isGold ? (
                   <p>
-                    <strong className="text-ink">Gold Tier Active:</strong> Customer is allowed to pay with{' '}
+                    <strong className="text-ink">Gold:</strong> Customer is allowed to pay with{' '}
                     <strong className="text-accent">Cash on Delivery</strong>. They receive bonus Lucky Draw tickets
                     and orders are immediately confirmed without waiting for KHQR verification.
                   </p>
                 ) : (
                   <p>
-                    <strong className="text-ink">Standard Tier Active:</strong> Customer is required to pay upfront
+                    <strong className="text-ink">Standard:</strong> Customer is required to pay upfront
                     using <strong className="text-ink">KHQR Payment</strong> before kitchen preparation starts.
                   </p>
                 )}
@@ -392,7 +381,7 @@ export function CustomerDetailDrawer({
 
               <div>
                 <label htmlFor="trust-notes" className="block text-xs font-bold uppercase text-ink mb-1.5">
-                  Manager Trust Notes / Room Info
+                  Manager Notes / Room Info
                 </label>
                 <textarea
                   id="trust-notes"
@@ -415,7 +404,7 @@ export function CustomerDetailDrawer({
                     className="flex-1 gap-1.5 font-bold text-xs"
                   >
                     <Lock className="size-3.5" />
-                    🔒 Demote to Standard (Require KHQR)
+                    Change to Standard
                   </Button>
                 ) : (
                   <Button
@@ -426,8 +415,8 @@ export function CustomerDetailDrawer({
                     onClick={() => handleToggleTier('gold')}
                     className="flex-1 gap-1.5 font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white border-0"
                   >
-                    <Star className="size-3.5 fill-current" />
-                    ⭐ Promote to Gold (Trust Cash)
+                    <Sparkles className="size-3.5" />
+                    Promote to Gold
                   </Button>
                 )}
 

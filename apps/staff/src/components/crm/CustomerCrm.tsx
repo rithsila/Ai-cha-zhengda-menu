@@ -5,22 +5,18 @@ import {
   ChevronRight,
   CircleAlert,
   Coins,
-  Dices,
   Lock,
   Phone,
   RefreshCw,
   Search,
-  Settings,
-  Shield,
   Sparkles,
-  Star,
+  Ticket,
   Users,
   X,
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Card, EmptyState, Skeleton, useToast } from '../ui';
 import { CustomerDetailDrawer } from './CustomerDetailDrawer';
-import { TrustConfigModal } from './TrustConfigModal';
 import type { CustomerSummary, CustomersResponse } from './types';
 
 type CustomerCrmProps = {
@@ -45,9 +41,8 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modals & Selected customer
+  // Selected customer drawer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
-  const [configModalOpen, setConfigModalOpen] = useState(false);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -141,7 +136,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
-                Standard Tier
+                Standard
               </p>
               <p className="mt-1.5 text-2xl font-black tabular-nums text-ink">
                 {summary ? summary.standardCount : '—'}
@@ -154,12 +149,12 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
           <p className="mt-2 text-[11px] text-ink-faint">Must pay upfront with KHQR</p>
         </Card>
 
-        {/* 3. ⭐ Gold Tier */}
+        {/* 3. Gold */}
         <Card padding="md" className="border-amber-500/30 bg-amber-500/5 shadow-xs">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                ⭐ Gold Tier
+                Gold
               </p>
               <p className="mt-1.5 text-2xl font-black tabular-nums text-amber-600 dark:text-amber-400">
                 {summary ? summary.goldCount : '—'}
@@ -204,7 +199,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
               </p>
             </div>
             <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
-              <Dices className="size-4" />
+              <Ticket className="size-4" />
             </div>
           </div>
           <p className="mt-2 text-[11px] text-ink-faint">Active tickets in draw pool</p>
@@ -259,14 +254,13 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 setTierFilter('gold');
                 setPage(1);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all flex items-center gap-1 ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
                 tierFilter === 'gold'
                   ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-ink-soft hover:text-ink'
               }`}
             >
-              <Star className="size-3 fill-current" />
-              ⭐ Gold {summary ? `(${summary.goldCount})` : ''}
+              Gold {summary ? `(${summary.goldCount})` : ''}
             </button>
             <button
               type="button"
@@ -283,17 +277,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
               Standard {summary ? `(${summary.standardCount})` : ''}
             </button>
           </div>
-
-          {/* Action Modals */}
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setConfigModalOpen(true)}
-            className="h-10 gap-1.5 font-bold text-xs"
-          >
-            <Settings className="size-3.5" />
-            Settings
-          </Button>
 
           <Button
             variant="ghost"
@@ -367,7 +350,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 <tr className="border-b border-border bg-surface-sunken/40 font-bold uppercase tracking-wider text-ink-soft">
                   <th className="py-3.5 pl-5 pr-3">Customer</th>
                   <th className="py-3.5 px-3">Phone</th>
-                  <th className="py-3.5 px-3">Trust Tier</th>
+                  <th className="py-3.5 px-3">Type</th>
                   <th className="py-3.5 px-3">Orders &amp; Spend</th>
                   <th className="py-3.5 px-3">Stamps</th>
                   <th className="py-3.5 px-3">Lucky Tickets</th>
@@ -402,7 +385,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                                 : 'bg-surface-sunken text-ink ring-1 ring-border'
                             }`}
                           >
-                            {isGold ? '⭐' : (c.firstName?.[0] || c.contactName?.[0] || 'U').toUpperCase()}
+                            {(c.firstName?.[0] || c.contactName?.[0] || 'U').toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <p className="truncate font-bold text-ink text-xs">{nameDisplay}</p>
@@ -434,26 +417,16 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                         )}
                       </td>
 
-                      {/* Trust Tier Badge */}
+                      {/* Type Badge */}
                       <td className="py-3.5 px-3">
                         <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
                             isGold
                               ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                               : 'bg-surface-sunken text-ink-soft border border-border'
                           }`}
                         >
-                          {isGold ? (
-                            <>
-                              <Star className="size-3 fill-current text-amber-500" />
-                              ⭐ Gold (Trusted)
-                            </>
-                          ) : (
-                            <>
-                              <Shield className="size-3 text-ink-soft" />
-                              Standard (Pay First)
-                            </>
-                          )}
+                          {isGold ? 'Gold' : 'Standard'}
                         </span>
                       </td>
 
@@ -544,13 +517,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
           </div>
         )}
       </Card>
-
-      {/* Configuration Modal */}
-      <TrustConfigModal
-        isOpen={configModalOpen}
-        onClose={() => setConfigModalOpen(false)}
-        onSaved={fetchCustomers}
-      />
     </div>
   );
 }
