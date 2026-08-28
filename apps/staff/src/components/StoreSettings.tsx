@@ -7,7 +7,6 @@ import {
   QrCode,
   Sliders,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
@@ -389,60 +388,32 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 4. Rates & Delivery Fee */}
+      {/* 4. Delivery Fee */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
           <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
-            <Sparkles className="size-5" />
+            <Truck className="size-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-ink">Loyalty & Delivery Rates</h3>
+            <h3 className="text-base font-bold text-ink">Delivery Fee</h3>
             <p className="text-xs text-ink-soft">
-              Point conversion rates and delivery fee for Arakawa.
+              Delivery fee charged per order inside Arakawa buildings.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-ink">Delivery Fee ($)</label>
-            <input
-              type="number"
-              step="0.25"
-              min="0"
-              value={config.deliveryFee}
-              onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
-              onBlur={(e) => updateSetting('deliveryFee', Number(e.target.value), 'Delivery Fee')}
-              className="h-11 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
-            />
-            <span className="text-[11px] text-ink-faint">0 = Free delivery</span>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-ink">Redeem Rate (Points/$1)</label>
-            <input
-              type="number"
-              min="1"
-              value={config.pointsPerDollar}
-              onChange={(e) => setConfig((prev) => ({ ...prev, pointsPerDollar: Number(e.target.value) }))}
-              onBlur={(e) => updateSetting('pointsPerDollar', Number(e.target.value), 'Points per Dollar')}
-              className="h-11 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
-            />
-            <span className="text-[11px] text-ink-faint">Default: 100 pts = $1 (10 pts/stamp)</span>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold text-ink">Earn Rate (Points/$1 spent)</label>
-            <input
-              type="number"
-              min="1"
-              value={config.earnPointsPerDollar}
-              onChange={(e) => setConfig((prev) => ({ ...prev, earnPointsPerDollar: Number(e.target.value) }))}
-              onBlur={(e) => updateSetting('earnPointsPerDollar', Number(e.target.value), 'Earn Points Rate')}
-              className="h-11 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
-            />
-            <span className="text-[11px] text-ink-faint">Default: 10 pts per $1 spent</span>
-          </div>
+        <div className="max-w-xs flex flex-col gap-2">
+          <label className="text-xs font-bold text-ink">Delivery Fee ($)</label>
+          <input
+            type="number"
+            step="0.25"
+            min="0"
+            value={config.deliveryFee}
+            onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
+            onBlur={(e) => updateSetting('deliveryFee', Number(e.target.value), 'Delivery Fee')}
+            className="h-11 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
+          />
+          <span className="text-[11px] text-ink-faint">0 = Free delivery for customers</span>
         </div>
       </Card>
     </div>
