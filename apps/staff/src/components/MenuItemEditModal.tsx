@@ -12,7 +12,7 @@ import {
   Award
 } from 'lucide-react';
 import { Button, Segmented, Switch, useToast } from './ui';
-import { API_BASE, authHeaders } from '../lib/api';
+import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 
 export type ModifierOptionInput = {
   id?: string;
@@ -44,6 +44,94 @@ export type MenuItemFull = {
   canClaim?: boolean;
   modifiers?: ModifierGroupInput[];
 };
+
+const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
+  {
+    name: 'Size / Cup Type',
+    type: 'single',
+    required: true,
+    options: [
+      { name: 'Hot (400ml)', priceDelta: 0 },
+      { name: 'Cold M (500ml)', priceDelta: 0 },
+      { name: 'Cold L (700ml)', priceDelta: 0.25 },
+    ],
+  },
+  {
+    name: 'Ice Level',
+    type: 'single',
+    required: true,
+    options: [
+      { name: 'No Ice', priceDelta: 0 },
+      { name: 'Less Ice', priceDelta: 0 },
+      { name: 'Normal Ice', priceDelta: 0 },
+      { name: 'More Ice', priceDelta: 0 },
+    ],
+  },
+  {
+    name: 'Sugar Level',
+    type: 'single',
+    required: true,
+    options: [
+      { name: '0%', priceDelta: 0 },
+      { name: '25%', priceDelta: 0 },
+      { name: '50%', priceDelta: 0 },
+      { name: '75%', priceDelta: 0 },
+      { name: '100%', priceDelta: 0 },
+    ],
+  },
+  {
+    name: 'Toppings',
+    type: 'multiple',
+    required: false,
+    options: [
+      { name: 'Boba Pearl', priceDelta: 0.25 },
+      { name: 'Coconut Jelly', priceDelta: 0.25 },
+      { name: 'Oats', priceDelta: 0.25 },
+      { name: 'Oolong Tea Jelly', priceDelta: 0.25 },
+      { name: 'Brown Sugar Jelly', priceDelta: 0.25 },
+      { name: 'Red Bean', priceDelta: 0.25 },
+    ],
+  },
+];
+
+const DEFAULT_FOOD_MODIFIERS: ModifierGroupInput[] = [
+  {
+    name: 'Flavor Powder',
+    type: 'single',
+    required: true,
+    options: [
+      { name: 'Signature', priceDelta: 0 },
+      { name: 'Mala', priceDelta: 0 },
+      { name: 'Plum', priceDelta: 0 },
+      { name: 'Cumin', priceDelta: 0 },
+    ],
+  },
+  {
+    name: 'Signature Sauce',
+    type: 'single',
+    required: false,
+    options: [
+      { name: 'No Sauce', priceDelta: 0 },
+      { name: 'Sweet & Chili', priceDelta: 0 },
+      { name: 'Mala Sauce', priceDelta: 0 },
+      { name: 'Blackpepper', priceDelta: 0 },
+    ],
+  },
+];
+
+function cloneModifierPreset(preset: ModifierGroupInput[]): ModifierGroupInput[] {
+  return preset.map((g, gIdx) => ({
+    key: `group_${Date.now()}_${gIdx}`,
+    name: g.name,
+    type: g.type,
+    required: g.required,
+    options: g.options.map((o, oIdx) => ({
+      key: `opt_${Date.now()}_${gIdx}_${oIdx}`,
+      name: o.name,
+      priceDelta: o.priceDelta,
+    })),
+  }));
+}
 
 type Props = {
   isOpen: boolean;
@@ -115,7 +203,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setImage('');
       setEarnsStamp(true);
       setCanClaim(false);
-      setModifiers([]);
+      setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
     }
     setError(null);
   }, [item, isOpen]);
@@ -151,6 +239,18 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   };
 
   // Modifier Groups Management
+  const loadDrinkPreset = () => {
+    setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
+  };
+
+  const loadFoodPreset = () => {
+    setModifiers(cloneModifierPreset(DEFAULT_FOOD_MODIFIERS));
+  };
+
+  const clearAllModifiers = () => {
+    setModifiers([]);
+  };
+
   const addModifierGroup = () => {
     setModifiers((prev) => [
       ...prev,
@@ -452,7 +552,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               <div className="relative flex size-20 items-center justify-center rounded-xl border border-border bg-surface-sunken overflow-hidden">
                 {image ? (
                   <img
-                    src={image.startsWith('http://') || image.startsWith('https://') ? image : image.startsWith('/') ? `${API_BASE}${image}`.replace(/([^:]\/)\/+/g, '$1') : image}
+                    src={resolveImageUrl(image)}
                     alt="Preview"
                     className="h-full w-full object-cover"
                   />
@@ -531,30 +631,84 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          {/* Modifiers & Options Section (Ice, Sugar, Size, Toppings) */}
+          {/* Options & Toppings Section (Size, Ice, Sugar, Toppings, Flavor, Sauce) */}
           <div className="border-t border-border pt-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Layers className="size-4 text-accent" />
                 <h4 className="text-sm font-bold text-ink">
-                  Modifiers &amp; Toppings ({modifiers.length})
+                  Options &amp; Toppings ({modifiers.length})
                 </h4>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={addModifierGroup}
-                className="text-xs font-bold"
-              >
-                <Plus className="size-3.5" />
-                Add Group (e.g. Topping/Sugar)
-              </Button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={loadDrinkPreset}
+                  className="text-xs font-semibold"
+                  title="Load standard Drink options (Size, Ice, Sugar, Toppings)"
+                >
+                  Drink Presets
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={loadFoodPreset}
+                  className="text-xs font-semibold"
+                  title="Load standard Food options (Flavor, Sauce)"
+                >
+                  Food Presets
+                </Button>
+                {modifiers.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    onClick={clearAllModifiers}
+                    className="text-xs font-semibold text-danger hover:bg-danger-soft"
+                    title="Remove all option groups"
+                  >
+                    Clear All
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={addModifierGroup}
+                  className="text-xs font-bold"
+                >
+                  <Plus className="size-3.5" />
+                  Add Custom Group
+                </Button>
+              </div>
             </div>
 
             {modifiers.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-ink-faint">
-                No modifiers configured. Tap above to add Size, Ice, Sugar level, or Toppings.
+              <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-ink-faint space-y-2">
+                <p>No options configured for this item.</p>
+                <div className="flex justify-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={loadDrinkPreset}
+                    className="text-xs"
+                  >
+                    Load Drink Options
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={loadFoodPreset}
+                    className="text-xs"
+                  >
+                    Load Food Options
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">

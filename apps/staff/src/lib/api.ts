@@ -82,3 +82,18 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   return (await res.json()) as T;
 }
+
+/**
+ * Resolve an image URL so relative paths (e.g. /images/... or /uploads/...)
+ * work cleanly across both local dev and production builds.
+ */
+export function resolveImageUrl(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  if (url.startsWith('/')) {
+    return API_BASE ? `${API_BASE}${url}`.replace(/([^:]\/)\/+/g, '$1') : url;
+  }
+  return url;
+}

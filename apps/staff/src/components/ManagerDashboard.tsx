@@ -25,7 +25,7 @@ import {
   Users2,
   X,
 } from 'lucide-react';
-import { apiFetch } from '../lib/api';
+import { apiFetch, resolveImageUrl } from '../lib/api';
 import type { MenuItemFull } from './MenuItemEditModal';
 import { StoreSettings } from './StoreSettings';
 import { CustomerCrm } from './crm/CustomerCrm';
@@ -968,17 +968,19 @@ export function ManagerDashboard() {
                                 className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-surface-sunken transition-colors"
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  {item.image ? (
-                                    <img
-                                      src={item.image}
-                                      alt={item.name}
-                                      className="size-8 rounded-lg object-cover shrink-0 border border-border/50"
-                                    />
-                                  ) : (
-                                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-ink-faint">
-                                      <Award className="size-4" />
-                                    </div>
-                                  )}
+                                  <div className="relative size-8 shrink-0 overflow-hidden rounded-lg border border-border/50 bg-surface-sunken flex items-center justify-center">
+                                    {item.image ? (
+                                      <img
+                                        src={resolveImageUrl(item.image)}
+                                        alt={item.name}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : null}
+                                    <Award className="size-4 text-ink-faint absolute pointer-events-none -z-10" />
+                                  </div>
                                   <div className="min-w-0">
                                     <p className="truncate text-xs font-bold text-ink">{item.name}</p>
                                     <p className="text-[10px] text-ink-soft capitalize">
@@ -1000,17 +1002,19 @@ export function ManagerDashboard() {
 
                     {selectedCatalogItem && (
                       <div className="flex items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 p-2.5">
-                        {selectedCatalogItem.image ? (
-                          <img
-                            src={selectedCatalogItem.image}
-                            alt={selectedCatalogItem.name}
-                            className="size-10 rounded-lg object-cover border border-accent/40"
-                          />
-                        ) : (
-                          <div className="flex size-10 items-center justify-center rounded-lg bg-accent/20 text-accent">
-                            <Sparkles className="size-5" />
-                          </div>
-                        )}
+                        <div className="relative size-10 shrink-0 overflow-hidden rounded-lg border border-accent/40 bg-accent/20 flex items-center justify-center">
+                          {selectedCatalogItem.image ? (
+                            <img
+                              src={resolveImageUrl(selectedCatalogItem.image)}
+                              alt={selectedCatalogItem.name}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : null}
+                          <Sparkles className="size-5 text-accent absolute pointer-events-none -z-10" />
+                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-ink truncate">
                             Selected: {selectedCatalogItem.name}
@@ -1121,17 +1125,19 @@ export function ManagerDashboard() {
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        {reward.image ? (
-                          <img
-                            src={reward.image}
-                            alt={reward.name}
-                            className="size-9 rounded-xl object-cover border border-border"
-                          />
-                        ) : (
-                          <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
-                            <Coins className="size-4" />
-                          </div>
-                        )}
+                        <div className="relative size-9 shrink-0 overflow-hidden rounded-xl border border-border bg-accent-soft flex items-center justify-center">
+                          {reward.image ? (
+                            <img
+                              src={resolveImageUrl(reward.image)}
+                              alt={reward.name}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : null}
+                          <Coins className="size-4 text-accent absolute pointer-events-none -z-10" />
+                        </div>
                         <Badge variant={reward.isActive ? 'success' : 'default'} dot>
                           {reward.isActive ? 'Active' : 'Inactive'}
                         </Badge>

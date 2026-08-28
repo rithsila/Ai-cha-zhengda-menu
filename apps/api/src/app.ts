@@ -34,6 +34,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes } from './lucky-draw';
+import { uploadToR2, isR2Configured } from './r2';
 
 // The tuned SQLite client lives in db.ts; re-exported here because every
 // caller (and every test) already imports it from this module.
@@ -533,7 +534,19 @@ export function createApp() {
     }
   });
 
-  // Static folder for uploaded menu images
+  // Static folder for menu images & uploaded images
+  const menuImagesDirs = [
+    path.resolve(process.cwd(), '../menu/public/images'),
+    path.resolve(__dirname, '../../menu/public/images'),
+    path.resolve(process.cwd(), 'public/images'),
+  ];
+  for (const imgDir of menuImagesDirs) {
+    if (fs.existsSync(imgDir)) {
+      app.use('/images', express.static(imgDir));
+      break;
+    }
+  }
+
   const uploadDir = path.resolve(process.cwd(), 'public/uploads');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });

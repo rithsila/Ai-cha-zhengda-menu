@@ -24,16 +24,16 @@ export async function settleOrderPoints(prisma: PrismaClient, orderId: string) {
       });
 
       const thresholdRow = await tx.systemConfig.findUnique({ where: { key: 'goldMinOrdersThreshold' } });
-      const threshold = thresholdRow ? Number(thresholdRow.value) : CONFIG_DEFAULTS.goldMinOrdersThreshold;
+      const threshold = Number(thresholdRow ? thresholdRow.value : CONFIG_DEFAULTS.goldMinOrdersThreshold);
 
       const luckyDrawEnabledRow = await tx.systemConfig.findUnique({ where: { key: 'luckyDrawEnabled' } });
       const luckyDrawEnabled = luckyDrawEnabledRow ? luckyDrawEnabledRow.value : String(CONFIG_DEFAULTS.luckyDrawEnabled);
 
       const goldTicketsRow = await tx.systemConfig.findUnique({ where: { key: 'luckyTicketsPerGoldOrder' } });
-      const goldTickets = goldTicketsRow ? Number(goldTicketsRow.value) : CONFIG_DEFAULTS.luckyTicketsPerGoldOrder;
+      const goldTickets = Number(goldTicketsRow ? goldTicketsRow.value : CONFIG_DEFAULTS.luckyTicketsPerGoldOrder);
 
       const stdTicketsRow = await tx.systemConfig.findUnique({ where: { key: 'luckyTicketsPerStandardOrder' } });
-      const stdTickets = stdTicketsRow ? Number(stdTicketsRow.value) : CONFIG_DEFAULTS.luckyTicketsPerStandardOrder;
+      const stdTickets = Number(stdTicketsRow ? stdTicketsRow.value : CONFIG_DEFAULTS.luckyTicketsPerStandardOrder);
 
       let newTier = user.tier;
       if (threshold > 0 && totalPaidOrders >= threshold && user.tier === 'standard') {
