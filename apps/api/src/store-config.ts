@@ -17,7 +17,6 @@ export interface StoreStatus {
 
 export const CONFIG_DEFAULTS: Record<string, string | number> = {
   pointsPerDollar: 100,
-  earnPointsPerDollar: 10,
   // Free inside Arakawa for now. The shop can raise it later via PUT /api/config.
   deliveryFee: 0,
   storeStatus: 'auto',
@@ -146,7 +145,6 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
   // Numeric keys
   if (
     key === 'pointsPerDollar' ||
-    key === 'earnPointsPerDollar' ||
     key === 'deliveryFee' ||
     key === 'goldMinOrdersThreshold' ||
     key === 'luckyTicketsPerGoldOrder' ||

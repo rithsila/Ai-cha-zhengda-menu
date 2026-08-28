@@ -935,7 +935,6 @@ export function createApp() {
       const serverTotal = Math.round((itemsTotal + deliveryFee) * 100) / 100;
 
       const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', Number(CONFIG_DEFAULTS.pointsPerDollar));
-      const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', Number(CONFIG_DEFAULTS.earnPointsPerDollar));
 
       let requestedPoints = 0;
       // An anonymous order has no balance to spend from.

@@ -3,7 +3,6 @@ import { Sparkle } from '@phosphor-icons/react';
 
 interface RewardCardProps {
   points: number;
-  earnPerDollar?: number;
   pointsPerDollar?: number;
   tier?: string;
   orderCount?: number;

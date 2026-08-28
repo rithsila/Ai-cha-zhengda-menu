@@ -20,8 +20,6 @@ export interface StoreConfigState {
   enableCash: boolean;
   enableKhqr: boolean;
   deliveryFee: number;
-  pointsPerDollar: number;
-  earnPointsPerDollar: number;
   isOpen: boolean;
   currentTime: string;
   reason: string;
@@ -36,8 +34,6 @@ const DEFAULT_CONFIG: StoreConfigState = {
   enableCash: true,
   enableKhqr: true,
   deliveryFee: 0,
-  pointsPerDollar: 100,
-  earnPointsPerDollar: 10,
   isOpen: true,
   currentTime: '',
   reason: 'schedule_open',
@@ -71,8 +67,6 @@ export function StoreSettings() {
         enableCash: statusRes.enableCash ?? (configMap.get('enableCash') !== '0'),
         enableKhqr: statusRes.enableKhqr ?? (configMap.get('enableKhqr') !== '0'),
         deliveryFee: Number(configMap.get('deliveryFee') ?? 0),
-        pointsPerDollar: Number(configMap.get('pointsPerDollar') ?? 100),
-        earnPointsPerDollar: Number(configMap.get('earnPointsPerDollar') ?? 10),
         isOpen: !!statusRes.isOpen,
         currentTime: statusRes.currentTime || '',
         reason: statusRes.reason || '',

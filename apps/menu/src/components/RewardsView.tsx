@@ -9,7 +9,6 @@ import { RewardCard } from './RewardCard';
 import { CustomerLuckyWheelModal, type LuckyPrize } from './CustomerLuckyWheelModal';
 import { LuckyWheelIcon } from './ui/LuckyWheelIcon';
 
-const DEFAULT_EARN_PER_DOLLAR = 10;
 const DEFAULT_POINTS_PER_DOLLAR = 100;
 
 /** Reads one numeric config row, falling back when it is missing or not a number. */
@@ -44,7 +43,6 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
   const [claimOrders, setClaimOrders] = useState<any[]>([]);
   const [paidOrderCount, setPaidOrderCount] = useState(0);
   const [goldThreshold, setGoldThreshold] = useState(3);
-  const [earnPerDollar, setEarnPerDollar] = useState(DEFAULT_EARN_PER_DOLLAR);
   const [pointsPerDollar, setPointsPerDollar] = useState(DEFAULT_POINTS_PER_DOLLAR);
   const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
   const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
@@ -115,7 +113,6 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
 
         if (cfgRes.ok) {
           const rows: { key: string; value: string }[] = await cfgRes.json();
-          setEarnPerDollar(readConfigNumber(rows, 'earnPointsPerDollar', DEFAULT_EARN_PER_DOLLAR));
           setPointsPerDollar(readConfigNumber(rows, 'pointsPerDollar', DEFAULT_POINTS_PER_DOLLAR));
           setGoldThreshold(readConfigNumber(rows, 'goldMinOrdersThreshold', 3));
         }
@@ -160,7 +157,6 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
       {/* 10-Slot Stamp Reward Card with Membership Tier */}
       <RewardCard
         points={points ?? 0}
-        earnPerDollar={earnPerDollar}
         pointsPerDollar={pointsPerDollar}
         tier={userProfile?.tier || 'standard'}
         orderCount={paidOrderCount}
