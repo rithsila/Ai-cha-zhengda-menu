@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Check,
   Dices,
   Gift,
   Loader2,
@@ -47,7 +46,6 @@ const PRESET_COLORS = [
 export function LuckyDrawManagement() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [luckyDrawModalOpen, setLuckyDrawModalOpen] = useState(false);
 
   // Stats from customer CRM
@@ -61,6 +59,8 @@ export function LuckyDrawManagement() {
   const [luckyTicketsPerStandardOrder, setLuckyTicketsPerStandardOrder] = useState<number>(1);
   const [luckyTicketsCostPerSpin, setLuckyTicketsCostPerSpin] = useState<number>(5);
   const [prizes, setPrizes] = useState<LuckyWheelPrizeItem[]>(DEFAULT_LUCKY_PRIZES);
+
+  const savePrizesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -121,10 +121,77 @@ export function LuckyDrawManagement() {
     loadData();
   }, []);
 
+  // Generic single-setting auto-save
+  const updateSetting = async (
+    key: string,
+    value: string | number | boolean,
+    label: string,
+    silent = false
+  ) => {
+    try {
+      let strVal = String(value);
+      if (typeof value === 'boolean') {
+        strVal = value ? '1' : '0';
+      }
+
+      await apiFetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value: strVal }),
+      });
+
+      if (!silent) {
+        toast({
+          title: `${label} updated`,
+          variant: 'success',
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: `Failed to update ${label}`,
+        description: err?.message || 'Please try again.',
+        variant: 'error',
+      });
+    }
+  };
+
+  // Auto-save prizes to API
+  const savePrizesToApi = async (prizeList: LuckyWheelPrizeItem[], silent = false) => {
+    try {
+      await apiFetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: 'luckyWheelPrizes',
+          value: JSON.stringify(prizeList),
+        }),
+      });
+
+      if (!silent) {
+        toast({
+          title: 'Prize segments saved',
+          variant: 'success',
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Couldn't save prize segments",
+        description: err.message || 'Please try again.',
+        variant: 'error',
+      });
+    }
+  };
+
   const handlePrizeChange = (index: number, field: keyof LuckyWheelPrizeItem, value: any) => {
     setPrizes((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
+
+      if (savePrizesTimer.current) clearTimeout(savePrizesTimer.current);
+      savePrizesTimer.current = setTimeout(() => {
+        savePrizesToApi(next, true);
+      }, 600);
+
       return next;
     });
   };
@@ -149,7 +216,9 @@ export function LuckyDrawManagement() {
       value: 10,
       weight: 10,
     };
-    setPrizes((prev) => [...prev, newPrize]);
+    const next = [...prizes, newPrize];
+    setPrizes(next);
+    savePrizesToApi(next);
   };
 
   const handleRemovePrize = (index: number) => {
@@ -161,53 +230,19 @@ export function LuckyDrawManagement() {
       });
       return;
     }
-    setPrizes((prev) => prev.filter((_, i) => i !== index));
+    const next = prizes.filter((_, i) => i !== index);
+    setPrizes(next);
+    savePrizesToApi(next);
   };
 
   const handleResetPrizes = () => {
     setPrizes(DEFAULT_LUCKY_PRIZES);
+    savePrizesToApi(DEFAULT_LUCKY_PRIZES);
     toast({
       title: 'Reset to default prizes',
-      description: 'Default 8 prize segments restored.',
+      description: 'Default 8 prize segments restored and saved.',
       variant: 'info',
     });
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const updates = [
-        { key: 'goldMinOrdersThreshold', value: Math.max(0, goldMinOrdersThreshold) },
-        { key: 'allowCashForStandard', value: allowCashForStandard ? 1 : 0 },
-        { key: 'luckyDrawEnabled', value: luckyDrawEnabled ? 1 : 0 },
-        { key: 'luckyTicketsPerGoldOrder', value: Math.max(0, luckyTicketsPerGoldOrder) },
-        { key: 'luckyTicketsPerStandardOrder', value: Math.max(0, luckyTicketsPerStandardOrder) },
-        { key: 'luckyTicketsCostPerSpin', value: Math.max(1, luckyTicketsCostPerSpin) },
-        { key: 'luckyWheelPrizes', value: JSON.stringify(prizes) },
-      ];
-
-      for (const update of updates) {
-        await apiFetch('/api/config', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(update),
-        });
-      }
-
-      toast({
-        title: 'Settings saved',
-        description: 'Customer settings and Lucky Draw rules updated successfully.',
-        variant: 'success',
-      });
-    } catch (err: any) {
-      toast({
-        title: "Couldn't save configuration",
-        description: err.message || 'Please try again.',
-        variant: 'error',
-      });
-    } finally {
-      setSaving(false);
-    }
   };
 
   if (loading) {
@@ -244,17 +279,6 @@ export function LuckyDrawManagement() {
           >
             <Trophy className="size-4 text-amber-500" />
             🎉 Spin Lucky Draw / Pick Winner
-          </Button>
-
-          <Button
-            variant="primary"
-            size="md"
-            loading={saving}
-            onClick={handleSave}
-            className="h-10 gap-1.5 font-bold text-xs"
-          >
-            <Check className="size-4" />
-            Save Settings
           </Button>
         </div>
       </div>
@@ -359,6 +383,11 @@ export function LuckyDrawManagement() {
                     max={100}
                     value={goldMinOrdersThreshold}
                     onChange={(e) => setGoldMinOrdersThreshold(Number(e.target.value) || 0)}
+                    onBlur={(e) => {
+                      const val = Math.max(0, Number(e.target.value) || 0);
+                      setGoldMinOrdersThreshold(val);
+                      updateSetting('goldMinOrdersThreshold', val, 'Gold promotion threshold');
+                    }}
                     className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">orders</span>
@@ -375,7 +404,10 @@ export function LuckyDrawManagement() {
               </div>
               <Switch
                 checked={allowCashForStandard}
-                onChange={setAllowCashForStandard}
+                onChange={(checked) => {
+                  setAllowCashForStandard(checked);
+                  updateSetting('allowCashForStandard', checked, 'Cash for Standard');
+                }}
                 srLabel="Allow cash for standard customers"
               />
             </div>
@@ -397,7 +429,10 @@ export function LuckyDrawManagement() {
               </div>
               <Switch
                 checked={luckyDrawEnabled}
-                onChange={setLuckyDrawEnabled}
+                onChange={(checked) => {
+                  setLuckyDrawEnabled(checked);
+                  updateSetting('luckyDrawEnabled', checked, 'Lucky Draw feature');
+                }}
                 srLabel="Enable lucky draw feature"
               />
             </div>
@@ -421,6 +456,11 @@ export function LuckyDrawManagement() {
                     max={50}
                     value={luckyTicketsPerGoldOrder}
                     onChange={(e) => setLuckyTicketsPerGoldOrder(Number(e.target.value) || 0)}
+                    onBlur={(e) => {
+                      const val = Math.max(0, Number(e.target.value) || 0);
+                      setLuckyTicketsPerGoldOrder(val);
+                      updateSetting('luckyTicketsPerGoldOrder', val, 'Gold ticket rate');
+                    }}
                     className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">tickets</span>
@@ -447,6 +487,11 @@ export function LuckyDrawManagement() {
                     max={50}
                     value={luckyTicketsPerStandardOrder}
                     onChange={(e) => setLuckyTicketsPerStandardOrder(Number(e.target.value) || 0)}
+                    onBlur={(e) => {
+                      const val = Math.max(0, Number(e.target.value) || 0);
+                      setLuckyTicketsPerStandardOrder(val);
+                      updateSetting('luckyTicketsPerStandardOrder', val, 'Standard ticket rate');
+                    }}
                     className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">tickets</span>
@@ -473,6 +518,11 @@ export function LuckyDrawManagement() {
                     max={100}
                     value={luckyTicketsCostPerSpin}
                     onChange={(e) => setLuckyTicketsCostPerSpin(Number(e.target.value) || 1)}
+                    onBlur={(e) => {
+                      const val = Math.max(1, Number(e.target.value) || 1);
+                      setLuckyTicketsCostPerSpin(val);
+                      updateSetting('luckyTicketsCostPerSpin', val, 'Spin ticket cost');
+                    }}
                     className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">tickets</span>
@@ -515,7 +565,7 @@ export function LuckyDrawManagement() {
             </div>
 
             <p className="text-xs text-ink-soft">
-              Configure each wedge of the Telegram Mini App spin wheel. Weight determines probability.
+              Configure each wedge of the Telegram Mini App spin wheel. Weight determines probability. Changes auto-save.
             </p>
 
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">

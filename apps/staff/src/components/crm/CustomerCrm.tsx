@@ -6,6 +6,7 @@ import {
   CircleAlert,
   Coins,
   Lock,
+  Pencil,
   Phone,
   RefreshCw,
   Search,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Card, EmptyState, Skeleton, useToast } from '../ui';
-import { CustomerDetailDrawer } from './CustomerDetailDrawer';
+import { CustomerEditModal } from './CustomerEditModal';
 import type { CustomerSummary, CustomersResponse } from './types';
 
 type CustomerCrmProps = {
@@ -290,15 +291,6 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
         </div>
       </div>
 
-      {/* Main Content Area: Selected Customer Drawer OR Customer Table List */}
-      {selectedCustomer ? (
-        <CustomerDetailDrawer
-          customerSummary={selectedCustomer}
-          onClose={() => setSelectedCustomerId(null)}
-          onCustomerUpdated={handleCustomerUpdated}
-        />
-      ) : null}
-
       {/* Customer List Card & Table */}
       <Card padding="none" className="overflow-hidden border-border bg-surface shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
@@ -466,18 +458,13 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                       <td className="py-3.5 pl-3 pr-5 text-right">
                         <Button
                           type="button"
-                          variant={isSelected ? 'primary' : 'secondary'}
+                          variant="secondary"
                           size="md"
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedCustomerId(null);
-                            } else {
-                              setSelectedCustomerId(c.telegramUserId);
-                            }
-                          }}
-                          className="h-8 px-3 text-xs font-bold"
+                          onClick={() => setSelectedCustomerId(c.telegramUserId)}
+                          className="h-8 px-3 text-xs font-bold gap-1"
                         >
-                          {isSelected ? 'Close' : 'Edit'}
+                          <Pencil className="size-3" />
+                          <span>Edit</span>
                         </Button>
                       </td>
                     </tr>
@@ -517,6 +504,14 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
           </div>
         )}
       </Card>
+
+      {/* Customer Edit Center Pop-up Modal */}
+      <CustomerEditModal
+        customerSummary={selectedCustomer}
+        isOpen={!!selectedCustomer}
+        onClose={() => setSelectedCustomerId(null)}
+        onCustomerUpdated={handleCustomerUpdated}
+      />
     </div>
   );
 }
