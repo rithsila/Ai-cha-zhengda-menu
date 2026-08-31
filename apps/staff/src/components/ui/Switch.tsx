@@ -26,7 +26,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={[
-        'inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-xl',
+        'inline-flex min-h-11 cursor-pointer items-center gap-3 rounded-none',
         'transition-[background-color,color] duration-150 ease-out',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,
@@ -37,7 +37,7 @@ export function Switch({
       <span
         aria-hidden="true"
         className={[
-          'relative h-7 w-12 shrink-0 rounded-full border',
+          'relative h-7 w-12 shrink-0 rounded-none border',
           'transition-[background-color,border-color] duration-150 ease-out',
           checked
             ? 'border-transparent bg-accent'
@@ -46,7 +46,7 @@ export function Switch({
       >
         <span
           className={[
-            'absolute top-1 left-1 size-5 rounded-full border border-border bg-surface-raised',
+            'absolute top-1 left-1 size-5 rounded-none border border-border bg-surface-raised',
             'transition-transform duration-150 ease-out',
             checked ? 'translate-x-5' : 'translate-x-0',
           ].join(' ')}

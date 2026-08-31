@@ -125,7 +125,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 {summary ? summary.totalCustomers : '—'}
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent-soft text-accent">
               <Users className="size-4" />
             </div>
           </div>
@@ -143,7 +143,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 {summary ? summary.standardCount : '—'}
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-surface-sunken text-ink-soft">
+            <div className="flex size-9 items-center justify-center rounded-none bg-surface-sunken text-ink-soft">
               <Lock className="size-4" />
             </div>
           </div>
@@ -161,7 +161,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 {summary ? summary.goldCount : '—'}
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+            <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/20 text-amber-600 dark:text-amber-400">
               <Sparkles className="size-4" />
             </div>
           </div>
@@ -179,7 +179,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 {summary ? summary.totalStamps : '—'}
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <div className="flex size-9 items-center justify-center rounded-none bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
               <Coins className="size-4" />
             </div>
           </div>
@@ -199,7 +199,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 🎟️ {summary ? summary.totalLuckyTickets : '—'}
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/15 text-amber-600 dark:text-amber-400">
               <Ticket className="size-4" />
             </div>
           </div>
@@ -217,14 +217,14 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by phone, name, @username, or Telegram ID..."
-            className="h-11 w-full rounded-xl border border-border bg-surface pl-10 pr-10 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
+            className="h-11 w-full rounded-none border border-border bg-surface pl-10 pr-10 text-sm font-medium text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
           />
           {searchInput && (
             <button
               type="button"
               onClick={handleClearSearch}
               aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-ink-faint hover:bg-surface-sunken hover:text-ink"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-none p-1 text-ink-faint hover:bg-surface-sunken hover:text-ink"
             >
               <X className="size-4" />
             </button>
@@ -234,14 +234,14 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
         {/* Tier Filter Buttons & Action Modal Triggers */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Tier Segmented Buttons */}
-          <div className="inline-flex rounded-xl border border-border bg-surface p-1 shadow-xs">
+          <div className="inline-flex rounded-none border border-border bg-surface p-1 shadow-xs">
             <button
               type="button"
               onClick={() => {
                 setTierFilter('all');
                 setPage(1);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 tierFilter === 'all'
                   ? 'bg-accent text-on-accent shadow-xs'
                   : 'text-ink-soft hover:text-ink'
@@ -255,7 +255,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 setTierFilter('gold');
                 setPage(1);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 tierFilter === 'gold'
                   ? 'bg-amber-500 text-white shadow-xs'
                   : 'text-ink-soft hover:text-ink'
@@ -269,7 +269,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                 setTierFilter('standard');
                 setPage(1);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 tierFilter === 'standard'
                   ? 'bg-surface-sunken text-ink shadow-xs'
                   : 'text-ink-soft hover:text-ink'
@@ -284,7 +284,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
             size="icon"
             onClick={fetchCustomers}
             aria-label="Refresh customer list"
-            className="size-10 rounded-xl"
+            className="size-10 rounded-none"
           >
             <RefreshCw className={`size-4 ${loading ? 'animate-spin text-accent' : 'text-ink-soft'}`} />
           </Button>
@@ -310,10 +310,10 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
 
         {loading ? (
           <div className="p-5 space-y-3">
-            <Skeleton className="h-14 w-full rounded-xl" />
-            <Skeleton className="h-14 w-full rounded-xl" />
-            <Skeleton className="h-14 w-full rounded-xl" />
-            <Skeleton className="h-14 w-full rounded-xl" />
+            <Skeleton className="h-14 w-full rounded-none" />
+            <Skeleton className="h-14 w-full rounded-none" />
+            <Skeleton className="h-14 w-full rounded-none" />
+            <Skeleton className="h-14 w-full rounded-none" />
           </div>
         ) : error ? (
           <div className="p-8 text-center">
@@ -371,7 +371,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                       <td className="py-3.5 pl-5 pr-3">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex size-9 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs ${
+                            className={`flex size-9 shrink-0 items-center justify-center rounded-none font-bold shadow-xs ${
                               isGold
                                 ? 'bg-amber-500 text-white ring-1 ring-amber-400'
                                 : 'bg-surface-sunken text-ink ring-1 ring-border'
@@ -412,7 +412,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                       {/* Type Badge */}
                       <td className="py-3.5 px-3">
                         <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          className={`inline-flex items-center rounded-none px-2.5 py-0.5 text-[11px] font-bold ${
                             isGold
                               ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                               : 'bg-surface-sunken text-ink-soft border border-border'

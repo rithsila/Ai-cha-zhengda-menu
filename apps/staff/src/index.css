@@ -169,9 +169,23 @@
   --font-sans:
     "Outfit", "Battambang", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
+  --radius-full: 0px;
+  --radius: 0px;
 }
 
 @layer base {
+  html {
+    font-size: 90%;
+  }
+
   html,
   body,
   #root {

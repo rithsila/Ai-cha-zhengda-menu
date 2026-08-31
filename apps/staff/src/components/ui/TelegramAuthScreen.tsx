@@ -191,7 +191,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
     <div className="flex min-h-dvh items-center justify-center bg-surface-page p-4">
       <Card padding="lg" className="w-full max-w-sm border-border bg-surface text-center shadow-2xl">
         <div className="mb-6">
-          <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-2xl bg-accent text-on-accent shadow-md">
+          <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-none bg-accent text-on-accent shadow-md">
             <Sparkles className="size-7" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-ink">Staff Portal</h1>
@@ -201,7 +201,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
         </div>
 
         {error && (
-          <div className="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft p-3 text-left text-xs font-semibold text-danger">
+          <div className="mb-4 flex items-start gap-2 rounded-none bg-danger-soft p-3 text-left text-xs font-semibold text-danger">
             <AlertCircle className="size-4 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -237,7 +237,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
                       setPhoneNumber(e.target.value);
                       if (error) setError(null);
                     }}
-                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 pl-9 font-medium text-sm text-ink focus:border-accent outline-none"
+                    className="h-11 w-full rounded-none border border-border bg-surface px-3 pl-9 font-medium text-sm text-ink focus:border-accent outline-none"
                   />
                   <Phone className="absolute left-3 top-3.5 size-4 text-ink-faint" />
                 </div>
@@ -249,7 +249,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
               <button
                 type="submit"
                 disabled={loading || !phoneNumber.trim()}
-                className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-accent text-on-accent hover:opacity-90 font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-none bg-accent text-on-accent hover:opacity-90 font-bold text-xs shadow-sm transition-all disabled:opacity-50"
               >
                 <ArrowRight className="size-4" />
                 {loading ? 'Sending Code...' : 'Send Verification Code'}
@@ -278,7 +278,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
                       setOtpCode(e.target.value);
                       if (error) setError(null);
                     }}
-                    className="h-12 w-full rounded-xl border border-border bg-surface px-3 pl-9 font-mono text-center text-lg font-bold tracking-[0.25em] text-ink focus:border-accent outline-none"
+                    className="h-12 w-full rounded-none border border-border bg-surface px-3 pl-9 font-mono text-center text-lg font-bold tracking-[0.25em] text-ink focus:border-accent outline-none"
                   />
                   <ShieldCheck className="absolute left-3 top-3.5 size-5 text-accent" />
                 </div>
@@ -287,7 +287,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
               <button
                 type="submit"
                 disabled={loading || otpCode.trim().length < 4}
-                className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-accent text-on-accent hover:opacity-90 font-bold text-xs shadow-sm transition-all disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-none bg-accent text-on-accent hover:opacity-90 font-bold text-xs shadow-sm transition-all disabled:opacity-50"
               >
                 <ShieldCheck className="size-4" />
                 {loading ? 'Verifying...' : 'Verify & Sign In'}
@@ -333,7 +333,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
                   type="button"
                   onClick={() => authenticateTelegram({ telegramUserId: 'dev_manager' } as any)}
                   disabled={loading}
-                  className="h-9 px-2 rounded-lg bg-surface-sunken hover:bg-surface-elevated border border-border text-[11px] font-bold text-ink flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                  className="h-9 px-2 rounded-none bg-surface-sunken hover:bg-surface-elevated border border-border text-[11px] font-bold text-ink flex items-center justify-center gap-1.5 transition-all shadow-xs"
                 >
                   👑 Store Manager
                 </button>
@@ -341,7 +341,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
                   type="button"
                   onClick={() => authenticateTelegram({ telegramUserId: 'dev_staff' } as any)}
                   disabled={loading}
-                  className="h-9 px-2 rounded-lg bg-surface-sunken hover:bg-surface-elevated border border-border text-[11px] font-bold text-ink flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                  className="h-9 px-2 rounded-none bg-surface-sunken hover:bg-surface-elevated border border-border text-[11px] font-bold text-ink flex items-center justify-center gap-1.5 transition-all shadow-xs"
                 >
                   🧑‍🍳 Staff Member
                 </button>

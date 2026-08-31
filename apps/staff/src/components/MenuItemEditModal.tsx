@@ -430,11 +430,11 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       role="dialog"
       aria-modal="true"
     >
-      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-surface shadow-2xl overflow-hidden my-auto">
+      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-none border border-border bg-surface shadow-2xl overflow-hidden my-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent text-on-accent">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent text-on-accent">
               <Sparkles className="size-4" />
             </div>
             <div>
@@ -449,7 +449,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none p-1.5 text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             <X className="size-5" />
           </button>
@@ -458,7 +458,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         {/* Form Body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
           {error && (
-            <div className="flex items-center gap-2 rounded-xl bg-danger-soft p-3 text-xs font-semibold text-danger">
+            <div className="flex items-center gap-2 rounded-none bg-danger-soft p-3 text-xs font-semibold text-danger">
               <AlertCircle className="size-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -491,7 +491,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="e.g. Milk Tea, Ice Cream, Signature, Frappe"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
               />
             </div>
           </div>
@@ -508,7 +508,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="e.g. Brown Sugar Boba Milk"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
               />
             </div>
 
@@ -524,7 +524,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="1.50"
                 value={basePrice}
                 onChange={(e) => setBasePrice(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink focus:border-accent outline-none tabular-nums"
+                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink focus:border-accent outline-none tabular-nums"
               />
             </div>
           </div>
@@ -539,7 +539,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               placeholder="Short appetizing description..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-xl border border-border bg-surface p-3 text-sm font-medium text-ink focus:border-accent outline-none"
+              className="w-full rounded-none border border-border bg-surface p-3 text-sm font-medium text-ink focus:border-accent outline-none"
             />
           </div>
 
@@ -549,7 +549,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               Item Image
             </label>
             <div className="flex flex-wrap items-center gap-4">
-              <div className="relative flex size-20 items-center justify-center rounded-xl border border-border bg-surface-sunken overflow-hidden">
+              <div className="relative flex size-20 items-center justify-center rounded-none border border-border bg-surface-sunken overflow-hidden">
                 {image ? (
                   <img
                     src={resolveImageUrl(image)}
@@ -605,7 +605,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-sunken/40 p-3.5">
+              <div className="flex items-center justify-between rounded-none border border-border bg-surface-sunken/40 p-3.5">
                 <div className="pr-3">
                   <p className="text-xs font-bold text-ink">Earns Stamp</p>
                   <p className="text-[11px] text-ink-soft">Customer gets 1 stamp on purchase</p>
@@ -617,7 +617,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-sunken/40 p-3.5">
+              <div className="flex items-center justify-between rounded-none border border-border bg-surface-sunken/40 p-3.5">
                 <div className="pr-3">
                   <p className="text-xs font-bold text-ink">Free Claim Item</p>
                   <p className="text-[11px] text-ink-soft">Can be claimed with 10 stamps</p>
@@ -687,7 +687,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
 
             {modifiers.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-ink-faint space-y-2">
+              <div className="rounded-none border border-dashed border-border p-4 text-center text-xs text-ink-faint space-y-2">
                 <p>No options configured for this item.</p>
                 <div className="flex justify-center gap-2 pt-1">
                   <Button
@@ -715,7 +715,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 {modifiers.map((group, gIdx) => (
                   <div
                     key={gIdx}
-                    className="rounded-xl border border-border bg-surface-sunken/40 p-4 space-y-3"
+                    className="rounded-none border border-border bg-surface-sunken/40 p-4 space-y-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
                       <div className="flex items-center gap-2 flex-1 min-w-48">
@@ -724,12 +724,12 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                           value={group.name}
                           onChange={(e) => updateGroup(gIdx, 'name', e.target.value)}
                           placeholder="Group name (e.g. Ice Level)"
-                          className="h-8 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent outline-none"
+                          className="h-8 flex-1 rounded-none border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent outline-none"
                         />
                         <select
                           value={group.type}
                           onChange={(e) => updateGroup(gIdx, 'type', e.target.value)}
-                          className="h-8 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none"
+                          className="h-8 rounded-none border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none"
                         >
                           <option value="single">Single Choice</option>
                           <option value="multiple">Multiple Choice (e.g. Toppings)</option>
@@ -739,7 +739,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                             type="checkbox"
                             checked={group.required}
                             onChange={(e) => updateGroup(gIdx, 'required', e.target.checked)}
-                            className="rounded text-accent"
+                            className="rounded-none text-accent"
                           />
                           <span>Required</span>
                         </label>
@@ -748,7 +748,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                       <button
                         type="button"
                         onClick={() => removeModifierGroup(gIdx)}
-                        className="p-1 text-danger hover:bg-danger-soft rounded"
+                        className="p-1 text-danger hover:bg-danger-soft rounded-none"
                         title="Remove group"
                       >
                         <Trash2 className="size-4" />
@@ -766,7 +766,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                               updateOption(gIdx, oIdx, 'name', e.target.value)
                             }
                             placeholder="Option name (e.g. Boba)"
-                            className="h-8 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-ink focus:border-accent outline-none"
+                            className="h-8 flex-1 rounded-none border border-border bg-surface px-2.5 text-xs font-medium text-ink focus:border-accent outline-none"
                           />
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-ink-faint">+$</span>
@@ -784,13 +784,13 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                                 )
                               }
                               placeholder="0.00"
-                              className="h-8 w-20 rounded-lg border border-border bg-surface px-2 text-xs font-bold text-ink focus:border-accent outline-none tabular-nums"
+                              className="h-8 w-20 rounded-none border border-border bg-surface px-2 text-xs font-bold text-ink focus:border-accent outline-none tabular-nums"
                             />
                           </div>
                           <button
                             type="button"
                             onClick={() => removeOptionFromGroup(gIdx, oIdx)}
-                            className="p-1 text-ink-faint hover:text-danger rounded"
+                            className="p-1 text-ink-faint hover:text-danger rounded-none"
                           >
                             <X className="size-3.5" />
                           </button>

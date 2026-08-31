@@ -6,7 +6,6 @@ import {
   Building2,
   ChevronDown,
   Clock,
-  Gift,
   LayoutDashboard,
   ListPlus,
   LogOut,
@@ -27,7 +26,6 @@ import { MenuManagement } from './components/MenuManagement';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { OrderCard } from './components/OrderCard';
 import { CancelOrderModal } from './components/CancelOrderModal';
-import { VerifyGiftClaimModal } from './components/crm/VerifyGiftClaimModal';
 import {
   PAID_STATUSES,
   STALE_AFTER_MS,
@@ -115,9 +113,9 @@ function ConnectionStatusBadge({
       type="button"
       onClick={onRefresh}
       aria-label={`Refresh orders now. Status: ${meta.label}`}
-      className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink-soft transition-all hover:border-border-strong hover:bg-surface-sunken hover:text-ink"
+      className="inline-flex h-9 items-center gap-2 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink-soft transition-all hover:border-border-strong hover:bg-surface-sunken hover:text-ink"
     >
-      <span className={`size-2 shrink-0 rounded-full ${meta.dot} ring-2 ring-surface`} />
+      <span className={`size-2 shrink-0 rounded-none ${meta.dot} ring-2 ring-surface`} />
       <span>{meta.label}</span>
       {seconds != null ? (
         <span className="tabular-nums text-ink-faint">({seconds}s)</span>
@@ -135,7 +133,7 @@ function BoardLegend() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-border bg-surface">
+    <div className="rounded-none border border-border bg-surface">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -156,16 +154,16 @@ function BoardLegend() {
             <h4 className="font-bold text-ink">Order Waiting Status</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-surface-sunken" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-surface-sunken" />
                 On time / newly placed
               </li>
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-status-pending" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-status-pending" />
                 Getting close — pending {TONE_THRESHOLDS.pending.warn}m, preparing{' '}
                 {TONE_THRESHOLDS.preparing.warn}m, ready {TONE_THRESHOLDS.ready.warn}m
               </li>
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-danger" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-danger" />
                 Over target — pending {TONE_THRESHOLDS.pending.late}m, preparing{' '}
                 {TONE_THRESHOLDS.preparing.late}m, ready {TONE_THRESHOLDS.ready.late}m
               </li>
@@ -173,7 +171,7 @@ function BoardLegend() {
             <h4 className="mt-4 font-bold text-ink">QR Payment Verification</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-danger" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-danger" />
                 Red border ticket: QR payment still pending. Do not serve until paid.
               </li>
             </ul>
@@ -189,7 +187,7 @@ function BoardLegend() {
                 ['M', 'Toggle Alert Chime'],
               ].map(([key, what]) => (
                 <div key={key} className="flex items-center gap-3">
-                  <kbd className="flex h-5 w-6 items-center justify-center rounded bg-surface-sunken font-mono text-[10px] font-bold text-ink shadow-sm">
+                  <kbd className="flex h-5 w-6 items-center justify-center rounded-none bg-surface-sunken font-mono text-[10px] font-bold text-ink shadow-sm">
                     {key}
                   </kbd>
                   <dd>{what}</dd>
@@ -225,7 +223,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [muted, setMutedState] = useState(() => isMuted());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
-  const [verifyGiftModalOpen, setVerifyGiftModalOpen] = useState(false);
 
   const failuresRef = useRef(0);
   const knownIdsRef = useRef<Set<string> | null>(null);
@@ -552,7 +549,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         {/* Sidebar Brand Header */}
         <div className="flex h-18 items-center justify-between border-b border-border px-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent text-on-accent shadow-sm">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent text-on-accent shadow-sm">
               <Sparkles className="size-5" />
             </div>
             <div>
@@ -567,7 +564,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(false)}
-            className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
+            className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
           >
             <X className="size-5" />
           </button>
@@ -583,7 +580,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             <select
               value={selectedBranch}
               onChange={(e) => setSelectedBranch(e.target.value)}
-              className="h-10 w-full rounded-xl border border-border bg-surface-sunken/50 px-3 text-xs font-bold text-ink outline-none transition-colors focus:border-accent"
+              className="h-10 w-full rounded-none border border-border bg-surface-sunken/50 px-3 text-xs font-bold text-ink outline-none transition-colors focus:border-accent"
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -610,7 +607,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                   setActiveTab(item.id);
                   setMobileMenuOpen(false);
                 }}
-                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-sm font-bold transition-all duration-150 ${
+                className={`flex w-full items-center justify-between rounded-none px-3.5 py-3 text-sm font-bold transition-all duration-150 ${
                   isActive
                     ? 'bg-accent text-on-accent shadow-sm'
                     : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -623,7 +620,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                 <div className="flex items-center gap-1.5">
                   {item.badge ? (
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-black tabular-nums ${
+                      className={`rounded-none px-2 py-0.5 text-xs font-black tabular-nums ${
                         isActive
                           ? 'bg-white/25 text-on-accent'
                           : 'bg-accent/15 text-accent'
@@ -633,7 +630,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     </span>
                   ) : null}
                   <kbd
-                    className={`hidden rounded px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
+                    className={`hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
                       isActive
                         ? 'bg-white/20 text-on-accent'
                         : 'bg-surface-sunken text-ink-faint'
@@ -645,33 +642,14 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               </button>
             );
           })}
-
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setVerifyGiftModalOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25 hover:bg-amber-500/20 transition-all shadow-2xs"
-            >
-              <div className="flex items-center gap-2.5">
-                <Gift className="size-4 text-amber-500" />
-                <span>Redeem Gift Voucher</span>
-              </div>
-              <span className="text-[10px] uppercase font-bold bg-amber-500/20 px-1.5 py-0.5 rounded">
-                Scan
-              </span>
-            </button>
-          </div>
         </nav>
 
         {/* Sidebar Footer Controls */}
         <div className="border-t border-border p-4 space-y-3">
-          <div className="flex items-center justify-between rounded-xl bg-surface-sunken/40 p-2 text-xs">
+          <div className="flex items-center justify-between rounded-none bg-surface-sunken/40 p-2 text-xs">
             <div className="flex items-center gap-2 font-medium text-ink-soft">
               <span
-                className={`size-2 rounded-full ${
+                className={`size-2 rounded-none ${
                   connState === 'live'
                     ? 'bg-success'
                     : connState === 'retrying'
@@ -735,7 +713,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="rounded-xl border border-border p-2 text-ink-soft hover:bg-surface-sunken lg:hidden"
+              className="rounded-none border border-border p-2 text-ink-soft hover:bg-surface-sunken lg:hidden"
               aria-label="Open sidebar"
             >
               <MenuIcon className="size-5" />
@@ -805,7 +783,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             ) : (
               <div className="mx-auto max-w-md pt-8">
                 <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
-                  <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-danger-soft text-danger">
+                  <div className="mx-auto flex size-12 items-center justify-center rounded-none bg-danger-soft text-danger">
                     <ShieldAlert className="size-6" />
                   </div>
                   <div>
@@ -851,7 +829,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               {strandedOrders.length > 0 ? (
                 <section
                   aria-label="Orders needing attention"
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-danger bg-danger-soft px-4 py-3"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-none border border-danger bg-danger-soft px-4 py-3"
                 >
                   <h2 className="flex items-center gap-2 font-bold text-danger">
                     <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
@@ -870,7 +848,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               {awaitingPaymentOrders.length > 0 ? (
                 <section
                   aria-labelledby="awaiting-payment-heading"
-                  className="overflow-hidden rounded-2xl border-2 border-danger bg-surface shadow-sm"
+                  className="overflow-hidden rounded-none border-2 border-danger bg-surface shadow-sm"
                 >
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 bg-danger-soft px-4 py-3">
                     <h2
@@ -879,7 +857,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     >
                       <QrCode className="size-5 shrink-0" aria-hidden="true" />
                       Waiting for Payment Verification
-                      <span className="rounded-full bg-danger px-2 py-0.5 text-xs text-white tabular-nums">
+                      <span className="rounded-none bg-danger px-2 py-0.5 text-xs text-white tabular-nums">
                         {awaitingPaymentOrders.length}
                       </span>
                     </h2>
@@ -914,7 +892,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     <section
                       key={lane.key}
                       aria-labelledby={`lane-${lane.key}`}
-                      className="flex min-w-0 flex-col rounded-2xl border border-border bg-surface-sunken/30 p-3"
+                      className="flex min-w-0 flex-col rounded-none border border-border bg-surface-sunken/30 p-3"
                     >
                       <div className="mb-3 flex items-center justify-between px-1">
                         <div className="flex items-center gap-2">
@@ -923,7 +901,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                               {lane.title}
                             </h2>
                           </Badge>
-                          <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-black tabular-nums text-ink shadow-xs">
+                          <span className="rounded-none bg-surface px-2 py-0.5 text-xs font-black tabular-nums text-ink shadow-xs">
                             {lane.orders.length}
                           </span>
                         </div>
@@ -935,7 +913,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                       </div>
 
                       {lane.orders.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-border py-8 text-center text-xs font-medium text-ink-faint">
+                        <div className="rounded-none border border-dashed border-border py-8 text-center text-xs font-medium text-ink-faint">
                           No {lane.title.toLowerCase()} orders
                         </div>
                       ) : (
@@ -972,7 +950,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                   >
                     <span className="font-bold text-ink">
                       Completed &amp; Finished Today
-                      <span className="ml-2 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-bold text-ink-soft tabular-nums">
+                      <span className="ml-2 rounded-none bg-surface-sunken px-2 py-0.5 text-xs font-bold text-ink-soft tabular-nums">
                         {shownClosed.length < closedOrders.length
                           ? `${shownClosed.length} of ${closedOrders.length}`
                           : closedOrders.length}
@@ -996,10 +974,10 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                         return (
                           <li
                             key={order.id}
-                            className={`flex flex-col gap-2.5 p-4 border-l-4 ${
+                            className={`flex flex-col gap-2.5 border p-4 ${
                               order.status === 'cancelled'
-                                ? 'border-danger/60 bg-danger-soft/10'
-                                : 'border-accent/70 hover:bg-surface-sunken/20'
+                                ? 'border-danger/30 bg-danger-soft/10'
+                                : 'border-border hover:border-accent/30 hover:bg-surface-sunken/20'
                             } transition-colors`}
                           >
                             {/* Top Header: Code, Badges, Price, Reopen Action */}
@@ -1015,7 +993,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                 ) : PAID_STATUSES.has(order.status) ? (
                                   <Badge variant="completed">Paid &amp; Done</Badge>
                                 ) : null}
-                                <span className="inline-flex items-center gap-1 rounded-lg bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-soft">
+                                <span className="inline-flex items-center gap-1 rounded-none bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-soft">
                                   {isDelivery ? (
                                     <>
                                       <Truck className="size-3 text-status-preparing" />
@@ -1057,7 +1035,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                       <div className="flex items-start gap-2">
                                         <span
                                           aria-hidden="true"
-                                          className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                                          className={`mt-1.5 size-2 shrink-0 rounded-none ${
                                             zhengda ? 'bg-zhengda' : 'bg-accent'
                                           }`}
                                         />
@@ -1119,7 +1097,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                 Finished: {new Date(finished).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               <span>·</span>
-                              <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-md">
+                              <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-none">
                                 <Clock className="size-3 text-accent" />
                                 {durationMins}m prep
                               </span>
@@ -1145,11 +1123,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         onClose={() => setCancelModalOrder(null)}
         onConfirm={handleConfirmCancel}
         loading={cancelModalOrder ? updatingIds.has(cancelModalOrder.id) : false}
-      />
-
-      <VerifyGiftClaimModal
-        isOpen={verifyGiftModalOpen}
-        onClose={() => setVerifyGiftModalOpen(false)}
       />
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">
@@ -1198,4 +1171,3 @@ export default function App() {
     </ToastProvider>
   );
 }
-

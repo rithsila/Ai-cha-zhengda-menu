@@ -50,7 +50,7 @@ export function CancelOrderModal({
       />
 
       {/* Modal Card */}
-      <div className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-5 shadow-2xl z-10 space-y-4">
+      <div className="relative w-full max-w-md rounded-none border border-border bg-surface p-5 shadow-2xl z-10 space-y-4">
         <div className="flex items-center justify-between border-b border-border/60 pb-3">
           <div className="flex items-center gap-2 text-danger">
             <AlertTriangle className="size-5 shrink-0" />
@@ -62,7 +62,7 @@ export function CancelOrderModal({
             type="button"
             disabled={loading}
             onClick={onClose}
-            className="rounded-lg p-1 text-ink-faint hover:bg-surface-sunken hover:text-ink disabled:opacity-50"
+            className="rounded-none p-1 text-ink-faint hover:bg-surface-sunken hover:text-ink disabled:opacity-50"
           >
             <X className="size-5" />
           </button>
@@ -85,7 +85,7 @@ export function CancelOrderModal({
                     key={reason}
                     type="button"
                     onClick={() => setSelectedReason(reason)}
-                    className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-xs font-semibold transition-all ${
+                    className={`flex w-full items-center justify-between rounded-none border px-3.5 py-2.5 text-left text-xs font-semibold transition-all ${
                       isSelected
                         ? 'border-danger bg-danger-soft text-danger font-bold'
                         : 'border-border bg-surface-sunken/40 text-ink hover:bg-surface-sunken'
@@ -93,7 +93,7 @@ export function CancelOrderModal({
                   >
                     <span>{reason}</span>
                     {isSelected ? (
-                      <span className="size-2 rounded-full bg-danger" />
+                      <span className="size-2 rounded-none bg-danger" />
                     ) : null}
                   </button>
                 );
@@ -102,7 +102,7 @@ export function CancelOrderModal({
               <button
                 type="button"
                 onClick={() => setSelectedReason('custom')}
-                className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-xs font-semibold transition-all ${
+                className={`flex w-full items-center justify-between rounded-none border px-3.5 py-2.5 text-left text-xs font-semibold transition-all ${
                   selectedReason === 'custom'
                     ? 'border-danger bg-danger-soft text-danger font-bold'
                     : 'border-border bg-surface-sunken/40 text-ink hover:bg-surface-sunken'
@@ -113,7 +113,7 @@ export function CancelOrderModal({
                   Custom reason...
                 </span>
                 {selectedReason === 'custom' ? (
-                  <span className="size-2 rounded-full bg-danger" />
+                  <span className="size-2 rounded-none bg-danger" />
                 ) : null}
               </button>
             </div>
@@ -130,7 +130,7 @@ export function CancelOrderModal({
                 placeholder="e.g. Milk tea base is finishing, takes 30 mins to brew..."
                 rows={2}
                 required
-                className="w-full rounded-xl border border-border bg-surface-sunken/50 p-2.5 text-xs text-ink placeholder:text-ink-faint focus:border-danger focus:outline-none"
+                className="w-full rounded-none border border-border bg-surface-sunken/50 p-2.5 text-xs text-ink placeholder:text-ink-faint focus:border-danger focus:outline-none"
               />
             </div>
           ) : null}

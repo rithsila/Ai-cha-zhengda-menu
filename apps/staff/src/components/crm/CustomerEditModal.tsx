@@ -61,6 +61,7 @@ export function CustomerEditModal({
 
   // Lucky tickets adjustment state
   const [savingTickets, setSavingTickets] = useState(false);
+  const [redeemingCode, setRedeemingCode] = useState<string | null>(null);
 
   const fetchCustomerDetails = useCallback(
     async (telegramUserId: string) => {
@@ -287,7 +288,6 @@ export function CustomerEditModal({
   };
 
   // Redeem a won gift item for this customer
-  const [redeemingCode, setRedeemingCode] = useState<string | null>(null);
   const handleRedeemCustomerGift = async (code: string) => {
     setRedeemingCode(code);
     try {
@@ -351,7 +351,7 @@ export function CustomerEditModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div
-                className={`flex size-12 shrink-0 items-center justify-center rounded-2xl text-lg font-black shadow-xs ${
+                className={`flex size-12 shrink-0 items-center justify-center rounded-none text-lg font-black shadow-xs ${
                   isGold
                     ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white ring-2 ring-amber-400/50'
                     : 'bg-surface-sunken text-ink ring-1 ring-border'
@@ -372,7 +372,7 @@ export function CustomerEditModal({
                     {displayName}
                   </h3>
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${
+                    className={`inline-flex items-center rounded-none px-2 py-0.5 text-[10px] font-black uppercase ${
                       isGold
                         ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                         : 'bg-surface-sunken text-ink-soft border border-border'
@@ -408,7 +408,7 @@ export function CustomerEditModal({
               size="icon"
               onClick={onClose}
               aria-label="Close modal"
-              className="size-8 rounded-lg shrink-0 text-ink-faint hover:text-ink"
+              className="size-8 rounded-none shrink-0 text-ink-faint hover:text-ink"
             >
               <X className="size-4" />
             </Button>
@@ -416,7 +416,7 @@ export function CustomerEditModal({
 
           {/* Quick Metrics Bar */}
           <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-xl border border-border bg-surface-sunken/40 px-3 py-2">
+            <div className="rounded-none border border-border bg-surface-sunken/40 px-3 py-2">
               <p className="text-[10px] font-bold uppercase text-ink-faint">Orders</p>
               <p className="text-sm font-extrabold text-ink">
                 {detail?.totalOrders ?? customerSummary.totalOrders}{' '}
@@ -426,7 +426,7 @@ export function CustomerEditModal({
               </p>
             </div>
 
-            <div className="rounded-xl border border-border bg-surface-sunken/40 px-3 py-2">
+            <div className="rounded-none border border-border bg-surface-sunken/40 px-3 py-2">
               <p className="text-[10px] font-bold uppercase text-ink-faint">Stamps</p>
               <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
                 {currentStamps}{' '}
@@ -436,14 +436,14 @@ export function CustomerEditModal({
               </p>
             </div>
 
-            <div className="rounded-xl border border-border bg-surface-sunken/40 px-3 py-2">
+            <div className="rounded-none border border-border bg-surface-sunken/40 px-3 py-2">
               <p className="text-[10px] font-bold uppercase text-ink-faint">Lucky Tickets</p>
               <p className="text-sm font-extrabold text-amber-600 dark:text-amber-400">
                 🎟️ {currentTickets}
               </p>
             </div>
 
-            <div className="rounded-xl border border-border bg-surface-sunken/40 px-3 py-2">
+            <div className="rounded-none border border-border bg-surface-sunken/40 px-3 py-2">
               <p className="text-[10px] font-bold uppercase text-ink-faint">Location</p>
               <p className="truncate text-xs font-bold text-ink">
                 {customerSummary.building || customerSummary.roomNumber ? (
@@ -460,7 +460,7 @@ export function CustomerEditModal({
             <button
               type="button"
               onClick={() => setActiveTab('type')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 activeTab === 'type'
                   ? 'bg-accent text-on-accent shadow-xs'
                   : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -473,7 +473,7 @@ export function CustomerEditModal({
             <button
               type="button"
               onClick={() => setActiveTab('stamps')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 activeTab === 'stamps'
                   ? 'bg-accent text-on-accent shadow-xs'
                   : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -486,7 +486,7 @@ export function CustomerEditModal({
             <button
               type="button"
               onClick={() => setActiveTab('tickets')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 activeTab === 'tickets'
                   ? 'bg-accent text-on-accent shadow-xs'
                   : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -499,7 +499,7 @@ export function CustomerEditModal({
             <button
               type="button"
               onClick={() => setActiveTab('gifts')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 activeTab === 'gifts'
                   ? 'bg-accent text-on-accent shadow-xs'
                   : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -512,7 +512,7 @@ export function CustomerEditModal({
             <button
               type="button"
               onClick={() => setActiveTab('orders')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              className={`inline-flex items-center gap-1.5 rounded-none px-3 py-1.5 text-xs font-bold transition-all ${
                 activeTab === 'orders'
                   ? 'bg-accent text-on-accent shadow-xs'
                   : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -529,7 +529,7 @@ export function CustomerEditModal({
           {/* TAB 1: CUSTOMER TYPE & NOTES */}
           {activeTab === 'type' && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-surface-sunken/40 p-4">
+              <div className="rounded-none border border-border bg-surface-sunken/40 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-xs font-bold uppercase text-ink">
@@ -588,7 +588,7 @@ export function CustomerEditModal({
                   value={trustNotes}
                   onChange={(e) => setTrustNotes(e.target.value)}
                   placeholder="e.g. Neighbor in Arakawa Block A 1110, trusted regular customer."
-                  className="w-full rounded-xl border border-border bg-surface p-3 text-xs font-medium text-ink outline-none transition-colors focus:border-accent"
+                  className="w-full rounded-none border border-border bg-surface p-3 text-xs font-medium text-ink outline-none transition-colors focus:border-accent"
                 />
                 <div className="mt-2 flex justify-end">
                   <Button
@@ -610,7 +610,7 @@ export function CustomerEditModal({
           {/* TAB 2: STAMPS & POINTS */}
           {activeTab === 'stamps' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3.5">
+              <div className="flex items-center justify-between rounded-none bg-emerald-500/10 border border-emerald-500/20 p-3.5">
                 <div>
                   <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
                     Current Balance
@@ -684,7 +684,7 @@ export function CustomerEditModal({
                       setCustomDeltaInput(e.target.value);
                       setPointsDelta(0);
                     }}
-                    className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                    className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
                   />
                 </div>
 
@@ -699,7 +699,7 @@ export function CustomerEditModal({
                     id="modal-reason-select"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink outline-none focus:border-accent"
+                    className="h-10 w-full rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink outline-none focus:border-accent"
                   >
                     <option value="">Select reason...</option>
                     {REASONS.map((r) => (
@@ -712,7 +712,7 @@ export function CustomerEditModal({
               </div>
 
               {/* Live Preview Box */}
-              <div className="rounded-xl border border-border bg-surface-sunken/40 p-3 text-xs">
+              <div className="rounded-none border border-border bg-surface-sunken/40 p-3 text-xs">
                 {activeDelta !== 0 ? (
                   <div className="flex items-center justify-between">
                     <span className="text-ink-soft">Preview:</span>
@@ -751,7 +751,7 @@ export function CustomerEditModal({
           {/* TAB 3: LUCKY TICKETS */}
           {activeTab === 'tickets' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+              <div className="flex items-center justify-between rounded-none bg-amber-500/10 border border-amber-500/20 p-4">
                 <div>
                   <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
                     Active Tickets
@@ -811,8 +811,8 @@ export function CustomerEditModal({
             <div className="space-y-3">
               {loading && !detail ? (
                 <div className="space-y-3">
-                  <Skeleton className="h-16 w-full rounded-xl" />
-                  <Skeleton className="h-16 w-full rounded-xl" />
+                  <Skeleton className="h-16 w-full rounded-none" />
+                  <Skeleton className="h-16 w-full rounded-none" />
                 </div>
               ) : !detail?.prizeClaims || detail.prizeClaims.length === 0 ? (
                 <div className="py-10 text-center">
@@ -830,16 +830,16 @@ export function CustomerEditModal({
                   return (
                     <div
                       key={claim.id}
-                      className="rounded-xl border border-border bg-surface-sunken/30 p-3.5 space-y-2.5 transition-all hover:bg-surface-sunken/60"
+                      className="rounded-none border border-border bg-surface-sunken/30 p-3.5 space-y-2.5 transition-all hover:bg-surface-sunken/60"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <span className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-2xl border border-amber-500/20 shadow-xs">
+                          <span className="flex size-10 items-center justify-center rounded-none bg-amber-500/15 text-2xl border border-amber-500/20 shadow-xs">
                             {claim.prizeIcon || '🎁'}
                           </span>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-ink bg-surface px-2 py-0.5 rounded-md border border-border">
+                              <span className="font-mono text-xs font-bold text-ink bg-surface px-2 py-0.5 rounded-none border border-border">
                                 {claim.code}
                               </span>
                               <Badge
@@ -901,9 +901,9 @@ export function CustomerEditModal({
             <div className="space-y-3">
               {loading && !detail ? (
                 <div className="space-y-3">
-                  <Skeleton className="h-16 w-full rounded-xl" />
-                  <Skeleton className="h-16 w-full rounded-xl" />
-                  <Skeleton className="h-16 w-full rounded-xl" />
+                  <Skeleton className="h-16 w-full rounded-none" />
+                  <Skeleton className="h-16 w-full rounded-none" />
+                  <Skeleton className="h-16 w-full rounded-none" />
                 </div>
               ) : !detail?.orders || detail.orders.length === 0 ? (
                 <div className="py-10 text-center">
@@ -917,7 +917,7 @@ export function CustomerEditModal({
                 detail.orders.map((order) => (
                   <div
                     key={order.id}
-                    className="rounded-xl border border-border bg-surface-sunken/30 p-3 transition-all hover:bg-surface-sunken/60"
+                    className="rounded-none border border-border bg-surface-sunken/30 p-3 transition-all hover:bg-surface-sunken/60"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -940,7 +940,7 @@ export function CustomerEditModal({
                             {order.status}
                           </Badge>
                           <span
-                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                            className={`rounded-none px-1.5 py-0.5 text-[9px] font-bold uppercase ${
                               order.paymentMethod === 'cash'
                                 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                                 : 'bg-accent-soft text-accent'

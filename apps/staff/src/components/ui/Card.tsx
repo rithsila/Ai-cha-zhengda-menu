@@ -28,7 +28,7 @@ export function Card({
   return (
     <div
       className={[
-        'rounded-2xl border border-border bg-surface',
+        'rounded-none border border-border bg-surface',
         paddingClasses[padding],
         raised ? 'shadow-raised' : '',
         className,

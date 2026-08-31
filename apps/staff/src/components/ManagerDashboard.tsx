@@ -489,7 +489,7 @@ export function ManagerDashboard() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
+                className={`inline-flex items-center gap-2 rounded-none px-4 py-2.5 text-sm font-semibold transition-all duration-150 ${
                   isActive
                     ? 'bg-accent text-on-accent shadow-sm'
                     : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -499,7 +499,7 @@ export function ManagerDashboard() {
                 <span>{tab.label}</span>
                 {tab.badge !== undefined ? (
                   <span
-                    className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                    className={`ml-1 rounded-none px-2 py-0.5 text-xs font-bold ${
                       isActive
                         ? 'bg-white/20 text-on-accent'
                         : 'bg-surface-sunken text-ink-soft'
@@ -536,11 +536,11 @@ export function ManagerDashboard() {
                 />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <Skeleton className="h-32 w-full rounded-2xl" />
-                <Skeleton className="h-32 w-full rounded-2xl" />
-                <Skeleton className="h-32 w-full rounded-2xl" />
-                <Skeleton className="h-32 w-full rounded-2xl" />
-                <Skeleton className="h-80 w-full rounded-2xl sm:col-span-2 lg:col-span-4" />
+                <Skeleton className="h-32 w-full rounded-none" />
+                <Skeleton className="h-32 w-full rounded-none" />
+                <Skeleton className="h-32 w-full rounded-none" />
+                <Skeleton className="h-32 w-full rounded-none" />
+                <Skeleton className="h-80 w-full rounded-none sm:col-span-2 lg:col-span-4" />
               </div>
             </div>
           ) : analyticsError ? (
@@ -548,25 +548,26 @@ export function ManagerDashboard() {
               <CircleAlert className="mx-auto size-10 text-danger" aria-hidden="true" />
               <h2 className="mt-3 text-lg font-bold text-ink">
                 {analyticsError === 'session'
-                  ? 'Manager session expired'
-                  : "Couldn't load analytics data"}
+                  ? 'Session expired'
+                  : 'Failed to load report'}
               </h2>
               <p className="mt-1 text-sm text-ink-soft">
                 {analyticsError === 'session'
-                  ? 'Your manager authentication has expired. Please retry or sign in again.'
-                  : 'Check your server connection and retry.'}
+                  ? 'Sign in again to view sales data.'
+                  : 'Check connection or try again.'}
               </p>
               <Button
                 variant="secondary"
-                className="mt-5"
+                size="md"
+                className="mt-4"
                 onClick={fetchDashboardData}
               >
-                Try Again
+                Retry
               </Button>
             </Card>
           ) : analytics ? (
             <div className="space-y-6">
-              {/* Range Selector & Header */}
+              {/* Header with quick date filter */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-bold text-ink">Performance Overview</h3>
@@ -580,19 +581,19 @@ export function ManagerDashboard() {
                 />
               </div>
 
-              {/* 4 Executive KPI Cards */}
+              {/* 4 Top KPI Cards */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card padding="lg" className="relative overflow-hidden border-border bg-surface">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
-                        Gross Revenue
+                        Total Sales
                       </p>
                       <p className="mt-2 text-3xl font-extrabold tabular-nums text-ink">
                         ${analytics.totalRevenue.toFixed(2)}
                       </p>
                     </div>
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-success-soft text-success">
+                    <div className="flex size-10 items-center justify-center rounded-none bg-success-soft text-success">
                       <DollarSign className="size-5" />
                     </div>
                   </div>
@@ -612,7 +613,7 @@ export function ManagerDashboard() {
                         {analytics.orderCount}
                       </p>
                     </div>
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-preparing-soft text-status-preparing">
+                    <div className="flex size-10 items-center justify-center rounded-none bg-status-preparing-soft text-status-preparing">
                       <Receipt className="size-5" />
                     </div>
                   </div>
@@ -633,7 +634,7 @@ export function ManagerDashboard() {
                           : '—'}
                       </p>
                     </div>
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-pending-soft text-status-pending">
+                    <div className="flex size-10 items-center justify-center rounded-none bg-status-pending-soft text-status-pending">
                       <BarChart3 className="size-5" />
                     </div>
                   </div>
@@ -652,7 +653,7 @@ export function ManagerDashboard() {
                         {activeRewardsCount} <span className="text-sm font-normal text-ink-faint">/ {rewards.length}</span>
                       </p>
                     </div>
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
+                    <div className="flex size-10 items-center justify-center rounded-none bg-accent-soft text-accent">
                       <Award className="size-5" />
                     </div>
                   </div>
@@ -693,14 +694,14 @@ export function ManagerDashboard() {
                               {showValue && amount > 0 ? `$${amount.toFixed(0)}` : ''}
                             </span>
                             <div
-                              className="w-full rounded-t-md bg-accent/85 transition-all duration-200 group-hover:bg-accent group-hover:shadow-md"
+                              className="w-full rounded-none bg-accent/85 transition-all duration-200 group-hover:bg-accent group-hover:shadow-md"
                               style={{
                                 height: `calc((100% - 1.5rem) * ${pct / 100})`,
                                 minHeight: amount > 0 ? '6px' : '2px',
                               }}
                             />
                             {/* Hover Tooltip */}
-                            <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                            <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-none border border-border bg-surface-raised px-3 py-1.5 text-xs font-semibold text-ink opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                               <p className="text-[10px] font-medium text-ink-soft">{date}</p>
                               <p className="text-sm font-bold text-accent">${amount.toFixed(2)}</p>
                             </div>
@@ -742,15 +743,15 @@ export function ManagerDashboard() {
 
             {loadingFeedback ? (
               <div className="space-y-3">
-                <Skeleton className="h-24 w-full rounded-2xl" />
-                <Skeleton className="h-24 w-full rounded-2xl" />
-                <Skeleton className="h-24 w-full rounded-2xl" />
+                <Skeleton className="h-24 w-full rounded-none" />
+                <Skeleton className="h-24 w-full rounded-none" />
+                <Skeleton className="h-24 w-full rounded-none" />
               </div>
             ) : feedbacks.length === 0 ? (
               <EmptyState
                 icon={<MessageSquare className="size-10" />}
-                title="No issue reports yet"
-                description="When customers send /report or /feedback to the Telegram bot, their messages will arrive here."
+                title="No Customer Feedback"
+                description="When customers send suggestions or issues, they will appear here."
               />
             ) : (
               <div className="space-y-3">
@@ -762,7 +763,7 @@ export function ManagerDashboard() {
                     <Card
                       key={item.id}
                       padding="lg"
-                      className={`border transition-all duration-150 ${
+                      className={`border transition-all duration-150 rounded-none ${
                         isNew
                           ? 'border-accent/40 bg-accent-soft/20 shadow-xs'
                           : 'border-border bg-surface'
@@ -804,7 +805,7 @@ export function ManagerDashboard() {
                             )}
                           </div>
 
-                          <div className="rounded-xl bg-surface-sunken/50 p-3.5 text-sm font-medium text-ink leading-relaxed whitespace-pre-wrap">
+                          <div className="rounded-none bg-surface-sunken/50 p-3.5 text-sm font-medium text-ink leading-relaxed whitespace-pre-wrap">
                             {item.message}
                           </div>
 
@@ -905,7 +906,7 @@ export function ManagerDashboard() {
                       setNewImage(null);
                       setCatalogSearch('');
                     }}
-                    className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
+                    className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
                   >
                     <X className="size-4" />
                   </button>
@@ -913,7 +914,7 @@ export function ManagerDashboard() {
 
                 <form onSubmit={handleAddReward} className="mt-4 space-y-4">
                   {/* Quick Menu Item Picker */}
-                  <div ref={dropdownRef} className="rounded-xl border border-border bg-surface-sunken/40 p-3.5 space-y-2.5">
+                  <div ref={dropdownRef} className="rounded-none border border-border bg-surface-sunken/40 p-3.5 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold uppercase text-ink flex items-center gap-1.5">
                         <Sparkles className="size-3.5 text-accent" />
@@ -949,12 +950,12 @@ export function ManagerDashboard() {
                             setCatalogSearch(e.target.value);
                             setItemDropdownOpen(true);
                           }}
-                          className="h-10 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-xs font-medium text-ink outline-none focus:border-accent"
+                          className="h-10 w-full rounded-none border border-border bg-surface pl-9 pr-3 text-xs font-medium text-ink outline-none focus:border-accent"
                         />
                       </div>
 
                       {itemDropdownOpen && (
-                        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-border bg-surface shadow-xl p-1 space-y-1">
+                        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-none border border-border bg-surface shadow-xl p-1 space-y-1">
                           {catalogItems.length === 0 ? (
                             <p className="p-3 text-center text-xs text-ink-soft">No menu items found</p>
                           ) : filteredCatalogItems.length === 0 ? (
@@ -965,10 +966,10 @@ export function ManagerDashboard() {
                                 key={item.id || item.name}
                                 type="button"
                                 onClick={() => handleSelectCatalogItem(item)}
-                                className="flex w-full items-center justify-between rounded-lg p-2 text-left hover:bg-surface-sunken transition-colors"
+                                className="flex w-full items-center justify-between rounded-none p-2 text-left hover:bg-surface-sunken transition-colors"
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  <div className="relative size-8 shrink-0 overflow-hidden rounded-lg border border-border/50 bg-surface-sunken flex items-center justify-center">
+                                  <div className="relative size-8 shrink-0 overflow-hidden rounded-none border border-border/50 bg-surface-sunken flex items-center justify-center">
                                     {item.image ? (
                                       <img
                                         src={resolveImageUrl(item.image)}
@@ -1001,8 +1002,8 @@ export function ManagerDashboard() {
                     </div>
 
                     {selectedCatalogItem && (
-                      <div className="flex items-center gap-3 rounded-lg border border-accent/30 bg-accent/10 p-2.5">
-                        <div className="relative size-10 shrink-0 overflow-hidden rounded-lg border border-accent/40 bg-accent/20 flex items-center justify-center">
+                      <div className="flex items-center gap-3 rounded-none border border-accent/30 bg-accent/10 p-2.5">
+                        <div className="relative size-10 shrink-0 overflow-hidden rounded-none border border-accent/40 bg-accent/20 flex items-center justify-center">
                           {selectedCatalogItem.image ? (
                             <img
                               src={resolveImageUrl(selectedCatalogItem.image)}
@@ -1038,7 +1039,7 @@ export function ManagerDashboard() {
                         placeholder="e.g. Free Passion Fruit Tea (M)"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
-                        className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
+                        className="mt-1.5 h-11 w-full rounded-none border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
                       />
                     </div>
                     <div>
@@ -1053,7 +1054,7 @@ export function ManagerDashboard() {
                         placeholder="10"
                         value={newCost}
                         onChange={(e) => setNewCost(e.target.value)}
-                        className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                        className="mt-1.5 h-11 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
                       />
                       <p className="mt-1 text-[10px] text-ink-faint">10 stamps = 1 full reward card</p>
                     </div>
@@ -1069,7 +1070,7 @@ export function ManagerDashboard() {
                       placeholder="e.g. Medium size cup, choice of toppings"
                       value={newDescription}
                       onChange={(e) => setNewDescription(e.target.value)}
-                      className="mt-1.5 h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
+                      className="mt-1.5 h-11 w-full rounded-none border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
                     />
                   </div>
 
@@ -1125,7 +1126,7 @@ export function ManagerDashboard() {
                   >
                     <div>
                       <div className="flex items-start justify-between gap-2">
-                        <div className="relative size-9 shrink-0 overflow-hidden rounded-xl border border-border bg-accent-soft flex items-center justify-center">
+                        <div className="relative size-9 shrink-0 overflow-hidden rounded-none border border-border bg-accent-soft flex items-center justify-center">
                           {reward.image ? (
                             <img
                               src={resolveImageUrl(reward.image)}
@@ -1222,7 +1223,7 @@ export function ManagerDashboard() {
                         placeholder="e.g. Sok Dara (Barista)"
                         value={newStaffName}
                         onChange={(e) => setNewStaffName(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                        className="h-11 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
 
@@ -1236,7 +1237,7 @@ export function ManagerDashboard() {
                         placeholder="e.g. 012 345 678"
                         value={newStaffPhone}
                         onChange={(e) => setNewStaffPhone(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                        className="h-11 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
 
@@ -1250,7 +1251,7 @@ export function ManagerDashboard() {
                         placeholder="e.g. 715714775"
                         value={newStaffId}
                         onChange={(e) => setNewStaffId(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 font-mono text-sm font-bold text-ink outline-none focus:border-accent"
+                        className="h-11 w-full rounded-none border border-border bg-surface px-3 font-mono text-sm font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
 
@@ -1261,7 +1262,7 @@ export function ManagerDashboard() {
                       <select
                         value={newStaffRole}
                         onChange={(e) => setNewStaffRole(e.target.value as 'staff' | 'manager')}
-                        className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
+                        className="h-11 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
                       >
                         <option value="staff">Staff (Orders &amp; Stock)</option>
                         <option value="manager">Manager (Full Access + Reports)</option>
@@ -1295,9 +1296,9 @@ export function ManagerDashboard() {
             {/* Staff Accounts List */}
             {loadingStaff ? (
               <div className="space-y-3">
-                <Skeleton className="h-20 w-full rounded-xl" />
-                <Skeleton className="h-20 w-full rounded-xl" />
-                <Skeleton className="h-20 w-full rounded-xl" />
+                <Skeleton className="h-20 w-full rounded-none" />
+                <Skeleton className="h-20 w-full rounded-none" />
+                <Skeleton className="h-20 w-full rounded-none" />
               </div>
             ) : staffAccounts.length === 0 ? (
               <EmptyState
@@ -1323,7 +1324,7 @@ export function ManagerDashboard() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <div
-                              className={`flex size-8 items-center justify-center rounded-lg ${
+                              className={`flex size-8 items-center justify-center rounded-none ${
                                 isManager
                                   ? 'bg-accent/15 text-accent'
                                   : 'bg-surface-sunken text-ink-soft'
@@ -1353,7 +1354,7 @@ export function ManagerDashboard() {
 
                           <div className="flex flex-col items-end gap-1">
                             <span
-                              className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                              className={`rounded-none px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
                                 isManager
                                   ? 'bg-accent text-on-accent'
                                   : 'bg-surface-sunken text-ink-soft'

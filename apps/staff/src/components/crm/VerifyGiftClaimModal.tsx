@@ -171,7 +171,7 @@ export function VerifyGiftClaimModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/15 text-amber-600 dark:text-amber-400">
               <Gift className="size-5" />
             </div>
             <div>
@@ -187,7 +187,7 @@ export function VerifyGiftClaimModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             <X className="size-5" />
           </button>
@@ -209,7 +209,7 @@ export function VerifyGiftClaimModal({
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                 autoFocus
-                className="h-11 w-full rounded-xl border border-border bg-surface pl-3.5 pr-10 font-mono text-sm font-bold text-ink tracking-wider uppercase outline-none focus:border-accent"
+                className="h-11 w-full rounded-none border border-border bg-surface pl-3.5 pr-10 font-mono text-sm font-bold text-ink tracking-wider uppercase outline-none focus:border-accent"
               />
               {inputCode && (
                 <button
@@ -236,7 +236,7 @@ export function VerifyGiftClaimModal({
 
           {/* Verification Error */}
           {verifyError && (
-            <div className="rounded-xl border border-danger/30 bg-danger-soft p-3.5 text-xs text-danger flex items-start gap-2.5 animate-in fade-in duration-150">
+            <div className="rounded-none border border-danger/30 bg-danger-soft p-3.5 text-xs text-danger flex items-start gap-2.5 animate-in fade-in duration-150">
               <ShieldAlert className="size-5 shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">Invalid Claim Code</p>
@@ -250,7 +250,7 @@ export function VerifyGiftClaimModal({
             <div className="space-y-4 animate-in zoom-in-95 duration-150">
               {/* Status Header Strip */}
               {isPending && !successRedeemed && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-center justify-between">
+                <div className="rounded-none border border-emerald-500/30 bg-emerald-500/10 p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
                     <Sparkles className="size-4 text-emerald-600" />
                     <span>Valid Voucher • Ready to Hand Over</span>
@@ -260,7 +260,7 @@ export function VerifyGiftClaimModal({
               )}
 
               {successRedeemed && (
-                <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-3.5 flex items-center gap-2.5 text-emerald-700 dark:text-emerald-300">
+                <div className="rounded-none border border-emerald-500/40 bg-emerald-500/15 p-3.5 flex items-center gap-2.5 text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
                   <div className="text-xs">
                     <p className="font-bold">Item Successfully Handed Over!</p>
@@ -270,7 +270,7 @@ export function VerifyGiftClaimModal({
               )}
 
               {isClaimed && !successRedeemed && (
-                <div className="rounded-xl border border-border bg-surface-sunken/60 p-3 flex items-center justify-between">
+                <div className="rounded-none border border-border bg-surface-sunken/60 p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-ink-soft font-bold text-xs">
                     <Check className="size-4 text-ink-faint" />
                     <span>Already Claimed ({formatDate(verifiedClaim.claimedAt)})</span>
@@ -280,7 +280,7 @@ export function VerifyGiftClaimModal({
               )}
 
               {isExpired && (
-                <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 flex items-center justify-between">
+                <div className="rounded-none border border-rose-500/30 bg-rose-500/10 p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 font-bold text-xs">
                     <Clock className="size-4 text-rose-600" />
                     <span>Expired Voucher ({formatDate(verifiedClaim.expiresAt)})</span>
@@ -290,13 +290,13 @@ export function VerifyGiftClaimModal({
               )}
 
               {/* Prize Details Card */}
-              <div className="rounded-2xl border border-border bg-surface-sunken/40 p-4 space-y-3">
+              <div className="rounded-none border border-border bg-surface-sunken/40 p-4 space-y-3">
                 <div className="flex items-center gap-3.5">
-                  <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-3xl shadow-xs shrink-0">
+                  <div className="flex size-14 items-center justify-center rounded-none bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-3xl shadow-xs shrink-0">
                     {verifiedClaim.prizeIcon || '🎁'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="font-mono text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 inline-block mb-1">
+                    <span className="font-mono text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-none border border-amber-500/20 inline-block mb-1">
                       {verifiedClaim.code}
                     </span>
                     <h4 className="font-extrabold text-base text-ink truncate">
@@ -334,7 +334,7 @@ export function VerifyGiftClaimModal({
 
               {/* Customer Profile Card */}
               {verifiedClaim.user && (
-                <div className="rounded-2xl border border-border bg-surface-sunken/40 p-3.5 space-y-2.5">
+                <div className="rounded-none border border-border bg-surface-sunken/40 p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-ink-faint flex items-center gap-1.5">
                       <User className="size-3.5 text-accent" />
@@ -372,7 +372,7 @@ export function VerifyGiftClaimModal({
 
               {/* Handover & Redeem Action (Only if pending) */}
               {isPending && (
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                <div className="rounded-none border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <label htmlFor="staff-name-input" className="block text-[10px] font-bold uppercase text-ink-soft mb-1">
@@ -384,7 +384,7 @@ export function VerifyGiftClaimModal({
                         value={staffName}
                         onChange={(e) => setStaffName(e.target.value)}
                         placeholder="e.g. Sok Barista"
-                        className="h-9 w-full rounded-xl border border-border bg-surface px-2.5 text-xs font-semibold text-ink outline-none focus:border-accent"
+                        className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-semibold text-ink outline-none focus:border-accent"
                       />
                     </div>
                     <div>
@@ -397,7 +397,7 @@ export function VerifyGiftClaimModal({
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="e.g. Size M Passion Tea"
-                        className="h-9 w-full rounded-xl border border-border bg-surface px-2.5 text-xs font-semibold text-ink outline-none focus:border-accent"
+                        className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-semibold text-ink outline-none focus:border-accent"
                       />
                     </div>
                   </div>

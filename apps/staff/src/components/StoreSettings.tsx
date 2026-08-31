@@ -16,9 +16,12 @@ import {
   Phone,
   Share2,
   Globe,
+  LayoutDashboard,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
+import { useLayoutStyle } from '../hooks/useLayoutStyle';
+import type { LayoutStyle } from '../hooks/useLayoutStyle';
 
 export interface MenuTabItem {
   id: string;
@@ -128,6 +131,7 @@ function renderSocialIcon(id: string) {
 
 export function StoreSettings() {
   const { toast } = useToast();
+  const { layoutStyle, setLayoutStyle } = useLayoutStyle();
   const [config, setConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
@@ -245,9 +249,9 @@ export function StoreSettings() {
   if (loading) {
     return (
       <div className="flex flex-col gap-6">
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <Skeleton className="h-44 w-full rounded-2xl" />
-        <Skeleton className="h-44 w-full rounded-2xl" />
+        <Skeleton className="h-28 w-full rounded-none" />
+        <Skeleton className="h-44 w-full rounded-none" />
+        <Skeleton className="h-44 w-full rounded-none" />
       </div>
     );
   }
@@ -256,6 +260,11 @@ export function StoreSettings() {
     { id: 'auto', label: 'Automatic (Schedule)' },
     { id: 'open', label: 'Force Open' },
     { id: 'closed', label: 'Force Closed' },
+  ];
+
+  const layoutOptions: Array<{ id: LayoutStyle; label: string; icon?: React.ReactNode }> = [
+    { id: 'compact-sidebar', label: 'Compact Sidebar (Dark & Fast)' },
+    { id: 'classic-board', label: 'Classic Board (Matcha & Lanes)' },
   ];
 
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -354,14 +363,14 @@ export function StoreSettings() {
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
               <Clock className="size-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-ink">Operating Mode &amp; Hours</h3>
                 <Badge variant={config.isOpen ? 'success' : 'danger'}>
-                  <span className="inline-block size-2 rounded-full bg-current mr-1.5 animate-pulse" />
+                  <span className="inline-block size-2 rounded-none bg-current mr-1.5 animate-pulse" />
                   {config.isOpen ? 'OPEN FOR ORDERS' : 'CURRENTLY CLOSED'}
                 </Badge>
               </div>
@@ -427,7 +436,7 @@ export function StoreSettings() {
                 value={config.openTime}
                 onChange={(e) => setConfig((prev) => ({ ...prev, openTime: e.target.value }))}
                 onBlur={(e) => updateSetting('openTime', e.target.value, 'Opening Time')}
-                className="h-11 flex-1 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
+                className="h-11 flex-1 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
               />
             </div>
             <span className="text-[11px] text-ink-faint">Format: 24-hour e.g. 08:00</span>
@@ -444,7 +453,7 @@ export function StoreSettings() {
                 value={config.closeTime}
                 onChange={(e) => setConfig((prev) => ({ ...prev, closeTime: e.target.value }))}
                 onBlur={(e) => updateSetting('closeTime', e.target.value, 'Closing Time')}
-                className="h-11 flex-1 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
+                className="h-11 flex-1 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
               />
             </div>
             <span className="text-[11px] text-ink-faint">Format: 24-hour e.g. 21:00</span>
@@ -460,7 +469,7 @@ export function StoreSettings() {
               await updateSetting('openTime', '08:00', 'Opening Time');
               await updateSetting('closeTime', '21:00', 'Closing Time');
             }}
-            className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             08:00 – 21:00 (Standard)
           </button>
@@ -470,7 +479,7 @@ export function StoreSettings() {
               await updateSetting('openTime', '07:30', 'Opening Time');
               await updateSetting('closeTime', '22:00', 'Closing Time');
             }}
-            className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             07:30 – 22:00 (Extended)
           </button>
@@ -480,7 +489,7 @@ export function StoreSettings() {
               await updateSetting('openTime', '09:00', 'Opening Time');
               await updateSetting('closeTime', '23:00', 'Closing Time');
             }}
-            className="rounded-lg border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             09:00 – 23:00 (Late Night)
           </button>
@@ -490,7 +499,7 @@ export function StoreSettings() {
       {/* 2. Customer Menu Banner & Brand Tabs */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
             <ImageIcon className="size-5" />
           </div>
           <div>
@@ -508,7 +517,7 @@ export function StoreSettings() {
           </label>
 
           {/* Banner Preview */}
-          <div className="relative h-36 w-full rounded-2xl overflow-hidden border border-border bg-black/40 shadow-inner flex items-end p-4">
+          <div className="relative h-36 w-full rounded-none overflow-hidden border border-border bg-black/40 shadow-inner flex items-end p-4">
             <img
               src={resolveImageUrl(config.menuBannerUrl)}
               alt="Menu Background Preview"
@@ -530,7 +539,7 @@ export function StoreSettings() {
           </div>
 
           {/* Upload Button & Size Guide */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-surface-raised border border-border">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-none bg-surface-raised border border-border">
             <div className="flex flex-col gap-0.5">
               <span className="text-xs font-bold text-ink flex items-center gap-1.5">
                 <span>📐</span> Recommended Banner Size:
@@ -570,7 +579,7 @@ export function StoreSettings() {
               <button
                 type="button"
                 onClick={() => updateSetting('menuBannerUrl', '/banner.webp', 'Menu Banner Photo')}
-                className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
                   config.menuBannerUrl === '/banner.webp'
                     ? 'border-accent bg-accent/10 text-accent font-bold'
                     : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -587,7 +596,7 @@ export function StoreSettings() {
                     'Menu Banner Photo'
                   )
                 }
-                className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
                   config.menuBannerUrl === '/images/zhengda_downloads/web-banner-zhengda_1_.webp'
                     ? 'border-accent bg-accent/10 text-accent font-bold'
                     : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
@@ -615,7 +624,7 @@ export function StoreSettings() {
                 value={config.menuBannerUrl}
                 onChange={(e) => setConfig((prev) => ({ ...prev, menuBannerUrl: e.target.value }))}
                 onBlur={(e) => updateSetting('menuBannerUrl', e.target.value, 'Menu Banner Photo')}
-                className="h-10 flex-1 rounded-xl border border-border bg-surface px-3 text-xs font-mono text-ink focus:border-accent focus:outline-none"
+                className="h-10 flex-1 rounded-none border border-border bg-surface px-3 text-xs font-mono text-ink focus:border-accent focus:outline-none"
               />
             </div>
           )}
@@ -634,11 +643,11 @@ export function StoreSettings() {
             </div>
 
             {/* Quick Count Preset Buttons */}
-            <div className="flex items-center gap-1.5 bg-surface-sunken p-1 rounded-xl border border-border">
+            <div className="flex items-center gap-1.5 bg-surface-sunken p-1 rounded-none border border-border">
               <button
                 type="button"
                 onClick={() => handleTabCountPreset(1)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                className={`px-3 py-1 text-xs font-bold rounded-none transition-all ${
                   activeTabsCount === 1
                     ? 'bg-accent text-white shadow-sm'
                     : 'text-ink-soft hover:text-ink'
@@ -649,7 +658,7 @@ export function StoreSettings() {
               <button
                 type="button"
                 onClick={() => handleTabCountPreset(2)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                className={`px-3 py-1 text-xs font-bold rounded-none transition-all ${
                   activeTabsCount === 2
                     ? 'bg-accent text-white shadow-sm'
                     : 'text-ink-soft hover:text-ink'
@@ -660,7 +669,7 @@ export function StoreSettings() {
               <button
                 type="button"
                 onClick={() => handleTabCountPreset(3)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                className={`px-3 py-1 text-xs font-bold rounded-none transition-all ${
                   activeTabsCount === 3
                     ? 'bg-accent text-white shadow-sm'
                     : 'text-ink-soft hover:text-ink'
@@ -676,7 +685,7 @@ export function StoreSettings() {
             {config.menuTabsConfig.map((tab, idx) => (
               <div
                 key={tab.id || idx}
-                className={`flex flex-col gap-3 p-3.5 rounded-2xl border transition-all ${
+                className={`flex flex-col gap-3 p-3.5 rounded-none border transition-all ${
                   tab.enabled
                     ? 'border-accent/40 bg-surface-raised shadow-sm'
                     : 'border-border bg-surface-sunken/40 opacity-70'
@@ -684,7 +693,7 @@ export function StoreSettings() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="flex size-6 items-center justify-center rounded-lg bg-surface border border-border font-bold text-xs text-ink">
+                    <span className="flex size-6 items-center justify-center rounded-none bg-surface border border-border font-bold text-xs text-ink">
                       {idx + 1}
                     </span>
                     <span className="font-bold text-xs text-ink">Tab {idx + 1}</span>
@@ -709,7 +718,7 @@ export function StoreSettings() {
                     }}
                     onBlur={(e) => handleTabUpdate(idx, { label: e.target.value })}
                     placeholder={`e.g. Tab ${idx + 1}`}
-                    className="h-9 w-full rounded-xl border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent focus:outline-none"
+                    className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent focus:outline-none"
                   />
                 </div>
 
@@ -726,7 +735,7 @@ export function StoreSettings() {
                     }}
                     onBlur={(e) => handleTabUpdate(idx, { id: e.target.value })}
                     placeholder="e.g. ai-cha, zhengda"
-                    className="h-9 w-full rounded-xl border border-border bg-surface px-2.5 text-xs font-mono text-ink focus:border-accent focus:outline-none"
+                    className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-mono text-ink focus:border-accent focus:outline-none"
                   />
                 </div>
 
@@ -738,7 +747,7 @@ export function StoreSettings() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <div className="size-10 rounded-xl bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-inner p-1">
+                    <div className="size-10 rounded-none bg-surface border border-border flex items-center justify-center shrink-0 overflow-hidden shadow-inner p-1">
                       {tab.icon ? (
                         <img
                           src={resolveImageUrl(tab.icon)}
@@ -778,7 +787,7 @@ export function StoreSettings() {
                         type="button"
                         onClick={() => handleTabUpdate(idx, { icon: '' })}
                         title="Remove icon"
-                        className="size-8 rounded-lg border border-border flex items-center justify-center text-ink-faint hover:text-danger hover:border-danger transition-colors shrink-0"
+                        className="size-8 rounded-none border border-border flex items-center justify-center text-ink-faint hover:text-danger hover:border-danger transition-colors shrink-0"
                       >
                         <Trash2 className="size-3.5" />
                       </button>
@@ -791,7 +800,7 @@ export function StoreSettings() {
                     <button
                       type="button"
                       onClick={() => handleTabUpdate(idx, { icon: '/images/aicha-logo.webp' })}
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors border ${
+                      className={`rounded-none px-1.5 py-0.5 text-[10px] font-medium transition-colors border ${
                         tab.icon === '/images/aicha-logo.webp'
                           ? 'border-accent bg-accent/10 text-accent font-bold'
                           : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken'
@@ -802,7 +811,7 @@ export function StoreSettings() {
                     <button
                       type="button"
                       onClick={() => handleTabUpdate(idx, { icon: '/images/zhengda_logo_cropped.webp' })}
-                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors border ${
+                      className={`rounded-none px-1.5 py-0.5 text-[10px] font-medium transition-colors border ${
                         tab.icon === '/images/zhengda_logo_cropped.webp'
                           ? 'border-accent bg-accent/10 text-accent font-bold'
                           : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken'
@@ -824,7 +833,7 @@ export function StoreSettings() {
                       }}
                       onBlur={(e) => handleTabUpdate(idx, { icon: e.target.value })}
                       placeholder="Custom image URL"
-                      className="h-8 w-full rounded-lg border border-border bg-surface px-2 text-[11px] font-mono text-ink mt-1"
+                      className="h-8 w-full rounded-none border border-border bg-surface px-2 text-[11px] font-mono text-ink mt-1"
                     />
                   )}
                 </div>
@@ -837,7 +846,7 @@ export function StoreSettings() {
       {/* 3. Our Shop Information & Social Media Badges */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
             <Store className="size-5" />
           </div>
           <div>
@@ -860,7 +869,7 @@ export function StoreSettings() {
               onChange={(e) => setConfig((prev) => ({ ...prev, shopName: e.target.value }))}
               onBlur={(e) => updateSetting('shopName', e.target.value, 'Shop Title')}
               placeholder="e.g. Our shop"
-              className="h-11 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
+              className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
             <span className="text-[11px] text-ink-faint">Header title on shop card</span>
           </div>
@@ -875,7 +884,7 @@ export function StoreSettings() {
               onChange={(e) => setConfig((prev) => ({ ...prev, shopAddress: e.target.value }))}
               onBlur={(e) => updateSetting('shopAddress', e.target.value, 'Shop Address')}
               placeholder="e.g. J03, Ground Floor, Arakawa"
-              className="h-11 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
+              className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
             <span className="text-[11px] text-ink-faint">Physical location &amp; unit</span>
           </div>
@@ -890,7 +899,7 @@ export function StoreSettings() {
               onChange={(e) => setConfig((prev) => ({ ...prev, shopDeliveryNote: e.target.value }))}
               onBlur={(e) => updateSetting('shopDeliveryNote', e.target.value, 'Delivery Note')}
               placeholder="e.g. Delivery inside Arakawa is free"
-              className="h-11 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
+              className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
             <span className="text-[11px] text-ink-faint">Highlighted in red/primary color</span>
           </div>
@@ -922,7 +931,7 @@ export function StoreSettings() {
               {config.shopSocialLinks.map((social, idx) => (
                 <div
                   key={social.id}
-                  className={`p-3.5 rounded-2xl border transition-all flex flex-col gap-2.5 ${
+                  className={`p-3.5 rounded-none border transition-all flex flex-col gap-2.5 ${
                     social.enabled
                       ? 'border-accent/40 bg-surface-raised shadow-sm'
                       : 'border-border bg-surface-sunken/40 opacity-75'
@@ -959,7 +968,7 @@ export function StoreSettings() {
                         ? 'https://maps.google.com/...'
                         : `https://${social.id}.com/...`
                     }
-                    className="h-9 w-full rounded-xl border border-border bg-surface px-2.5 text-xs text-ink focus:border-accent focus:outline-none"
+                    className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs text-ink focus:border-accent focus:outline-none"
                   />
                 </div>
               ))}
@@ -967,13 +976,13 @@ export function StoreSettings() {
           )}
 
           {/* Live Preview of Shop Card */}
-          <div className="mt-2 rounded-2xl border border-border bg-surface-sunken p-4">
+          <div className="mt-2 rounded-none border border-border bg-surface-sunken p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-ink-faint block mb-2">
               Customer "Our Shop" Card Preview
             </span>
-            <div className="rounded-2xl bg-surface p-4 border border-border shadow-sm flex flex-col gap-3">
+            <div className="rounded-none bg-surface p-4 border border-border shadow-sm flex flex-col gap-3">
               <div className="flex items-start gap-3">
-                <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent shrink-0">
+                <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent shrink-0">
                   <Store className="size-5" />
                 </div>
                 <div className="min-w-0">
@@ -992,7 +1001,7 @@ export function StoreSettings() {
                     .map((s) => (
                       <span
                         key={s.id}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-raised border border-border text-ink"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-xs font-semibold bg-surface-raised border border-border text-ink"
                       >
                         {renderSocialIcon(s.id)}
                         {s.label}
@@ -1011,7 +1020,7 @@ export function StoreSettings() {
       {/* 4. Order Types Toggles */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
             <Sliders className="size-5" />
           </div>
           <div>
@@ -1024,9 +1033,9 @@ export function StoreSettings() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Pickup Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface-raised p-4">
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
                 <ShoppingBag className="size-5" />
               </div>
               <div>
@@ -1043,9 +1052,9 @@ export function StoreSettings() {
           </div>
 
           {/* Delivery Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface-raised p-4">
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
+              <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
                 <Truck className="size-5" />
               </div>
               <div>
@@ -1066,7 +1075,7 @@ export function StoreSettings() {
       {/* 4. Payment Methods Toggles */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
             <Coins className="size-5" />
           </div>
           <div>
@@ -1079,9 +1088,9 @@ export function StoreSettings() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Cash Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface-raised p-4">
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+              <div className="flex size-10 items-center justify-center rounded-none bg-emerald-500/10 text-emerald-600">
                 <Coins className="size-5" />
               </div>
               <div>
@@ -1098,9 +1107,9 @@ export function StoreSettings() {
           </div>
 
           {/* KHQR Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface-raised p-4">
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600">
+              <div className="flex size-10 items-center justify-center rounded-none bg-rose-500/10 text-rose-600">
                 <QrCode className="size-5" />
               </div>
               <div>
@@ -1121,7 +1130,7 @@ export function StoreSettings() {
       {/* 5. Delivery Fee */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
             <Truck className="size-5" />
           </div>
           <div>
@@ -1141,9 +1150,41 @@ export function StoreSettings() {
             value={config.deliveryFee}
             onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
             onBlur={(e) => updateSetting('deliveryFee', Number(e.target.value), 'Delivery Fee')}
-            className="h-11 rounded-xl border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
+            className="h-11 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
           />
           <span className="text-[11px] text-ink-faint">0 = Free delivery for customers</span>
+        </div>
+      </Card>
+
+      {/* 6. UI Layout & Navigation Style */}
+      <Card className="p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
+            <LayoutDashboard className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">UI Layout &amp; Navigation</h3>
+            <p className="text-xs text-ink-soft">
+              Choose your preferred workspace navigation and visual density.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Segmented
+            ariaLabel="UI Layout Style"
+            value={layoutStyle}
+            onChange={(val) => {
+              setLayoutStyle(val as LayoutStyle);
+              toast({ title: `Switched to ${val === 'compact-sidebar' ? 'Compact Sidebar' : 'Classic Board'} layout`, variant: 'success' });
+            }}
+            options={layoutOptions}
+          />
+          <p className="text-[11px] text-ink-faint">
+            {layoutStyle === 'compact-sidebar'
+              ? 'Compact Sidebar: Fixed dark navigation sidebar, shop selector, and compact cards for fast operations.'
+              : 'Classic Board: Top navigation bar with matcha-styled order lanes.'}
+          </p>
         </div>
       </Card>
     </div>

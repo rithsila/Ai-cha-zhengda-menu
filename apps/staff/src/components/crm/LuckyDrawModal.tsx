@@ -125,7 +125,7 @@ export function LuckyDrawModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/15 text-amber-600 dark:text-amber-400">
               <Dices className="size-5" />
             </div>
             <div>
@@ -144,7 +144,7 @@ export function LuckyDrawModal({
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             <X className="size-5" />
           </button>
@@ -155,9 +155,9 @@ export function LuckyDrawModal({
           {!result && !drawing && (
             <>
               {/* Pool Info */}
-              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 flex items-center justify-between">
+              <div className="rounded-none border border-amber-500/20 bg-amber-500/5 p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                  <div className="flex size-10 items-center justify-center rounded-none bg-amber-500/20 text-amber-600 dark:text-amber-400">
                     <Ticket className="size-5" />
                   </div>
                   <div>
@@ -184,7 +184,7 @@ export function LuckyDrawModal({
                   placeholder="e.g. Free Passion Fruit Milk Tea + Fries"
                   value={prizeName}
                   onChange={(e) => setPrizeName(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm font-semibold text-ink outline-none focus:border-accent"
+                  className="h-11 w-full rounded-none border border-border bg-surface px-3.5 text-sm font-semibold text-ink outline-none focus:border-accent"
                 />
               </div>
 
@@ -197,7 +197,7 @@ export function LuckyDrawModal({
                   <button
                     type="button"
                     onClick={() => setTierFilter('all')}
-                    className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all ${
+                    className={`flex flex-col items-center justify-center rounded-none border p-2.5 text-center transition-all ${
                       tierFilter === 'all'
                         ? 'border-accent bg-accent text-on-accent shadow-sm'
                         : 'border-border bg-surface-sunken/40 text-ink hover:bg-surface-sunken'
@@ -212,7 +212,7 @@ export function LuckyDrawModal({
                   <button
                     type="button"
                     onClick={() => setTierFilter('gold')}
-                    className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all ${
+                    className={`flex flex-col items-center justify-center rounded-none border p-2.5 text-center transition-all ${
                       tierFilter === 'gold'
                         ? 'border-amber-500 bg-amber-500 text-white shadow-sm'
                         : 'border-border bg-surface-sunken/40 text-ink hover:bg-surface-sunken'
@@ -227,7 +227,7 @@ export function LuckyDrawModal({
                   <button
                     type="button"
                     onClick={() => setTierFilter('standard')}
-                    className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all ${
+                    className={`flex flex-col items-center justify-center rounded-none border p-2.5 text-center transition-all ${
                       tierFilter === 'standard'
                         ? 'border-slate-600 bg-slate-700 text-white shadow-sm'
                         : 'border-border bg-surface-sunken/40 text-ink hover:bg-surface-sunken'
@@ -261,7 +261,7 @@ export function LuckyDrawModal({
           {drawing && (
             <div className="flex flex-col items-center justify-center py-12 space-y-4">
               <div className="relative flex size-24 items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-4 border-amber-500/20 border-t-amber-500 animate-spin" />
+                <div className="absolute inset-0 rounded-none border-4 border-amber-500/20 border-t-amber-500 animate-spin" />
                 <Dices className="size-10 text-amber-500 animate-bounce" />
               </div>
               <div className="text-center">
@@ -274,8 +274,8 @@ export function LuckyDrawModal({
           {/* Winner Display Card */}
           {result && !drawing && (
             <div className="space-y-5">
-              <div className="relative overflow-hidden rounded-2xl border-2 border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-surface to-surface p-6 text-center shadow-lg">
-                <div className="inline-flex size-14 items-center justify-center rounded-2xl bg-amber-500 text-white shadow-md mb-3">
+              <div className="relative overflow-hidden rounded-none border-2 border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-surface to-surface p-6 text-center shadow-lg">
+                <div className="inline-flex size-14 items-center justify-center rounded-none bg-amber-500 text-white shadow-md mb-3">
                   <Trophy className="size-7" />
                 </div>
 
@@ -293,7 +293,7 @@ export function LuckyDrawModal({
 
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
+                    className={`inline-flex items-center gap-1 rounded-none px-3 py-1 text-xs font-bold ${
                       result.winner.tier === 'gold'
                         ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                         : 'bg-surface-sunken text-ink-soft border border-border'
@@ -307,20 +307,20 @@ export function LuckyDrawModal({
                   </span>
 
                   {result.winner.phoneNumber && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-surface-sunken px-3 py-1 text-xs font-semibold text-ink">
+                    <span className="inline-flex items-center gap-1 rounded-none bg-surface-sunken px-3 py-1 text-xs font-semibold text-ink">
                       <Phone className="size-3 text-accent" />
                       {result.winner.phoneNumber}
                     </span>
                   )}
 
-                  <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
+                  <span className="inline-flex items-center gap-1 rounded-none bg-accent-soft px-3 py-1 text-xs font-bold text-accent">
                     <Ticket className="size-3" />
                     Held {result.winner.luckyTickets} tickets
                   </span>
                 </div>
 
                 {result.prizeName && (
-                  <div className="mt-4 rounded-xl bg-surface-sunken/60 p-3 border border-border space-y-2">
+                  <div className="mt-4 rounded-none bg-surface-sunken/60 p-3 border border-border space-y-2">
                     <div>
                       <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider">Prize Won</p>
                       <p className="text-sm font-bold text-accent flex items-center justify-center gap-1.5 mt-0.5">
@@ -331,7 +331,7 @@ export function LuckyDrawModal({
                     {result.claimCode && (
                       <div className="pt-2 border-t border-border/60">
                         <p className="text-[10px] uppercase font-bold text-ink-faint">Generated Claim Voucher Code</p>
-                        <p className="mt-0.5 font-mono text-sm font-black text-amber-600 dark:text-amber-400 bg-surface px-2.5 py-1 rounded-lg border border-amber-500/30 inline-block">
+                        <p className="mt-0.5 font-mono text-sm font-black text-amber-600 dark:text-amber-400 bg-surface px-2.5 py-1 rounded-none border border-amber-500/30 inline-block">
                           {result.claimCode}
                         </p>
                       </div>

@@ -211,7 +211,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
       >
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent-soft text-accent">
               <Settings className="size-5" />
             </div>
             <div>
@@ -227,7 +227,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="flex size-8 items-center justify-center rounded-lg text-ink-soft hover:bg-surface-soft hover:text-ink"
+            className="flex size-8 items-center justify-center rounded-none text-ink-soft hover:bg-surface-soft hover:text-ink"
           >
             <X className="size-4" />
           </button>
@@ -246,7 +246,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                 <span>Customer Type &amp; Payment Rules</span>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
+              <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <label htmlFor="gold-threshold-input" className="text-xs font-bold text-ink block">
@@ -264,7 +264,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                       max="100"
                       value={goldMinOrdersThreshold}
                       onChange={(e) => setGoldMinOrdersThreshold(Number(e.target.value) || 1)}
-                      className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
+                      className="h-10 w-24 rounded-none border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
                     />
                     <span className="text-xs font-semibold text-ink-soft">orders</span>
                   </div>
@@ -295,7 +295,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                 <span>Lucky Draw &amp; Ticket Rules</span>
               </div>
 
-              <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
+              <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
                 <div className="flex items-center justify-between pb-3 border-b border-border/60">
                   <div>
                     <span className="text-xs font-bold text-ink block">
@@ -330,7 +330,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                       max="20"
                       value={luckyTicketsPerGoldOrder}
                       onChange={(e) => setLuckyTicketsPerGoldOrder(Number(e.target.value) || 0)}
-                      className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
+                      className="h-10 w-24 rounded-none border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
                     />
                     <span className="text-xs font-semibold text-ink-soft">tickets</span>
                   </div>
@@ -354,7 +354,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                       max="20"
                       value={luckyTicketsPerStandardOrder}
                       onChange={(e) => setLuckyTicketsPerStandardOrder(Number(e.target.value) || 0)}
-                      className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
+                      className="h-10 w-24 rounded-none border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
                     />
                     <span className="text-xs font-semibold text-ink-soft">tickets</span>
                   </div>
@@ -378,7 +378,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                       max="50"
                       value={luckyTicketsCostPerSpin}
                       onChange={(e) => setLuckyTicketsCostPerSpin(Math.max(1, Number(e.target.value) || 1))}
-                      className="h-10 w-24 rounded-xl border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
+                      className="h-10 w-24 rounded-none border border-border bg-surface px-3 text-center text-sm font-bold text-ink outline-none focus:border-accent"
                     />
                     <span className="text-xs font-semibold text-ink-soft">tickets</span>
                   </div>
@@ -421,7 +421,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                 {prizes.map((prize, index) => (
                   <div
                     key={prize.id || index}
-                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-xl border border-border bg-surface-soft/40 p-3"
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-none border border-border bg-surface-soft/40 p-3"
                   >
                     <div className="flex items-center gap-2.5 w-full sm:w-auto">
                       {/* Color Preview & Preset Selector */}
@@ -430,7 +430,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                           type="color"
                           value={prize.color}
                           onChange={(e) => handleUpdatePrize(index, { color: e.target.value })}
-                          className="size-7 cursor-pointer rounded-lg border-0 p-0"
+                          className="size-7 cursor-pointer rounded-none border-0 p-0"
                           title="Choose Slice Color"
                         />
                       </div>
@@ -440,7 +440,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                         type="text"
                         value={prize.icon}
                         onChange={(e) => handleUpdatePrize(index, { icon: e.target.value })}
-                        className="h-8 w-9 rounded-lg border border-border bg-surface text-center text-sm outline-none focus:border-accent"
+                        className="h-8 w-9 rounded-none border border-border bg-surface text-center text-sm outline-none focus:border-accent"
                         title="Prize Emoji"
                       />
 
@@ -451,7 +451,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                           value={prize.label}
                           onChange={(e) => handleUpdatePrize(index, { label: e.target.value })}
                           placeholder="Wheel Label"
-                          className="h-8 w-full rounded-lg border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
+                          className="h-8 w-full rounded-none border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
                           title="Label on Wheel"
                         />
                       </div>
@@ -462,7 +462,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                       <select
                         value={prize.type}
                         onChange={(e) => handleUpdatePrize(index, { type: e.target.value as any })}
-                        className="h-8 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none focus:border-accent"
+                        className="h-8 rounded-none border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none focus:border-accent"
                       >
                         <option value="points">Points (+Pts)</option>
                         <option value="tickets">Tickets (+Tix)</option>
@@ -478,7 +478,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                           value={prize.value}
                           onChange={(e) => handleUpdatePrize(index, { value: Number(e.target.value) || 0 })}
                           placeholder="Val"
-                          className="h-8 w-16 rounded-lg border border-border bg-surface px-2 text-center text-xs font-bold text-ink outline-none focus:border-accent"
+                          className="h-8 w-16 rounded-none border border-border bg-surface px-2 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                           title="Reward Value"
                         />
                       )}
@@ -492,7 +492,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                           max="100"
                           value={prize.weight}
                           onChange={(e) => handleUpdatePrize(index, { weight: Math.max(1, Number(e.target.value) || 1) })}
-                          className="h-8 w-12 rounded-lg border border-border bg-surface px-1 text-center text-xs font-bold text-ink outline-none focus:border-accent"
+                          className="h-8 w-12 rounded-none border border-border bg-surface px-1 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                           title="Win Chance Weight"
                         />
                       </div>
@@ -503,7 +503,7 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
                         onClick={() => handleRemovePrize(index)}
                         disabled={prizes.length <= 2}
                         aria-label="Remove slice"
-                        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-soft hover:bg-error-soft hover:text-error disabled:opacity-30 disabled:pointer-events-none"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-none text-ink-soft hover:bg-error-soft hover:text-error disabled:opacity-30 disabled:pointer-events-none"
                       >
                         <Trash2 className="size-3.5" />
                       </button>

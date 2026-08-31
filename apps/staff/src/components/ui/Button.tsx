@@ -64,7 +64,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={[
-        'relative inline-flex shrink-0 items-center justify-center rounded-xl font-semibold',
+        'relative inline-flex shrink-0 items-center justify-center rounded-none font-semibold',
         'transition-[background-color,border-color,color,transform] duration-150 ease-out',
         'active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100',
         variantClasses[variant],

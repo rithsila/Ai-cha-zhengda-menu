@@ -331,7 +331,7 @@ export function LuckyDrawManagement() {
                 🎟️ {summary ? summary.totalLuckyTickets : '—'}
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+            <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/20 text-amber-600 dark:text-amber-400">
               <Ticket className="size-4" />
             </div>
           </div>
@@ -348,7 +348,7 @@ export function LuckyDrawManagement() {
                 +{luckyTicketsPerGoldOrder} / order
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-surface-sunken text-ink-soft">
+            <div className="flex size-9 items-center justify-center rounded-none bg-surface-sunken text-ink-soft">
               <Sparkles className="size-4 text-amber-500" />
             </div>
           </div>
@@ -365,7 +365,7 @@ export function LuckyDrawManagement() {
                 +{luckyTicketsPerStandardOrder} / order
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-surface-sunken text-ink-soft">
+            <div className="flex size-9 items-center justify-center rounded-none bg-surface-sunken text-ink-soft">
               <Ticket className="size-4" />
             </div>
           </div>
@@ -382,7 +382,7 @@ export function LuckyDrawManagement() {
                 {luckyTicketsCostPerSpin} Tickets
               </p>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-surface-sunken text-ink-soft">
+            <div className="flex size-9 items-center justify-center rounded-none bg-surface-sunken text-ink-soft">
               <Dices className="size-4" />
             </div>
           </div>
@@ -401,7 +401,7 @@ export function LuckyDrawManagement() {
               <span>Customer Type &amp; Payment Rules</span>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
+            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <label htmlFor="gold-threshold-input" className="text-xs font-bold text-ink block">
@@ -424,14 +424,14 @@ export function LuckyDrawManagement() {
                       setGoldMinOrdersThreshold(val);
                       updateSetting('goldMinOrdersThreshold', val, 'Gold promotion threshold');
                     }}
-                    className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
+                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">orders</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-border bg-surface-soft/40 p-4">
+            <div className="flex items-center justify-between rounded-none border border-border bg-surface-soft/40 p-4">
               <div className="pr-4">
                 <p className="text-xs font-bold text-ink">Allow Cash Pickup for Standard Customers</p>
                 <p className="text-[11px] text-ink-soft">
@@ -456,7 +456,7 @@ export function LuckyDrawManagement() {
               <span>Lucky Draw &amp; Ticket Rules</span>
             </div>
 
-            <div className="flex items-center justify-between rounded-2xl border border-border bg-surface-soft/40 p-4">
+            <div className="flex items-center justify-between rounded-none border border-border bg-surface-soft/40 p-4">
               <div className="pr-4">
                 <p className="text-xs font-bold text-ink">Lucky Draw Feature Active</p>
                 <p className="text-[11px] text-ink-soft">
@@ -473,7 +473,7 @@ export function LuckyDrawManagement() {
               />
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
+            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <label htmlFor="gold-tickets-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
@@ -497,14 +497,14 @@ export function LuckyDrawManagement() {
                       setLuckyTicketsPerGoldOrder(val);
                       updateSetting('luckyTicketsPerGoldOrder', val, 'Gold ticket rate');
                     }}
-                    className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
+                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">tickets</span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
+            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <label htmlFor="std-tickets-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
@@ -528,14 +528,14 @@ export function LuckyDrawManagement() {
                       setLuckyTicketsPerStandardOrder(val);
                       updateSetting('luckyTicketsPerStandardOrder', val, 'Standard ticket rate');
                     }}
-                    className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
+                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">tickets</span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-border bg-surface-soft/40 p-4">
+            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <label htmlFor="spin-cost-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
@@ -559,7 +559,7 @@ export function LuckyDrawManagement() {
                       setLuckyTicketsCostPerSpin(val);
                       updateSetting('luckyTicketsCostPerSpin', val, 'Spin ticket cost');
                     }}
-                    className="h-9 w-20 rounded-xl border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
+                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
                   />
                   <span className="text-xs font-semibold text-ink-soft">tickets</span>
                 </div>
@@ -608,11 +608,11 @@ export function LuckyDrawManagement() {
               {prizes.map((p, idx) => (
                 <div
                   key={p.id}
-                  className="rounded-2xl border border-border bg-surface-soft/40 p-3.5 transition-all hover:border-accent/40 space-y-2.5"
+                  className="rounded-none border border-border bg-surface-soft/40 p-3.5 transition-all hover:border-accent/40 space-y-2.5"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex size-6 items-center justify-center rounded-lg bg-surface-sunken text-xs font-bold text-ink-soft">
+                      <span className="flex size-6 items-center justify-center rounded-none bg-surface-sunken text-xs font-bold text-ink-soft">
                         #{idx + 1}
                       </span>
                       <input
@@ -621,7 +621,7 @@ export function LuckyDrawManagement() {
                         onChange={(e) => handlePrizeChange(idx, 'icon', e.target.value)}
                         placeholder="Icon"
                         title="Emoji or icon"
-                        className="size-8 text-center rounded-lg border border-border bg-surface text-base outline-none focus:border-accent"
+                        className="size-8 text-center rounded-none border border-border bg-surface text-base outline-none focus:border-accent"
                       />
                       <input
                         type="text"
@@ -629,7 +629,7 @@ export function LuckyDrawManagement() {
                         onChange={(e) => handlePrizeChange(idx, 'label', e.target.value)}
                         placeholder="Wheel Label (e.g. +10 Pts)"
                         title="Short text displayed on the wheel wedge"
-                        className="h-8 w-28 rounded-lg border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
+                        className="h-8 w-28 rounded-none border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
 
@@ -639,14 +639,14 @@ export function LuckyDrawManagement() {
                         value={p.color}
                         onChange={(e) => handlePrizeChange(idx, 'color', e.target.value)}
                         title="Wedge background color"
-                        className="size-7 cursor-pointer rounded-lg border border-border bg-surface p-0.5"
+                        className="size-7 cursor-pointer rounded-none border border-border bg-surface p-0.5"
                       />
                       <button
                         type="button"
                         onClick={() => handleRemovePrize(idx)}
                         disabled={prizes.length <= 2}
                         aria-label={`Remove prize segment ${idx + 1}`}
-                        className="flex size-7 items-center justify-center rounded-lg text-ink-faint hover:bg-danger-soft hover:text-danger disabled:opacity-30"
+                        className="flex size-7 items-center justify-center rounded-none text-ink-faint hover:bg-danger-soft hover:text-danger disabled:opacity-30"
                       >
                         <Trash2 className="size-3.5" />
                       </button>
@@ -661,7 +661,7 @@ export function LuckyDrawManagement() {
                       <select
                         value={p.type}
                         onChange={(e) => handlePrizeChange(idx, 'type', e.target.value as any)}
-                        className="h-8 w-full rounded-lg border border-border bg-surface px-2 text-xs font-medium text-ink outline-none focus:border-accent"
+                        className="h-8 w-full rounded-none border border-border bg-surface px-2 text-xs font-medium text-ink outline-none focus:border-accent"
                       >
                         <option value="points">Points</option>
                         <option value="tickets">Tickets</option>
@@ -679,7 +679,7 @@ export function LuckyDrawManagement() {
                         value={p.value}
                         onChange={(e) => handlePrizeChange(idx, 'value', Number(e.target.value) || 0)}
                         placeholder="0"
-                        className="h-8 w-full rounded-lg border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
+                        className="h-8 w-full rounded-none border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
 
@@ -695,7 +695,7 @@ export function LuckyDrawManagement() {
                         onChange={(e) => handlePrizeChange(idx, 'weight', Number(e.target.value) || 1)}
                         placeholder="10"
                         title="Probability weight relative to total sum of weights"
-                        className="h-8 w-full rounded-lg border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
+                        className="h-8 w-full rounded-none border border-border bg-surface px-2 text-xs font-bold text-ink outline-none focus:border-accent"
                       />
                     </div>
                   </div>
@@ -705,7 +705,7 @@ export function LuckyDrawManagement() {
                     value={p.name}
                     onChange={(e) => handlePrizeChange(idx, 'name', e.target.value)}
                     placeholder="Full prize description (e.g. Zhengda Fried Chicken Voucher)"
-                    className="h-7 w-full rounded-lg border border-border bg-surface px-2 text-[11px] text-ink-soft outline-none focus:border-accent"
+                    className="h-7 w-full rounded-none border border-border bg-surface px-2 text-[11px] text-ink-soft outline-none focus:border-accent"
                   />
                 </div>
               ))}
@@ -734,11 +734,11 @@ export function LuckyDrawManagement() {
 
           <div className="flex items-center gap-2">
             {/* Filter Tabs */}
-            <div className="flex items-center gap-1 bg-surface-sunken p-1 rounded-xl border border-border text-xs font-bold">
+            <div className="flex items-center gap-1 bg-surface-sunken p-1 rounded-none border border-border text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setClaimsFilter('all')}
-                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                className={`px-2.5 py-1 rounded-none transition-colors ${
                   claimsFilter === 'all' ? 'bg-accent text-on-accent' : 'text-ink-soft hover:text-ink'
                 }`}
               >
@@ -747,7 +747,7 @@ export function LuckyDrawManagement() {
               <button
                 type="button"
                 onClick={() => setClaimsFilter('pending')}
-                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                className={`px-2.5 py-1 rounded-none transition-colors ${
                   claimsFilter === 'pending' ? 'bg-emerald-600 text-white' : 'text-ink-soft hover:text-ink'
                 }`}
               >
@@ -756,7 +756,7 @@ export function LuckyDrawManagement() {
               <button
                 type="button"
                 onClick={() => setClaimsFilter('claimed')}
-                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                className={`px-2.5 py-1 rounded-none transition-colors ${
                   claimsFilter === 'claimed' ? 'bg-ink/10 text-ink' : 'text-ink-soft hover:text-ink'
                 }`}
               >
@@ -772,7 +772,7 @@ export function LuckyDrawManagement() {
                 placeholder="Search code, customer..."
                 value={claimsSearch}
                 onChange={(e) => setClaimsSearch(e.target.value)}
-                className="h-8 pl-8 pr-3 rounded-lg border border-border bg-surface text-xs text-ink outline-none focus:border-accent w-44"
+                className="h-8 pl-8 pr-3 rounded-none border border-border bg-surface text-xs text-ink outline-none focus:border-accent w-44"
               />
             </div>
 
