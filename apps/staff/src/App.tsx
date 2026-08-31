@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Award,
   BarChart3,
   Bell,
   BellOff,
@@ -10,20 +11,27 @@ import {
   ListPlus,
   LogOut,
   Menu as MenuIcon,
+  MessageSquare,
   Package,
   Phone,
   QrCode,
   RefreshCw,
   ShieldAlert,
   ShoppingBag,
+  Sliders,
   Sparkles,
   TriangleAlert,
   Truck,
   User,
+  Users,
   X,
 } from 'lucide-react';
 import { MenuManagement } from './components/MenuManagement';
-import { ManagerDashboard } from './components/ManagerDashboard';
+import { SalesAnalytics } from './components/SalesAnalytics';
+import { CustomerCrm } from './components/crm/CustomerCrm';
+import { CustomerFeedback } from './components/CustomerFeedback';
+import { RewardManagement } from './components/RewardManagement';
+import { SettingsManagement } from './components/SettingsManagement';
 import { OrderCard } from './components/OrderCard';
 import { CancelOrderModal } from './components/CancelOrderModal';
 import {
@@ -63,7 +71,14 @@ const POLL_MS = 5000;
 const CLOCK_MS = 15000;
 const PANEL_ID = 'staff-panel';
 
-type TabId = 'orders' | 'menu' | 'manager';
+type TabId =
+  | 'orders'
+  | 'menu'
+  | 'analytics'
+  | 'customers'
+  | 'feedback'
+  | 'rewards'
+  | 'settings';
 
 const LANES: Array<{ key: string; title: string; statuses: string[] }> = [
   { key: 'pending', title: 'Pending', statuses: ['pending', 'paid'] },
@@ -180,9 +195,13 @@ function BoardLegend() {
             <h4 className="font-bold text-ink">Keyboard Quick Keys</h4>
             <dl className="mt-2 space-y-1.5 text-ink-soft">
               {[
-                ['1', 'Switch to Orders Board'],
-                ['2', 'Switch to Menu Stock'],
-                ['3', 'Switch to Admin'],
+                ['1', 'Switch to Orders'],
+                ['2', 'Switch to Menu'],
+                ['3', 'Switch to Analytics'],
+                ['4', 'Switch to Customers'],
+                ['5', 'Switch to Feedback'],
+                ['6', 'Switch to Rewards'],
+                ['7', 'Switch to Settings'],
                 ['R', 'Force Refresh data'],
                 ['M', 'Toggle Alert Chime'],
               ].map(([key, what]) => (
@@ -495,7 +514,11 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       const key = event.key.toLowerCase();
       if (key === '1') setActiveTab('orders');
       else if (key === '2') setActiveTab('menu');
-      else if (key === '3') setActiveTab('manager');
+      else if (key === '3') setActiveTab('analytics');
+      else if (key === '4') setActiveTab('customers');
+      else if (key === '5') setActiveTab('feedback');
+      else if (key === '6') setActiveTab('rewards');
+      else if (key === '7') setActiveTab('settings');
       else if (key === 'r') fetchOrders(true);
       else if (key === 'm') toggleMute();
       else return;
@@ -508,25 +531,52 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const openCount = openOrders.length;
   const showBranch = selectedBranch === '' && branches.length > 1;
 
-  const navItems = [
+  const operationNavItems = [
     {
       id: 'orders' as TabId,
-      label: 'Live Orders',
+      label: 'Orders',
       icon: <LayoutDashboard className="size-5" />,
       badge: openCount > 0 ? String(openCount) : undefined,
       shortcut: '1',
     },
     {
       id: 'menu' as TabId,
-      label: 'Menu & Stock',
+      label: 'Menu',
       icon: <ListPlus className="size-5" />,
       shortcut: '2',
     },
     {
-      id: 'manager' as TabId,
-      label: 'Admin',
+      id: 'analytics' as TabId,
+      label: 'Analytics',
       icon: <BarChart3 className="size-5" />,
       shortcut: '3',
+    },
+    {
+      id: 'customers' as TabId,
+      label: 'Customers',
+      icon: <Users className="size-5" />,
+      shortcut: '4',
+    },
+    {
+      id: 'feedback' as TabId,
+      label: 'Feedback',
+      icon: <MessageSquare className="size-5" />,
+      shortcut: '5',
+    },
+    {
+      id: 'rewards' as TabId,
+      label: 'Rewards',
+      icon: <Award className="size-5" />,
+      shortcut: '6',
+    },
+  ];
+
+  const managementNavItems = [
+    {
+      id: 'settings' as TabId,
+      label: 'Settings',
+      icon: <Sliders className="size-5" />,
+      shortcut: '7',
     },
   ];
 
@@ -593,55 +643,101 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         )}
 
         {/* Navigation Menu */}
-        <nav className="flex-1 space-y-1.5 p-4" aria-label="Main navigation">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-            Operations
-          </p>
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setMobileMenuOpen(false);
-                }}
-                className={`flex w-full items-center justify-between rounded-none px-3.5 py-3 text-sm font-bold transition-all duration-150 ${
-                  isActive
-                    ? 'bg-accent text-on-accent shadow-sm'
-                    : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  {item.icon}
-                  <span>{item.label}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {item.badge ? (
-                    <span
-                      className={`rounded-none px-2 py-0.5 text-xs font-black tabular-nums ${
-                        isActive
-                          ? 'bg-white/25 text-on-accent'
-                          : 'bg-accent/15 text-accent'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  ) : null}
-                  <kbd
-                    className={`hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
+        <nav className="flex-1 space-y-4 p-4 overflow-y-auto" aria-label="Main navigation">
+          <div>
+            <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              Operations
+            </p>
+            <div className="space-y-1">
+              {operationNavItems.map((item) => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
                       isActive
-                        ? 'bg-white/20 text-on-accent'
-                        : 'bg-surface-sunken text-ink-faint'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                     }`}
                   >
-                    {item.shortcut}
-                  </kbd>
-                </div>
-              </button>
-            );
-          })}
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {item.badge ? (
+                        <span
+                          className={`rounded-none px-2 py-0.5 text-xs font-black tabular-nums ${
+                            isActive
+                              ? 'bg-white/25 text-on-accent'
+                              : 'bg-accent/15 text-accent'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      ) : null}
+                      <kbd
+                        className={`hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
+                          isActive
+                            ? 'bg-white/20 text-on-accent'
+                            : 'bg-surface-sunken text-ink-faint'
+                        }`}
+                      >
+                        {item.shortcut}
+                      </kbd>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              System &amp; Settings
+            </p>
+            <div className="space-y-1">
+              {managementNavItems.map((item) => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      isActive
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <kbd
+                        className={`hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
+                          isActive
+                            ? 'bg-white/20 text-on-accent'
+                            : 'bg-surface-sunken text-ink-faint'
+                        }`}
+                      >
+                        {item.shortcut}
+                      </kbd>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </nav>
 
         {/* Sidebar Footer Controls */}
@@ -722,10 +818,18 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-extrabold text-ink sm:text-lg whitespace-nowrap">
                   {activeTab === 'orders'
-                    ? 'Live Orders'
+                    ? 'Orders'
                     : activeTab === 'menu'
-                      ? 'Menu & Stock'
-                      : 'Admin'}
+                      ? 'Menu'
+                      : activeTab === 'analytics'
+                        ? 'Analytics'
+                        : activeTab === 'customers'
+                          ? 'Customers'
+                          : activeTab === 'feedback'
+                            ? 'Feedback'
+                            : activeTab === 'rewards'
+                              ? 'Rewards'
+                              : 'Settings'}
                 </h2>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
@@ -733,7 +837,15 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                   ? `${openCount} active tickets in queue`
                   : activeTab === 'menu'
                     ? 'Quick toggle out-of-stock items'
-                    : 'Sales data, customer loyalty, and catalog perks'}
+                    : activeTab === 'analytics'
+                      ? 'Sales performance, revenue, and daily trends'
+                      : activeTab === 'customers'
+                        ? 'Customer points, stamps, and loyalty CRM'
+                        : activeTab === 'feedback'
+                          ? 'Issues and customer support reports'
+                          : activeTab === 'rewards'
+                            ? 'Redemption catalog and lucky draw wheel'
+                            : 'Store settings and team account permissions'}
               </p>
             </div>
           </div>
@@ -777,33 +889,39 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           <div className="mx-auto max-w-7xl">
           {activeTab === 'menu' ? (
             <MenuManagement />
-          ) : activeTab === 'manager' ? (
-            isManager ? (
-              <ManagerDashboard />
-            ) : (
-              <div className="mx-auto max-w-md pt-8">
-                <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
-                  <div className="mx-auto flex size-12 items-center justify-center rounded-none bg-danger-soft text-danger">
-                    <ShieldAlert className="size-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-ink">Admin Restricted</h3>
-                    <p className="mt-1 text-xs text-ink-soft leading-relaxed">
-                      Your Telegram account is logged in as <strong>Staff</strong>. Analytics, customer points, and team access management require a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
-                    </p>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={onLogout}
-                    className="gap-2 font-bold w-full"
-                  >
-                    <LogOut className="size-4" />
-                    Switch to Manager Account
-                  </Button>
-                </Card>
-              </div>
-            )
+          ) : activeTab !== 'orders' && !isManager ? (
+            <div className="mx-auto max-w-md pt-8">
+              <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-none bg-danger-soft text-danger">
+                  <ShieldAlert className="size-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink">Manager Restricted</h3>
+                  <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                    Your Telegram account is logged in as <strong>Staff</strong>. Accessing this section requires a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={onLogout}
+                  className="gap-2 font-bold w-full"
+                >
+                  <LogOut className="size-4" />
+                  Switch to Manager Account
+                </Button>
+              </Card>
+            </div>
+          ) : activeTab === 'analytics' ? (
+            <SalesAnalytics />
+          ) : activeTab === 'customers' ? (
+            <CustomerCrm />
+          ) : activeTab === 'feedback' ? (
+            <CustomerFeedback />
+          ) : activeTab === 'rewards' ? (
+            <RewardManagement />
+          ) : activeTab === 'settings' ? (
+            <SettingsManagement />
           ) : loading ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
