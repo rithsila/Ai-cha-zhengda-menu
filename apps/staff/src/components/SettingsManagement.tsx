@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { StoreSettings } from './StoreSettings';
-import { Badge, Button, Card, EmptyState, Skeleton, useToast } from './ui';
+import { Badge, Button, Card, CustomSelect, EmptyState, Skeleton, useToast } from './ui';
 
 export type StaffAccount = {
   id: string;
@@ -277,14 +277,15 @@ export function SettingsManagement() {
                     <label className="block text-xs font-bold text-ink mb-1">
                       Assigned Role
                     </label>
-                    <select
+                    <CustomSelect<'staff' | 'manager'>
                       value={newStaffRole}
-                      onChange={(e) => setNewStaffRole(e.target.value as 'staff' | 'manager')}
-                      className="h-11 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink outline-none focus:border-accent"
-                    >
-                      <option value="staff">Staff (Orders &amp; Stock)</option>
-                      <option value="manager">Manager (Full Access + Reports)</option>
-                    </select>
+                      onChange={(val) => setNewStaffRole(val)}
+                      options={[
+                        { value: 'staff', label: 'Staff (Orders & Stock)' },
+                        { value: 'manager', label: 'Manager (Full Access + Reports)' },
+                      ]}
+                      size="lg"
+                    />
                   </div>
                 </div>
 

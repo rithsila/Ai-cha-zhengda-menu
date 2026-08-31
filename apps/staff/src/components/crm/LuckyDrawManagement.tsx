@@ -13,7 +13,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, Card, Switch, useToast } from '../ui';
+import { Badge, Button, Card, CustomSelect, Switch, useToast } from '../ui';
 import { LuckyDrawModal } from './LuckyDrawModal';
 import { VerifyGiftClaimModal } from './VerifyGiftClaimModal';
 import type { CustomersResponse, PrizeClaimItem, SystemConfigItem } from './types';
@@ -658,15 +658,16 @@ export function LuckyDrawManagement() {
                       <label className="block text-[10px] font-bold uppercase text-ink-soft mb-1">
                         Type
                       </label>
-                      <select
+                      <CustomSelect<'points' | 'tickets' | 'item'>
                         value={p.type}
-                        onChange={(e) => handlePrizeChange(idx, 'type', e.target.value as any)}
-                        className="h-8 w-full rounded-none border border-border bg-surface px-2 text-xs font-medium text-ink outline-none focus:border-accent"
-                      >
-                        <option value="points">Points</option>
-                        <option value="tickets">Tickets</option>
-                        <option value="item">Physical Item</option>
-                      </select>
+                        onChange={(val) => handlePrizeChange(idx, 'type', val)}
+                        options={[
+                          { value: 'points', label: 'Points' },
+                          { value: 'tickets', label: 'Tickets' },
+                          { value: 'item', label: 'Physical Item' },
+                        ]}
+                        size="sm"
+                      />
                     </div>
 
                     <div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Gift, Loader2, Plus, RotateCcw, Settings, ShieldCheck, Sparkles, Ticket, Trash2, X } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
-import { Button, Card, Switch, useToast } from '../ui';
+import { Button, Card, CustomSelect, Switch, useToast } from '../ui';
 import type { SystemConfigItem } from './types';
 
 export interface LuckyWheelPrizeItem {
@@ -459,15 +459,18 @@ export function TrustConfigModal({ isOpen, onClose, onSaved }: TrustConfigModalP
 
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                       {/* Reward Type */}
-                      <select
+                      <CustomSelect<'points' | 'tickets' | 'item'>
                         value={prize.type}
-                        onChange={(e) => handleUpdatePrize(index, { type: e.target.value as any })}
-                        className="h-8 rounded-none border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none focus:border-accent"
-                      >
-                        <option value="points">Points (+Pts)</option>
-                        <option value="tickets">Tickets (+Tix)</option>
-                        <option value="item">Voucher / Item</option>
-                      </select>
+                        onChange={(val) => handleUpdatePrize(index, { type: val })}
+                        options={[
+                          { value: 'points', label: 'Points (+Pts)' },
+                          { value: 'tickets', label: 'Tickets (+Tix)' },
+                          { value: 'item', label: 'Voucher / Item' },
+                        ]}
+                        size="sm"
+                        fullWidth={false}
+                        className="min-w-32"
+                      />
 
                       {/* Value Input (for points / tickets) */}
                       {prize.type !== 'item' && (

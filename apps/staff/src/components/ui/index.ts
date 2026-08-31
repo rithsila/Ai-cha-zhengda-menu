@@ -28,3 +28,10 @@ export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
 
 export { ThemeToggle } from './ThemeToggle';
+
+export { CustomSelect } from './CustomSelect';
+export type {
+  CustomSelectProps,
+  CustomSelectOption,
+  CustomSelectSize,
+} from './CustomSelect';

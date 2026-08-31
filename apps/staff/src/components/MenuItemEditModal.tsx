@@ -11,7 +11,7 @@ import {
   AlertCircle,
   Award
 } from 'lucide-react';
-import { Button, Segmented, Switch, useToast } from './ui';
+import { Button, CustomSelect, Segmented, Switch, useToast } from './ui';
 import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 
 export type ModifierOptionInput = {
@@ -726,14 +726,17 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                           placeholder="Group name (e.g. Ice Level)"
                           className="h-8 flex-1 rounded-none border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent outline-none"
                         />
-                        <select
+                        <CustomSelect<'single' | 'multiple'>
                           value={group.type}
-                          onChange={(e) => updateGroup(gIdx, 'type', e.target.value)}
-                          className="h-8 rounded-none border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none"
-                        >
-                          <option value="single">Single Choice</option>
-                          <option value="multiple">Multiple Choice (e.g. Toppings)</option>
-                        </select>
+                          onChange={(val) => updateGroup(gIdx, 'type', val)}
+                          options={[
+                            { value: 'single', label: 'Single Choice' },
+                            { value: 'multiple', label: 'Multiple Choice (e.g. Toppings)' },
+                          ]}
+                          size="sm"
+                          fullWidth={false}
+                          className="min-w-44"
+                        />
                         <label className="flex items-center gap-1 text-xs text-ink-soft cursor-pointer">
                           <input
                             type="checkbox"

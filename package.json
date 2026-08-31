@@ -12,7 +12,8 @@
   "scripts": {
     "dev": "concurrently -n api,menu,staff -c blue,magenta,green \"npm --prefix apps/api run dev\" \"npm --prefix apps/menu run dev\" \"npm --prefix apps/staff run dev\"",
     "build": "npm --prefix packages/aba-payway-sdk-unofficial run build && npm --prefix apps/api run build",
-    "start": "npm --prefix apps/api start"
+    "start": "npm --prefix apps/api start",
+    "test": "npm --prefix apps/staff test"
   },
   "devDependencies": {
     "concurrently": "^10.0.5"

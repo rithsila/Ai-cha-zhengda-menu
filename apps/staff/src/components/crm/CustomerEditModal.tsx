@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, Card, Skeleton, useToast } from '../ui';
+import { Badge, Button, Card, CustomSelect, Skeleton, useToast } from '../ui';
 import type { CustomerDetail, CustomerSummary, CustomerTier, PrizeClaimItem } from './types';
 
 const REASONS = [
@@ -695,19 +695,14 @@ export function CustomerEditModal({
                   >
                     Reason <span className="text-danger">*</span>
                   </label>
-                  <select
+                  <CustomSelect
                     id="modal-reason-select"
                     value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="h-10 w-full rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink outline-none focus:border-accent"
-                  >
-                    <option value="">Select reason...</option>
-                    {REASONS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setReason(val)}
+                    placeholder="Select reason..."
+                    options={REASONS.map((r) => ({ value: r, label: r }))}
+                    size="md"
+                  />
                 </div>
               </div>
 

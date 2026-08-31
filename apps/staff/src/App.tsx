@@ -47,6 +47,7 @@ import {
   Badge,
   Button,
   Card,
+  CustomSelect,
   EmptyState,
   TelegramAuthScreen,
   Skeleton,
@@ -627,18 +628,15 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               <Building2 className="size-3.5" />
               <span>Store Branch</span>
             </div>
-            <select
+            <CustomSelect
               value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="h-10 w-full rounded-none border border-border bg-surface-sunken/50 px-3 text-xs font-bold text-ink outline-none transition-colors focus:border-accent"
-            >
-              <option value="">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedBranch(val)}
+              options={[
+                { value: '', label: 'All Branches' },
+                ...branches.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+              buttonClassName="h-10 bg-surface-sunken/50 text-xs font-bold"
+            />
           </div>
         )}
 
