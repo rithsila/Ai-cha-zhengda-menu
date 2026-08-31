@@ -65,7 +65,7 @@ const DEFAULT_TABS: MenuTabItem[] = [
 ];
 
 const DEFAULT_SOCIALS: SocialBadgeItem[] = [
-  { id: 'telegram', label: 'Telegram', url: 'https://t.me/aicha_zhengda_arakawa_bot', enabled: true },
+  { id: 'telegram', label: 'Telegram', url: 'https://t.me/iLoveAiChaZhengDaArakawa', enabled: true },
   { id: 'facebook', label: 'Facebook', url: '', enabled: false },
   { id: 'instagram', label: 'Instagram', url: '', enabled: false },
   { id: 'tiktok', label: 'TikTok', url: '', enabled: false },
@@ -194,9 +194,9 @@ export function StoreSettings() {
         reason: statusRes.reason || '',
         menuBannerUrl: statusRes.menuBannerUrl || configMap.get('menuBannerUrl') || '/banner.webp',
         menuTabsConfig: parsedTabs,
-        shopName: statusRes.shopName || configMap.get('shopName') || 'Our shop',
-        shopAddress: statusRes.shopAddress || configMap.get('shopAddress') || 'J03, Ground Floor, Arakawa',
-        shopDeliveryNote: statusRes.shopDeliveryNote || configMap.get('shopDeliveryNote') || 'Delivery inside Arakawa is free',
+        shopName: statusRes.shopName ?? configMap.get('shopName') ?? 'Our shop',
+        shopAddress: statusRes.shopAddress ?? configMap.get('shopAddress') ?? 'J03, Ground Floor, Arakawa',
+        shopDeliveryNote: statusRes.shopDeliveryNote ?? configMap.get('shopDeliveryNote') ?? 'Delivery inside Arakawa is free',
         shopSocialsEnabled: statusRes.shopSocialsEnabled ?? (configMap.get('shopSocialsEnabled') !== '0'),
         shopSocialLinks: parsedSocials,
       });
@@ -961,9 +961,9 @@ export function StoreSettings() {
                     onBlur={(e) => handleSocialUpdate(idx, { url: e.target.value })}
                     placeholder={
                       social.id === 'telegram'
-                        ? 'https://t.me/...'
+                        ? 'https://t.me/iLoveAiChaZhengDaArakawa'
                         : social.id === 'phone'
-                        ? 'tel:+855...'
+                        ? 'e.g. 098765432 or +855...'
                         : social.id === 'maps'
                         ? 'https://maps.google.com/...'
                         : `https://${social.id}.com/...`
@@ -988,9 +988,11 @@ export function StoreSettings() {
                 <div className="min-w-0">
                   <div className="font-bold text-sm text-ink">{config.shopName || 'Our shop'}</div>
                   <div className="text-xs text-ink-soft">{config.shopAddress || 'J03, Ground Floor, Arakawa'}</div>
-                  <div className="text-xs font-semibold text-accent mt-0.5">
-                    {config.shopDeliveryNote || 'Delivery inside Arakawa is free'}
-                  </div>
+                  {config.shopDeliveryNote ? (
+                    <div className="text-xs font-semibold text-accent mt-0.5">
+                      {config.shopDeliveryNote}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

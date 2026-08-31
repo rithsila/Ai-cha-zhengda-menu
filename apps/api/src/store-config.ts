@@ -65,7 +65,7 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
   shopDeliveryNote: 'Delivery inside Arakawa is free',
   shopSocialsEnabled: '1',
   shopSocialLinks: JSON.stringify([
-    { id: 'telegram', label: 'Telegram', url: 'https://t.me/aicha_zhengda_arakawa_bot', enabled: true },
+    { id: 'telegram', label: 'Telegram', url: 'https://t.me/iLoveAiChaZhengDaArakawa', enabled: true },
     { id: 'facebook', label: 'Facebook', url: '', enabled: false },
     { id: 'instagram', label: 'Instagram', url: '', enabled: false },
     { id: 'tiktok', label: 'TikTok', url: '', enabled: false },

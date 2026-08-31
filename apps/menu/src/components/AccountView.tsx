@@ -69,6 +69,34 @@ function renderMenuSocialIcon(id: string) {
       );
   }
 }
+function resolveSocialUrl(id: string, rawUrl: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return '';
+
+  if (id === 'phone') {
+    if (trimmed.startsWith('tel:')) return trimmed;
+    const cleaned = trimmed.replace(/[^\d+]/g, '');
+    return `tel:${cleaned}`;
+  }
+
+  if (id === 'telegram') {
+    if (trimmed.startsWith('@')) {
+      return `https://t.me/${trimmed.slice(1)}`;
+    }
+    if (trimmed.startsWith('t.me/')) {
+      return `https://${trimmed}`;
+    }
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    return `https://t.me/${trimmed}`;
+  }
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
 
 interface AccountViewProps {
   onBrowseMenu?: () => void;
@@ -283,26 +311,65 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
             <div className="text-sm text-tg-hint">
               {storeStatus.shopAddress || t('shopAddress', `${SHOP_UNIT}, Ground Floor, ${RESIDENCE_NAME}`)}
             </div>
-            <div className="mt-1 text-xs font-semibold text-brand-primary">
-              {storeStatus.shopDeliveryNote || t('freeDeliveryInside', `Delivery inside ${RESIDENCE_NAME} is free`)}
-            </div>
+            {storeStatus.shopDeliveryNote !== undefined ? (
+              storeStatus.shopDeliveryNote ? (
+                <div className="mt-1 text-xs font-semibold text-brand-primary">
+                  {storeStatus.shopDeliveryNote}
+                </div>
+              ) : null
+            ) : (
+              <div className="mt-1 text-xs font-semibold text-brand-primary">
+                {t('freeDeliveryInside', `Delivery inside ${RESIDENCE_NAME} is free`)}
+              </div>
+            )}
           </div>
         </div>
 
         {activeSocials.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-tg-hint/10">
-            {activeSocials.map((s) => (
-              <a
-                key={s.id}
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-tg-bg hover:bg-brand-primary/10 text-tg-text hover:text-brand-primary border border-tg-hint/15 transition-all shadow-xs active:scale-95"
-              >
-                {renderMenuSocialIcon(s.id)}
-                <span>{s.label}</span>
-              </a>
-            ))}
+            {activeSocials.map((s) => {
+              const url = resolveSocialUrl(s.id, s.url);
+              if (!url) return null;
+
+              const isPhone = s.id === 'phone';
+              const isTelegram = s.id === 'telegram';
+
+              const handleClick = (e: React.MouseEvent) => {
+                const globalTg = (window as any)?.Telegram?.WebApp;
+
+                if (isPhone) {
+                  window.location.href = url;
+                  e.preventDefault();
+                  return;
+                }
+
+                if (isTelegram && globalTg?.openTelegramLink) {
+                  e.preventDefault();
+                  globalTg.openTelegramLink(url);
+                  return;
+                }
+
+                if (globalTg?.openLink && url.startsWith('http')) {
+                  e.preventDefault();
+                  globalTg.openLink(url);
+                  return;
+                }
+              };
+
+              return (
+                <a
+                  key={s.id}
+                  href={url}
+                  onClick={handleClick}
+                  target={isPhone ? undefined : '_blank'}
+                  rel={isPhone ? undefined : 'noopener noreferrer'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-tg-bg hover:bg-brand-primary/10 text-tg-text hover:text-brand-primary border border-tg-hint/15 transition-all shadow-xs active:scale-95"
+                >
+                  {renderMenuSocialIcon(s.id)}
+                  <span>{s.label}</span>
+                </a>
+              );
+            })}
           </div>
         )}
       </div>
