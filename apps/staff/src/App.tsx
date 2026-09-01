@@ -39,9 +39,11 @@ import {
   STALE_AFTER_MS,
   TONE_THRESHOLDS,
   formatElapsed,
+  formatCountdown,
   isAwaitingPayment,
   isZhengda,
   parseModifiers,
+  paymentExpiryAt,
 } from './lib/orders';
 import {
   Badge,
@@ -239,6 +241,8 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [paymentQueueOpen, setPaymentQueueOpen] = useState(false);
+  const [paymentConfirmId, setPaymentConfirmId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [muted, setMutedState] = useState(() => isMuted());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -484,6 +488,22 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const markPaidAtCounter = useCallback(
     (id: string) => setStatus(id, 'paid'),
     [setStatus],
+  );
+
+  const markPaymentPaidAtCounter = useCallback(
+    (orderId: string) => {
+      if (paymentConfirmId === orderId) {
+        setPaymentConfirmId(null);
+        markPaidAtCounter(orderId);
+        return;
+      }
+
+      setPaymentConfirmId(orderId);
+      window.setTimeout(() => {
+        setPaymentConfirmId((current) => (current === orderId ? null : current));
+      }, 4000);
+    },
+    [markPaidAtCounter, paymentConfirmId],
   );
 
   useEffect(() => {
@@ -960,46 +980,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                 </section>
               ) : null}
 
-              {/* Unpaid KHQR Payment Orders */}
-              {awaitingPaymentOrders.length > 0 ? (
-                <section
-                  aria-labelledby="awaiting-payment-heading"
-                  className="overflow-hidden rounded-none border-2 border-danger bg-surface shadow-sm"
-                >
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 bg-danger-soft px-4 py-3">
-                    <h2
-                      id="awaiting-payment-heading"
-                      className="flex items-center gap-2 font-bold text-danger"
-                    >
-                      <QrCode className="size-5 shrink-0" aria-hidden="true" />
-                      Waiting for Payment Verification
-                      <span className="rounded-none bg-danger px-2 py-0.5 text-xs text-white tabular-nums">
-                        {awaitingPaymentOrders.length}
-                      </span>
-                    </h2>
-                    <p className="text-xs font-semibold text-danger">
-                      Not paid yet — do not prepare yet. Automatically moves when payment completes.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 items-start gap-4 p-4 md:grid-cols-3">
-                    {awaitingPaymentOrders.map((order) => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        now={now}
-                        updating={updatingIds.has(order.id)}
-                        isNew={newIds.has(order.id)}
-                        showBranch={showBranch}
-                        onAction={advance}
-                        onCancel={cancelOrder}
-                        onMarkPaid={markPaidAtCounter}
-                        onSeen={markSeen}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               {/* 3-Column Kanban Board */}
               <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-3">
                 {laneOrders.map((lane) => {
@@ -1086,6 +1066,14 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                         const finished = order.updatedAt ? new Date(order.updatedAt).getTime() : created;
                         const durationMins = Math.max(1, Math.round((finished - created) / 60000));
                         const isDelivery = order.orderType === 'delivery';
+                        // The expiry sweep stores this as `cancelled` so it is
+                        // excluded from every active workflow. It was never a
+                        // staff cancellation, though: the customer did not
+                        // complete the KHQR payment before its QR expired.
+                        const paymentExpired =
+                          order.status === 'cancelled' &&
+                          order.paymentMethod.toLowerCase() === 'khqr' &&
+                          (paymentExpiryAt(order) ?? Infinity) <= now;
 
                         return (
                           <li
@@ -1096,13 +1084,15 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                 : 'border-border hover:border-accent/30 hover:bg-surface-sunken/20'
                             } transition-colors`}
                           >
-                            {/* Top Header: Code, Badges, Price, Reopen Action */}
+                            {/* Top Header: Code, status, price, and permitted recovery action. */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-base font-black tracking-tight text-ink">
                                   {order.pickupCode || '—'}
                                 </span>
-                                {order.status === 'cancelled' ? (
+                                {paymentExpired ? (
+                                  <Badge variant="danger">Payment failed: QR expired</Badge>
+                                ) : order.status === 'cancelled' ? (
                                   <Badge variant="danger">
                                     Cancelled{order.cancelReason ? `: ${order.cancelReason}` : ''}
                                   </Badge>
@@ -1128,15 +1118,17 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                 <span className="text-base font-black tabular-nums text-ink">
                                   ${order.totalAmount.toFixed(2)}
                                 </span>
-                                <Button
-                                  variant="secondary"
-                                  size="md"
-                                  loading={updatingIds.has(order.id)}
-                                  onClick={() => setStatus(order.id, 'ready')}
-                                  aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
-                                >
-                                  Reopen Ticket
-                                </Button>
+                                {!paymentExpired ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="md"
+                                    loading={updatingIds.has(order.id)}
+                                    onClick={() => setStatus(order.id, 'ready')}
+                                    aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
+                                  >
+                                    Reopen Ticket
+                                  </Button>
+                                ) : null}
                               </div>
                             </div>
 
@@ -1224,6 +1216,140 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     </ul>
                   ) : null}
                 </Card>
+              ) : null}
+
+              {/* Unpaid KHQR queue: deliberately after live work and finished tickets. */}
+              {awaitingPaymentOrders.length > 0 ? (
+                <section
+                  aria-labelledby="awaiting-payment-heading"
+                  className="overflow-hidden border border-danger/50 bg-surface"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPaymentQueueOpen((open) => !open)}
+                    aria-expanded={paymentQueueOpen}
+                    className="flex min-h-12 w-full items-center justify-between gap-3 bg-danger-soft/50 p-4 text-left hover:bg-danger-soft"
+                  >
+                    <span className="min-w-0">
+                      <span
+                        id="awaiting-payment-heading"
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 font-bold text-danger"
+                      >
+                        <QrCode className="size-4 shrink-0" aria-hidden="true" />
+                        Waiting for Payment Verification
+                        <span className="rounded-none bg-danger px-2 py-0.5 text-xs font-bold text-on-danger tabular-nums">
+                          {awaitingPaymentOrders.length}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs font-medium text-danger">
+                        Unpaid KHQR tickets — not part of the preparation queue.
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`size-5 shrink-0 text-danger transition-transform duration-150 ${
+                        paymentQueueOpen ? 'rotate-180' : ''
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
+
+                  {paymentQueueOpen ? (
+                    <div className="border-t border-danger/30">
+                      <div className="max-h-[30rem] overflow-auto">
+                        <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
+                          <caption className="sr-only">
+                            Unpaid KHQR orders awaiting payment verification
+                          </caption>
+                          <thead className="sticky top-0 z-10 bg-surface-sunken text-xs font-bold uppercase tracking-wider text-ink-faint">
+                            <tr>
+                              <th scope="col" className="px-4 py-3">Ticket</th>
+                              <th scope="col" className="px-4 py-3">Customer</th>
+                              <th scope="col" className="px-4 py-3">Order</th>
+                              <th scope="col" className="px-4 py-3">Placed</th>
+                              <th scope="col" className="px-4 py-3 text-right">Total</th>
+                              <th scope="col" className="px-4 py-3">QR status</th>
+                              <th scope="col" className="px-4 py-3 text-right">Counter</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {awaitingPaymentOrders.map((order) => {
+                              const expiresAt = paymentExpiryAt(order);
+                              const remaining = expiresAt == null ? null : expiresAt - now;
+                              const qrStatus =
+                                remaining == null
+                                  ? 'No QR issued'
+                                  : remaining <= 0
+                                    ? `Expired ${formatCountdown(-remaining)} ago`
+                                    : `${formatCountdown(remaining)} left`;
+                              const itemSummary = order.items
+                                .slice(0, 2)
+                                .map((item) => `${item.quantity}× ${item.menuItem?.name || 'Item'}`)
+                                .join(' · ');
+
+                              return (
+                                <tr key={order.id} className="bg-surface transition-colors hover:bg-surface-sunken/40">
+                                  <td className="whitespace-nowrap px-4 py-3 align-top">
+                                    <div className="font-black tracking-tight text-ink">{order.pickupCode || '—'}</div>
+                                    <div className="mt-0.5 text-xs text-ink-faint">
+                                      {order.orderType === 'delivery' ? 'Delivery' : 'Pickup'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 align-top">
+                                    <div className="font-semibold text-ink">{order.contactName || 'Walk-in customer'}</div>
+                                    {order.contactPhone ? (
+                                      <a href={`tel:${order.contactPhone}`} className="mt-0.5 inline-flex text-xs font-semibold text-accent hover:underline">
+                                        {order.contactPhone}
+                                      </a>
+                                    ) : null}
+                                  </td>
+                                  <td className="max-w-64 px-4 py-3 align-top">
+                                    <div className="truncate font-medium text-ink" title={itemSummary}>
+                                      {itemSummary || 'No items'}
+                                    </div>
+                                    {order.items.length > 2 ? (
+                                      <div className="mt-0.5 text-xs text-ink-faint">+{order.items.length - 2} more item{order.items.length - 2 === 1 ? '' : 's'}</div>
+                                    ) : null}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 align-top tabular-nums text-ink-soft">
+                                    <div>{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div className="mt-0.5 text-xs text-ink-faint">{formatElapsed(order.createdAt, now).label} ago</div>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 align-top text-right font-black tabular-nums text-ink">
+                                    ${order.totalAmount.toFixed(2)}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 align-top">
+                                    <span className="inline-flex items-center gap-1.5 font-semibold tabular-nums text-danger">
+                                      <QrCode className="size-3.5 shrink-0" aria-hidden="true" />
+                                      {qrStatus}
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right align-top">
+                                    <Button
+                                      variant={paymentConfirmId === order.id ? 'success' : 'secondary'}
+                                      size="md"
+                                      loading={updatingIds.has(order.id)}
+                                      onClick={() => markPaymentPaidAtCounter(order.id)}
+                                      aria-label={
+                                        paymentConfirmId === order.id
+                                          ? `Confirm that order ${order.pickupCode ?? ''} was paid at the counter`
+                                          : `Mark order ${order.pickupCode ?? ''} as paid at the counter`
+                                      }
+                                    >
+                                      {paymentConfirmId === order.id ? 'Confirm paid' : 'Paid at counter'}
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="border-t border-border px-4 py-2.5 text-xs font-medium text-ink-soft">
+                        Payment confirmation moves a ticket to Pending automatically. Do not prepare it before payment is confirmed.
+                      </p>
+                    </div>
+                  ) : null}
+                </section>
               ) : null}
 
               <BoardLegend />

@@ -31,6 +31,7 @@ interface PaymentOrder {
   totalAmount: number;
   status: string;
   paymentMethod: string;
+  paymentExpiresAt?: string | null;
   createdAt: string;
   pickupCode: string | null;
   transactionId?: string | null;
@@ -57,6 +58,16 @@ function shortDate(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function isExpiredKhqrPayment(
+  order: Pick<PaymentOrder, 'status' | 'paymentMethod' | 'paymentExpiresAt'>,
+): boolean {
+  if (order.status !== 'cancelled' || order.paymentMethod !== 'khqr' || !order.paymentExpiresAt) {
+    return false;
+  }
+  const expiresAt = new Date(order.paymentExpiresAt).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 /** Total number of drinks/food in an order. */
@@ -286,6 +297,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
               // badge, a pickup code and points would tell the customer they
               // bought something they did not.
               const cancelled = order.status === 'cancelled';
+              const paymentFailed = isExpiredKhqrPayment(order);
               return (
               <div
                 key={order.id}
@@ -297,7 +309,9 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                       {cancelled ? (
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-500/15 text-red-600">
                           <X size={14} weight="bold" />
-                          {t('orderCancelled', 'Cancelled')}
+                          {paymentFailed
+                            ? t('paymentFailed', 'Payment failed')
+                            : t('orderCancelled', 'Cancelled')}
                         </span>
                       ) : (
                         <span
@@ -338,13 +352,15 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
 
                 {cancelled ? (
                   <div className="mt-2 text-xs">
-                    {order.cancelReason ? (
+                    {!paymentFailed && order.cancelReason ? (
                       <p className="font-semibold text-rose-500">
                         Reason: {order.cancelReason}
                       </p>
                     ) : null}
                     <p className="text-tg-hint">
-                      {t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
+                      {paymentFailed
+                        ? t('paymentFailedExpired', 'KHQR payment was not completed before the QR code expired. You were not charged.')
+                        : t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
                     </p>
                   </div>
                 ) : (

@@ -32,6 +32,7 @@ interface Order {
   totalAmount: number;
   status: string;
   paymentMethod: string;
+  paymentExpiresAt?: string | null;
   createdAt: string;
   pickupCode: string | null;
   transactionId?: string | null;
@@ -60,6 +61,14 @@ function shortDate(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function isExpiredKhqrPayment(order: Pick<Order, 'status' | 'paymentMethod' | 'paymentExpiresAt'>): boolean {
+  if (order.status !== 'cancelled' || order.paymentMethod !== 'khqr' || !order.paymentExpiresAt) {
+    return false;
+  }
+  const expiresAt = new Date(order.paymentExpiresAt).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now();
 }
 
 export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
@@ -124,8 +133,17 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
     onReorder(cartItems);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (order: Order) => {
+    if (isExpiredKhqrPayment(order)) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
+          <X size={13} weight="bold" />
+          {t('paymentFailed', 'Payment failed')}
+        </span>
+      );
+    }
+
+    switch (order.status) {
       case 'pending':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/15 text-yellow-700">
@@ -162,7 +180,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
       default:
         return (
           <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-tg-hint/15 text-tg-hint">
-            {status}
+            {order.status}
           </span>
         );
     }
@@ -231,6 +249,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
       <div className="space-y-4">
         {orders.map(order => {
           const isCancelled = order.status === 'cancelled';
+          const paymentFailed = isExpiredKhqrPayment(order);
           const isPending = order.status === 'pending';
 
           return (
@@ -244,7 +263,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
               <div className="flex justify-between items-start mb-3 border-b border-tg-hint/10 pb-3 gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusBadge(order.status)}
+                    {getStatusBadge(order)}
                     <span className="text-xs font-mono text-tg-hint font-medium">
                       #{shortRef(order.id)}
                     </span>
@@ -270,14 +289,16 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                     {shortDate(order.createdAt)}
                   </p>
 
-                  {isCancelled && order.cancelReason && (
+                  {isCancelled && !paymentFailed && order.cancelReason && (
                     <p className="text-xs font-semibold text-rose-500 mt-1">
                       Reason: {order.cancelReason}
                     </p>
                   )}
                   {isCancelled && (
                     <p className="text-xs text-tg-hint mt-0.5">
-                      {t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
+                      {paymentFailed
+                        ? t('paymentFailedExpired', 'KHQR payment was not completed before the QR code expired. You were not charged.')
+                        : t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
                     </p>
                   )}
                 </div>
