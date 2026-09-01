@@ -124,15 +124,3 @@ describe('GET /api/payment/aba/status/:orderId — who may watch a payment', () 
     expect(res.status).toBe(200);
   });
 });
-
-// ABA calls this one, not a browser. It is protected by the signature check and
-// must stay open in the customer sense.
-describe('POST /api/payment/aba/webhook', () => {
-  it('rejects on the signature, not on a missing customer sign-in', async () => {
-    const res = await request(app)
-      .post('/api/payment/aba/webhook')
-      .send({ tran_id: 'whatever', status: 'APPROVED' });
-    expect(res.status).toBe(401);
-    expect(res.body.error).toBe('Invalid signature');
-  });
-});

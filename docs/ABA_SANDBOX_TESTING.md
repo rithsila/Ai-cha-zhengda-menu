@@ -8,11 +8,10 @@ run without credentials.
 
 Register here: https://sandbox.payway.com.kh/register-sandbox/
 
-ABA will email you three things:
+ABA will email you two things:
 
 - a **merchant ID**
 - an **API key** (also called the public key)
-- a **webhook secret**
 
 ## Step 2 — Put them in the API config
 
@@ -22,7 +21,6 @@ Open `apps/api/.env` and add:
 ABA_MERCHANT_ID="your_merchant_id"
 ABA_API_KEY="your_api_key"
 ABA_BASE_URL="https://checkout-sandbox.payway.com.kh"
-ABA_WEBHOOK_SECRET="your_webhook_secret"
 ```
 
 If `apps/api/.env` does not exist yet, copy `apps/api/.env.example` first.
@@ -51,14 +49,14 @@ Open it, add one cheap item, choose **KHQR**, and confirm.
 
 You should see:
 
-- a **Pay with ABA Mobile** button,
+- an **Open ABA Mobile** button (on supported phones),
 - a **QR code** picture,
 - a **countdown** starting near 15:00.
 
 ## Step 5 — Pay it
 
-Either scan the QR with ABA Mobile, or press the button to open ABA's checkout
-page.
+Either scan the QR with ABA Mobile, or press **Open ABA Mobile** to open the
+payment directly in the app. The QR remains visible as the fallback.
 
 Within a few seconds of paying, the screen should move to the success page and
 show your pickup code. The app asks the server every 3 seconds, and the server
@@ -80,10 +78,8 @@ You should get `"status": "APPROVED"` and `"orderStatus": "paid"`.
 `ABA_MERCHANT_ID` or `ABA_API_KEY` is empty, or you did not restart the server.
 
 **"Wrong Hash"**
-The API key is wrong, or the request fields changed. The list of fields and
-their exact order must match between `hash.ts` and `client.ts` in
-`packages/aba-payway-sdk-unofficial`. Changing one without the other breaks the
-signature.
+The API key is wrong, or the merchant credentials do not match the selected
+sandbox. The installed SDK signs requests; do not reimplement its hash logic.
 
 **"ABA PayWay returned a non-JSON response"**
 ABA sent back an HTML page instead of data. This almost always means the
@@ -95,22 +91,18 @@ its HTML checkout page (HTTP 200), not an error code. So an HTML reply is the
 normal sign of bad credentials.
 
 **The QR picture is an empty grey box**
-ABA returned no `qr_string`. The request must send `payment_option=abapay_khqr`,
-which the server does. If it still happens, your merchant account may not have
-KHQR enabled — ask ABA.
+ABA returned no `qr_image`. The request sends
+`payment_option=abapay_khqr_deeplink`, which returns both the QR and the ABA
+Mobile deeplink. If it still happens, your merchant account may not have KHQR
+enabled — ask ABA.
 
 **The screen never leaves "Waiting for payment confirmation"**
 Check the API logs. The status route talks to ABA directly, so it works even
 without a public webhook URL. If the status route returns 502, the server cannot
 reach ABA.
 
-## About webhooks
+## Payment confirmation
 
-Webhooks are the other way ABA tells us a payment landed. They only work when
-your server has a public HTTPS address — ABA cannot reach `localhost`.
-
-For local testing you do not need them. The status route is enough.
-
-When you do set them up, remember: if `ABA_WEBHOOK_SECRET` is empty the server
-**rejects** every webhook with 503. That is on purpose. An unverified webhook
-would let anyone mark an order as paid.
+The app confirms payment by polling its own status route, which asks ABA's
+server using the transaction id. A return URL or client-side success signal is
+never enough to mark an order paid.

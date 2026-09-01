@@ -54,10 +54,7 @@ cd /var/www
 git clone https://github.com/rithsila/Ai-cha-zhengda-menu.git aicha-uat
 cd /var/www/aicha-uat
 
-# Initialize SDK submodules & build
-git submodule update --init --recursive
 npm install
-npm --prefix packages/aba-payway-sdk-unofficial run build
 ```
 
 ---
@@ -85,7 +82,6 @@ CORS_ORIGINS="https://menu.aichazhengdaarakawa.com,https://staff.aichazhengdaara
 ABA_MERCHANT_ID=""
 ABA_API_KEY=""
 ABA_BASE_URL="https://checkout-sandbox.payway.com.kh"
-ABA_WEBHOOK_SECRET=""
 ```
 
 ### 5.2 Customer Menu App (`apps/menu/.env.production`)

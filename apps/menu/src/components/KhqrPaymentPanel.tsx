@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
-import twa from '@twa-dev/sdk';
 import { apiFetch } from '../utils/api';
 import { markOnlinePaymentAvailable, markOnlinePaymentUnavailable } from '../utils/onlinePayment';
-
-const WebApp = (twa as any)?.WebApp || twa || {};
 
 /** Seconds -> "m:ss" for the KHQR countdown. */
 function formatCountdown(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/** A desktop browser cannot open ABA Mobile's custom URL scheme. */
+function isMobilePayer(): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 interface KhqrPaymentPanelProps {
@@ -35,10 +37,13 @@ interface KhqrPaymentPanelProps {
  */
 export function KhqrPaymentPanel({ orderId, onPaid, onCancel, onUseCash }: KhqrPaymentPanelProps) {
   const { t } = useTranslation();
+  const mobilePayer = isMobilePayer();
 
   const [payment, setPayment] = useState<{
-    checkoutUrl: string;
-    khqrSvg: string;
+    abapayDeeplink?: string;
+    appStoreUrl?: string;
+    playStoreUrl?: string;
+    qrImage: string;
     expiresAt: number;
   } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -89,8 +94,10 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel, onUseCash }: KhqrP
         markOnlinePaymentAvailable();
         if (cancelled) return;
         setPayment({
-          checkoutUrl: data.checkoutUrl,
-          khqrSvg: data.khqrSvg,
+          abapayDeeplink: data.abapayDeeplink,
+          appStoreUrl: data.appStoreUrl,
+          playStoreUrl: data.playStoreUrl,
+          qrImage: data.qrImage,
           expiresAt: data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 15 * 60 * 1000,
         });
       } catch {
@@ -233,22 +240,28 @@ export function KhqrPaymentPanel({ orderId, onPaid, onCancel, onUseCash }: KhqrP
         </p>
       </div>
 
-      <button
-        onClick={() => {
-          if (WebApp?.openLink) {
-            WebApp.openLink(payment.checkoutUrl);
-          } else {
-            window.location.href = payment.checkoutUrl;
-          }
-        }}
-        className="w-full bg-[#005E8E] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#004A70] transition-colors"
-      >
-        {t('payWithAba', 'Pay with ABA Mobile')}
-      </button>
+      {mobilePayer && payment.abapayDeeplink && (
+        <button
+          onClick={() => { window.location.href = payment.abapayDeeplink!; }}
+          className="w-full bg-[#005E8E] text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-[#004A70] transition-colors"
+        >
+          {t('payWithAba', 'Open ABA Mobile')}
+        </button>
+      )}
 
       <div className="relative w-full max-w-[280px] bg-white p-4 rounded-2xl shadow-sm border border-tg-hint/15 mt-4 flex items-center justify-center">
-        <img src={payment.khqrSvg} alt="KHQR" className="w-full max-w-[250px] h-auto" />
+        <img src={payment.qrImage} alt="KHQR" className="w-full max-w-[250px] h-auto" />
       </div>
+
+      {(payment.playStoreUrl || payment.appStoreUrl) && (
+        <div className="text-center text-xs text-tg-hint">
+          <p>{t('abaNotInstalled', 'ABA Mobile is not installed?')}</p>
+          <div className="mt-1 flex justify-center gap-3 font-semibold text-brand-primary">
+            {payment.playStoreUrl && <a href={payment.playStoreUrl} target="_blank" rel="noreferrer">Google Play</a>}
+            {payment.appStoreUrl && <a href={payment.appStoreUrl} target="_blank" rel="noreferrer">App Store</a>}
+          </div>
+        </div>
+      )}
 
       <p className="text-sm font-semibold text-tg-text tabular-nums" aria-live="polite">
         {t('timeRemaining', 'Time remaining')}: {formatCountdown(secondsLeft)}

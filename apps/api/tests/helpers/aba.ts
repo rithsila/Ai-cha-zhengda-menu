@@ -1,6 +1,4 @@
-import crypto from 'crypto';
 import { vi } from 'vitest';
-import request from 'supertest';
 
 /**
  * Test helpers for the ABA PayWay routes.
@@ -17,7 +15,6 @@ export const ABA_ENV = {
   ABA_MERCHANT_ID: 'test_merchant',
   ABA_API_KEY: 'test_api_key',
   ABA_BASE_URL: 'https://checkout-sandbox.payway.com.kh',
-  ABA_WEBHOOK_SECRET: 'test_webhook_secret',
 } as const;
 
 /** Turn ABA credentials on for the current test. */
@@ -30,35 +27,18 @@ export function disableAba() {
   for (const key of Object.keys(ABA_ENV)) delete process.env[key];
 }
 
-/**
- * Sign a webhook body the way ABA does: HMAC-SHA512 of the exact bytes on the
- * wire, base64 encoded. Supertest sends JSON.stringify(body), and the app reads
- * those same bytes back via req.rawBody, so the two always line up.
- */
-export function signWebhook(body: unknown, secret: string = ABA_ENV.ABA_WEBHOOK_SECRET): string {
-  return crypto.createHmac('sha512', secret).update(JSON.stringify(body)).digest('base64');
-}
-
-/** POST a correctly signed webhook. */
-export function postWebhook(app: any, body: unknown, secret?: string) {
-  return request(app)
-    .post('/api/payment/aba/webhook')
-    .set('x-payway-signature', signWebhook(body, secret))
-    .send(body as any);
-}
-
 const DEFAULT_PURCHASE = {
   status: 0,
   description: 'Success',
-  checkout_url: 'https://checkout-sandbox.payway.com.kh/checkout/abc123',
-  abapay_deeplink: 'abapay://pay?token=abc123',
+  abapay_deeplink: 'abamobilebank://ababank.com?type=payway&qrcode=abc123',
   qr_string: '00020101021229370016KHQR-TEST-DATA',
+  qr_image: 'data:image/png;base64,cXI=',
+  expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
 };
 
 /**
- * Stub global fetch and route by URL. Also swallows the quickchart.io call that
- * generateKHQR makes, which keeps tests offline (the SVG falls back to a
- * placeholder, which is fine -- we only assert that an image came back).
+ * Stub global fetch and route by URL. The new SDK returns ABA's own QR image,
+ * so the payment flow has no secondary QR-rendering network request.
  */
 export function stubAbaFetch(opts: { purchase?: any; status?: any } = {}) {
   // The SDK reads the body with .text() and parses it itself, so a stub must

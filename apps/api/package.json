@@ -28,7 +28,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
     "@prisma/client": "^6.19.3",
-    "aba-payway-sdk-unofficial": "^1.0.0",
+    "aba-payway-sdk-unofficial": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",

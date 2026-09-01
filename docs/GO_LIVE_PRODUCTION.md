@@ -58,7 +58,6 @@ R2_PUBLIC_URL="https://pub-xxxx.r2.dev"
 ABA_MERCHANT_ID="your_merchant_id"
 ABA_API_KEY="your_api_key"
 ABA_BASE_URL="https://checkout.payway.com.kh"
-ABA_WEBHOOK_SECRET="your_webhook_secret"
 ```
 
 ### Step 1.5: Generate Public API URL

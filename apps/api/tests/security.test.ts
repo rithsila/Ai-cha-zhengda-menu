@@ -19,7 +19,6 @@ const auth = () => ({ Authorization: `Bearer ${staffToken}` });
 const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
 
 beforeAll(async () => {
-  delete process.env.ABA_WEBHOOK_SECRET;
   await prisma.systemConfig.deleteMany({
     where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
   });
