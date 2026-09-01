@@ -14,6 +14,13 @@ export const setupBot = () => {
 
   const bot = new Telegraf(token);
 
+  bot.telegram.setMyCommands([
+    { command: 'report', description: 'Report an issue with your order' },
+    { command: 'feedback', description: 'Send feedback to the team' },
+  ]).catch((err) => {
+    console.error('Failed to register Telegram bot commands:', err);
+  });
+
   bot.start(async (ctx) => {
     const userId = ctx.from.id.toString();
     const menuUrl = process.env.WEBAPP_URL || 'https://menu.aichazhengdaarakawa.com';
