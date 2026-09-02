@@ -7,6 +7,19 @@ interface TelegramAuthScreenProps {
   onSuccess: () => void;
 }
 
+// The API always sends `error` as a string, but a proxy, a gateway or the
+// Telegram widget can hand back an object instead. Rendering that raw turns the
+// banner into "[object Object]", which tells the person at the till nothing.
+function readError(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (value instanceof Error && value.message) return value.message;
+  if (value && typeof value === 'object') {
+    const inner = (value as Record<string, unknown>).error ?? (value as Record<string, unknown>).message;
+    if (typeof inner === 'string' && inner.trim()) return inner;
+  }
+  return fallback;
+}
+
 export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +45,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
 
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Access denied: Telegram account is not authorized.');
+        throw new Error(readError(data.error, 'Access denied: Telegram account is not authorized.'));
       }
 
       saveSession({
@@ -42,7 +55,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       });
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Login failed. Account is not authorized.');
+      setError(readError(err, 'Login failed. Account is not authorized.'));
     } finally {
       setLoading(false);
     }
@@ -130,13 +143,13 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       }
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Access denied: Phone number is not authorized by Admin.');
+        throw new Error(readError(data.error, 'Access denied: Phone number is not authorized by Admin.'));
       }
 
       setOtpSent(true);
       setCountdown(60);
     } catch (err: any) {
-      setError(err.message || 'Phone number is not authorized by Admin.');
+      setError(readError(err, 'Phone number is not authorized by Admin.'));
     } finally {
       setLoading(false);
     }
@@ -171,7 +184,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       }
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Invalid verification code.');
+        throw new Error(readError(data.error, 'Invalid verification code.'));
       }
 
       saveSession({
@@ -181,7 +194,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
       });
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Verification failed. Please check the code.');
+      setError(readError(err, 'Verification failed. Please check the code.'));
     } finally {
       setLoading(false);
     }
