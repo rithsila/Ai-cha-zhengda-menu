@@ -1412,6 +1412,8 @@ export function createApp() {
         appStoreUrl: purchase.appStoreUrl,
         playStoreUrl: purchase.playStoreUrl,
         qrImage: purchase.qrImage,
+        amount: order.totalAmount,
+        merchantName: 'Ai-Cha & Zhengda',
         transactionId,
         expiresAt: expiresAt.toISOString(),
       });

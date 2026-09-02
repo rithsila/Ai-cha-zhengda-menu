@@ -401,6 +401,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             {step === 3 && paymentOrderId ? (
               <KhqrPaymentPanel
                 orderId={paymentOrderId}
+                totalAmount={finalTotal}
                 onPaid={(code) => onSuccess(code)}
                 onUseCash={handlePayCashInstead}
               />
