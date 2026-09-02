@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, Card, CustomSelect, Switch, useToast } from '../ui';
-import { LuckyDrawModal } from './LuckyDrawModal';
 import { VerifyGiftClaimModal } from './VerifyGiftClaimModal';
 import type { CustomersResponse, PrizeClaimItem, SystemConfigItem } from './types';
 
@@ -48,7 +47,6 @@ const PRESET_COLORS = [
 export function LuckyDrawManagement() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [luckyDrawModalOpen, setLuckyDrawModalOpen] = useState(false);
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [verifyInitialCode, setVerifyInitialCode] = useState('');
 
@@ -278,7 +276,7 @@ export function LuckyDrawManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner: Lucky Draw Title & Live Spinner Trigger */}
+      {/* Top Banner: Lucky Draw Title & Gift Verification */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="text-base font-bold text-ink flex items-center gap-2">
@@ -289,7 +287,7 @@ export function LuckyDrawManagement() {
             </Badge>
           </h3>
           <p className="text-xs text-ink-soft">
-            Manage raffle tickets, wheel prize segments, and draw live lucky winners
+            Manage raffle tickets, wheel prize segments, and customer gift claims
           </p>
         </div>
 
@@ -305,16 +303,6 @@ export function LuckyDrawManagement() {
           >
             <Gift className="size-4" />
             🎁 Verify / Redeem Gift
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setLuckyDrawModalOpen(true)}
-            className="h-10 gap-2 font-bold text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 shadow-xs"
-          >
-            <Trophy className="size-4 text-amber-500" />
-            🎉 Draw Raffle Winner
           </Button>
         </div>
       </div>
@@ -931,25 +919,6 @@ export function LuckyDrawManagement() {
           );
         })()}
       </Card>
-
-      {/* Lucky Draw Live Spinner Modal */}
-      <LuckyDrawModal
-        isOpen={luckyDrawModalOpen}
-        onClose={() => {
-          setLuckyDrawModalOpen(false);
-          fetchClaims();
-        }}
-        summaryData={
-          summary
-            ? {
-                totalCustomers: summary.totalCustomers,
-                goldCount: summary.goldCount,
-                standardCount: summary.standardCount,
-                totalLuckyTickets: summary.totalLuckyTickets,
-              }
-            : undefined
-        }
-      />
 
       {/* Staff Verify & Redeem Gift Modal */}
       <VerifyGiftClaimModal

@@ -756,7 +756,7 @@ export function CustomerEditModal({
                   </p>
                 </div>
                 <p className="text-right text-xs text-amber-700 dark:text-amber-300">
-                  Entered in next Lucky Draw
+                  Available for menu lucky wheel
                 </p>
               </div>
 
