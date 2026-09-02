@@ -705,11 +705,11 @@ export default function App() {
         <motion.div 
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[4.75rem] left-4 right-4 max-w-sm mx-auto z-30"
+          className="fixed bottom-[4.5rem] left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] z-30"
         >
           <button 
             onClick={() => setIsCartOpen(true)}
-            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-3.5 rounded-2xl font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_14px_32px_rgba(229,57,53,0.38),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
+            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-2.5 rounded-full font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_12px_30px_rgba(229,57,53,0.35),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
           >
             <div className="flex items-center gap-2 text-sm">
               <ShoppingCart size={18} weight="fill" />
