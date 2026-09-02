@@ -8,6 +8,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
 import { apiFetch, resolveImageUrl } from '../lib/api';
@@ -42,6 +43,7 @@ export function RewardManagement() {
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Catalog items for reward selector
   const [catalogItems, setCatalogItems] = useState<MenuItemFull[]>([]);
@@ -179,6 +181,33 @@ export function RewardManagement() {
       });
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleDeleteReward = async (reward: Reward) => {
+    if (!window.confirm(`Are you sure you want to delete "${reward.name}"? This cannot be undone.`)) {
+      return;
+    }
+    setDeletingId(reward.id);
+    try {
+      await apiFetch(`/api/rewards/${reward.id}`, {
+        method: 'DELETE',
+      });
+      setRewards((prev) => prev.filter((r) => r.id !== reward.id));
+      toast({
+        title: 'Reward deleted',
+        variant: 'info',
+      });
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      toast({
+        title: "Couldn't delete reward",
+        description:
+          status === 401 ? 'Manager session expired — unlock again.' : 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -518,14 +547,26 @@ export function RewardManagement() {
                         </span>
                       </p>
                     </div>
-                    <Button
-                      variant={reward.isActive ? 'secondary' : 'success'}
-                      size="md"
-                      loading={togglingId === reward.id}
-                      onClick={() => handleToggleReward(reward)}
-                    >
-                      {reward.isActive ? 'Disable' : 'Enable'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={reward.isActive ? 'secondary' : 'success'}
+                        size="md"
+                        loading={togglingId === reward.id}
+                        onClick={() => handleToggleReward(reward)}
+                      >
+                        {reward.isActive ? 'Disable' : 'Enable'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${reward.name}`}
+                        className="text-danger hover:bg-danger/10 hover:text-danger-strong border border-border"
+                        loading={deletingId === reward.id}
+                        onClick={() => handleDeleteReward(reward)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               ))}
