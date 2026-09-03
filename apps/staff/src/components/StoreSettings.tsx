@@ -16,12 +16,9 @@ import {
   Phone,
   Share2,
   Globe,
-  LayoutDashboard,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
-import { useLayoutStyle } from '../hooks/useLayoutStyle';
-import type { LayoutStyle } from '../hooks/useLayoutStyle';
 
 export interface MenuTabItem {
   id: string;
@@ -131,7 +128,6 @@ function renderSocialIcon(id: string) {
 
 export function StoreSettings() {
   const { toast } = useToast();
-  const { layoutStyle, setLayoutStyle } = useLayoutStyle();
   const [config, setConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [updatingKey, setUpdatingKey] = useState<string | null>(null);
@@ -260,11 +256,6 @@ export function StoreSettings() {
     { id: 'auto', label: 'Automatic (Schedule)' },
     { id: 'open', label: 'Force Open' },
     { id: 'closed', label: 'Force Closed' },
-  ];
-
-  const layoutOptions: Array<{ id: LayoutStyle; label: string; icon?: React.ReactNode }> = [
-    { id: 'compact-sidebar', label: 'Compact Sidebar (Dark & Fast)' },
-    { id: 'classic-board', label: 'Classic Board (Matcha & Lanes)' },
   ];
 
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1155,38 +1146,6 @@ export function StoreSettings() {
             className="h-11 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
           />
           <span className="text-[11px] text-ink-faint">0 = Free delivery for customers</span>
-        </div>
-      </Card>
-
-      {/* 6. UI Layout & Navigation Style */}
-      <Card className="p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
-            <LayoutDashboard className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">UI Layout &amp; Navigation</h3>
-            <p className="text-xs text-ink-soft">
-              Choose your preferred workspace navigation and visual density.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <Segmented
-            ariaLabel="UI Layout Style"
-            value={layoutStyle}
-            onChange={(val) => {
-              setLayoutStyle(val as LayoutStyle);
-              toast({ title: `Switched to ${val === 'compact-sidebar' ? 'Compact Sidebar' : 'Classic Board'} layout`, variant: 'success' });
-            }}
-            options={layoutOptions}
-          />
-          <p className="text-[11px] text-ink-faint">
-            {layoutStyle === 'compact-sidebar'
-              ? 'Compact Sidebar: Fixed dark navigation sidebar, shop selector, and compact cards for fast operations.'
-              : 'Classic Board: Top navigation bar with matcha-styled order lanes.'}
-          </p>
         </div>
       </Card>
     </div>

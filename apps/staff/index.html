@@ -12,20 +12,15 @@
     />
     <title>Ai-Cha &amp; Zhengda — Staff</title>
     <script>
-      // Resolve theme & layout before first paint to avoid flashes.
+      // Resolve theme before first paint to avoid flashes.
       try {
-        var l = window.localStorage.getItem('staff-layout-style');
-        var resolvedLayout = (l === 'classic-board' || l === 'compact-sidebar') ? l : 'compact-sidebar';
-        document.documentElement.dataset.layout = resolvedLayout;
-
         var t = window.localStorage.getItem('staff-theme');
         if (!t) {
-          t = resolvedLayout === 'compact-sidebar' ? 'dark' : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         document.documentElement.dataset.theme = t;
       } catch {
         document.documentElement.dataset.theme = 'dark';
-        document.documentElement.dataset.layout = 'compact-sidebar';
       }
     </script>
   </head>
