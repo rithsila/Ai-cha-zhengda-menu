@@ -20,10 +20,12 @@ import {
   ShoppingBag,
   Sliders,
   Sparkles,
+  Store,
   TriangleAlert,
   Truck,
   User,
   Users,
+  Users2,
   X,
 } from 'lucide-react';
 import { MenuManagement } from './components/MenuManagement';
@@ -32,6 +34,7 @@ import { CustomerCrm } from './components/crm/CustomerCrm';
 import { CustomerFeedback } from './components/CustomerFeedback';
 import { RewardManagement } from './components/RewardManagement';
 import { SettingsManagement } from './components/SettingsManagement';
+import type { SettingsSubTab } from './components/SettingsManagement';
 import { OrderCard } from './components/OrderCard';
 import { CancelOrderModal } from './components/CancelOrderModal';
 import {
@@ -59,6 +62,7 @@ import {
 } from './components/ui';
 import {
   API_BASE,
+  apiFetch,
   authHeaders,
   clearSession,
   handleUnauthorized,
@@ -226,8 +230,18 @@ function BoardLegend() {
 function StaffApp({ onLogout }: { onLogout: () => void }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
+  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('store');
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
+  const [usersCount, setUsersCount] = useState(0);
   const sessionRole = loadSession()?.role;
   const isManager = sessionRole === 'manager';
+
+  useEffect(() => {
+    if (!isManager) return;
+    apiFetch<any[]>('/api/staff-accounts')
+      .then((data) => setUsersCount(data.length))
+      .catch(() => {});
+  }, [isManager]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -539,7 +553,10 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       else if (key === '4') setActiveTab('customers');
       else if (key === '5') setActiveTab('feedback');
       else if (key === '6') setActiveTab('rewards');
-      else if (key === '7') setActiveTab('settings');
+      else if (key === '7') {
+        setActiveTab('settings');
+        setSettingsExpanded(true);
+      }
       else if (key === 'r') fetchOrders(true);
       else if (key === 'm') toggleMute();
       else return;
@@ -589,15 +606,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       label: 'Rewards',
       icon: <Award className="size-5" />,
       shortcut: '6',
-    },
-  ];
-
-  const managementNavItems = [
-    {
-      id: 'settings' as TabId,
-      label: 'Settings',
-      icon: <Sliders className="size-5" />,
-      shortcut: '7',
     },
   ];
 
@@ -720,40 +728,90 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               System &amp; Settings
             </p>
             <div className="space-y-1">
-              {managementNavItems.map((item) => {
-                const isActive = activeTab === item.id;
-                return (
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'settings') {
+                    setActiveTab('settings');
+                    setSettingsExpanded(true);
+                  } else {
+                    setSettingsExpanded((prev) => !prev);
+                  }
+                }}
+                className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                  activeTab === 'settings'
+                    ? 'bg-surface-sunken text-ink'
+                    : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Sliders className="size-5" />
+                  <span>Settings</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
+                    7
+                  </kbd>
+                  <ChevronDown
+                    className={`size-4 text-ink-soft transition-transform duration-200 ${
+                      settingsExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {settingsExpanded && (
+                <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
                   <button
-                    key={item.id}
                     type="button"
                     onClick={() => {
-                      setActiveTab(item.id);
+                      setActiveTab('settings');
+                      setSettingsSubTab('store');
                       setMobileMenuOpen(false);
                     }}
-                    className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                      isActive
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'settings' && settingsSubTab === 'store'
                         ? 'bg-accent text-on-accent shadow-sm'
                         : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      {item.icon}
-                      <span>{item.label}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <kbd
-                        className={`hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
-                          isActive
-                            ? 'bg-white/20 text-on-accent'
-                            : 'bg-surface-sunken text-ink-faint'
-                        }`}
-                      >
-                        {item.shortcut}
-                      </kbd>
+                    <div className="flex items-center gap-2.5">
+                      <Store className="size-4" />
+                      <span>Store</span>
                     </div>
                   </button>
-                );
-              })}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setSettingsSubTab('users');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'settings' && settingsSubTab === 'users'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users2 className="size-4" />
+                      <span>Users</span>
+                    </div>
+                    {usersCount > 0 && (
+                      <span
+                        className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                          activeTab === 'settings' && settingsSubTab === 'users'
+                            ? 'bg-white/25 text-on-accent'
+                            : 'bg-accent/15 text-accent'
+                        }`}
+                      >
+                        {usersCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </nav>
@@ -847,7 +905,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                             ? 'Feedback'
                             : activeTab === 'rewards'
                               ? 'Rewards'
-                              : 'Settings'}
+                              : settingsSubTab === 'users'
+                                ? 'Users'
+                                : 'Store Settings'}
                 </h2>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
@@ -863,7 +923,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                           ? 'Issues and customer support reports'
                           : activeTab === 'rewards'
                             ? 'Redemption catalog and lucky draw wheel'
-                            : 'Store settings and team account permissions'}
+                            : settingsSubTab === 'users'
+                              ? 'Authorized staff and manager accounts'
+                              : 'Store profile, ordering options, and branch details'}
               </p>
             </div>
           </div>
@@ -939,7 +1001,10 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           ) : activeTab === 'rewards' ? (
             <RewardManagement />
           ) : activeTab === 'settings' ? (
-            <SettingsManagement />
+            <SettingsManagement
+              subTab={settingsSubTab}
+              onUsersCountChange={setUsersCount}
+            />
           ) : loading ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (

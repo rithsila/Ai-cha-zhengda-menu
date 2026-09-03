@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import {
   Phone,
   Shield,
-  Sliders,
   Trash2,
   UserCheck,
   UserPlus,
@@ -25,11 +24,18 @@ export type StaffAccount = {
   createdAt: string;
 };
 
-type SettingsSubTab = 'store' | 'staff';
+export type SettingsSubTab = 'store' | 'users';
 
-export function SettingsManagement() {
+export interface SettingsManagementProps {
+  subTab?: SettingsSubTab;
+  onUsersCountChange?: (count: number) => void;
+}
+
+export function SettingsManagement({
+  subTab = 'store',
+  onUsersCountChange,
+}: SettingsManagementProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<SettingsSubTab>('store');
 
   // Staff accounts state
   const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
@@ -47,21 +53,20 @@ export function SettingsManagement() {
     try {
       const data = await apiFetch<StaffAccount[]>('/api/staff-accounts');
       setStaffAccounts(data);
+      onUsersCountChange?.(data.length);
     } catch {
       toast({
-        title: "Couldn't load staff accounts",
+        title: "Couldn't load users",
         variant: 'error',
       });
     } finally {
       setLoadingStaff(false);
     }
-  }, [toast]);
+  }, [toast, onUsersCountChange]);
 
   useEffect(() => {
-    if (activeTab === 'staff') {
-      fetchStaffAccounts();
-    }
-  }, [activeTab, fetchStaffAccounts]);
+    fetchStaffAccounts();
+  }, [fetchStaffAccounts]);
 
   const handleAddStaffAccount = async (e: FormEvent) => {
     e.preventDefault();
@@ -96,7 +101,9 @@ export function SettingsManagement() {
       });
       setStaffAccounts((prev) => {
         const filtered = prev.filter((a) => a.id !== created.id && (!created.phoneNumber || a.phoneNumber !== created.phoneNumber));
-        return [created, ...filtered];
+        const updated = [created, ...filtered];
+        onUsersCountChange?.(updated.length);
+        return updated;
       });
       toast({ title: `Added ${name} (${newStaffRole})`, variant: 'success' });
       setNewStaffId('');
@@ -105,7 +112,7 @@ export function SettingsManagement() {
       setNewStaffRole('staff');
       setAddStaffOpen(false);
     } catch (err: any) {
-      toast({ title: "Couldn't add staff account", description: err.message, variant: 'error' });
+      toast({ title: "Couldn't add user", description: err.message, variant: 'error' });
     } finally {
       setAddingStaff(false);
     }
@@ -137,10 +144,14 @@ export function SettingsManagement() {
     setStaffActionId(account.id);
     try {
       await apiFetch(`/api/staff-accounts/${account.id}`, { method: 'DELETE' });
-      setStaffAccounts((prev) => prev.filter((a) => a.id !== account.id));
+      setStaffAccounts((prev) => {
+        const filtered = prev.filter((a) => a.id !== account.id);
+        onUsersCountChange?.(filtered.length);
+        return filtered;
+      });
       toast({ title: `Removed ${account.name}`, variant: 'info' });
     } catch {
-      toast({ title: "Couldn't remove staff account", variant: 'error' });
+      toast({ title: "Couldn't remove user", variant: 'error' });
     } finally {
       setStaffActionId(null);
     }
@@ -148,58 +159,16 @@ export function SettingsManagement() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Sub navigation bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('store')}
-            className={`inline-flex items-center gap-2 rounded-none px-4 py-2 text-sm font-bold transition-all ${
-              activeTab === 'store'
-                ? 'bg-accent text-on-accent shadow-sm'
-                : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-            }`}
-          >
-            <Sliders className="size-4" />
-            <span>Store Settings</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('staff')}
-            className={`inline-flex items-center gap-2 rounded-none px-4 py-2 text-sm font-bold transition-all ${
-              activeTab === 'staff'
-                ? 'bg-accent text-on-accent shadow-sm'
-                : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-            }`}
-          >
-            <Users2 className="size-4" />
-            <span>Staff &amp; Accounts</span>
-            {staffAccounts.length > 0 && (
-              <span
-                className={`ml-1 rounded-none px-2 py-0.5 text-xs font-bold ${
-                  activeTab === 'staff'
-                    ? 'bg-white/20 text-on-accent'
-                    : 'bg-surface-sunken text-ink-soft'
-                }`}
-              >
-                {staffAccounts.length}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {activeTab === 'store' ? (
+      {subTab === 'store' ? (
         <StoreSettings />
       ) : (
         <div className="space-y-6">
           {/* Header + Add Action */}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h3 className="text-base font-bold text-ink">Staff &amp; Manager Accounts</h3>
+              <h3 className="text-base font-bold text-ink">Users</h3>
               <p className="text-xs text-ink-soft">
-                Authorize Telegram accounts to log into the staff portal.
+                Manage staff and manager accounts authorized to log into the staff portal.
               </p>
             </div>
             <Button
@@ -216,7 +185,7 @@ export function SettingsManagement() {
               ) : (
                 <>
                   <UserPlus className="size-4" />
-                  Add Staff / Manager
+                  Add User
                 </>
               )}
             </Button>
@@ -228,13 +197,13 @@ export function SettingsManagement() {
               <form onSubmit={handleAddStaffAccount} className="space-y-4">
                 <div className="flex items-center gap-2 font-bold text-ink">
                   <UserPlus className="size-5 text-accent" />
-                  <span>Authorize New Staff Member</span>
+                  <span>Authorize New User</span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
                     <label className="block text-xs font-bold text-ink mb-1">
-                      Staff / Manager Name <span className="text-danger">*</span>
+                      Name <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -321,8 +290,8 @@ export function SettingsManagement() {
           ) : staffAccounts.length === 0 ? (
             <EmptyState
               icon={<Users2 className="size-10" />}
-              title="No Staff Accounts Configured"
-              description="Click 'Add Staff / Manager' to allow team members to log in."
+              title="No Users Configured"
+              description="Click 'Add User' to allow team members to log in."
             />
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
