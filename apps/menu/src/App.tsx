@@ -120,7 +120,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
             </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-emerald-400 tracking-tight mb-2 drop-shadow-[0_2px_12px_rgba(52,211,153,0.35)]">
             Fresh Tea & Crispy
           </h1>
           <p className="text-xs sm:text-sm text-slate-300/80 mb-8 max-w-[260px] leading-relaxed">
