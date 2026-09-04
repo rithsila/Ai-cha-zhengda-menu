@@ -229,11 +229,11 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /\+ new/i })).toBeDefined();
+      expect(screen.getByRole('button', { name: /^new$/i })).toBeDefined();
     });
 
-    // Click "+ New"
-    await user.click(screen.getByRole('button', { name: /\+ new/i }));
+    // Click "New"
+    await user.click(screen.getByRole('button', { name: /^new$/i }));
 
     // Inline input should appear with Save and Cancel
     const input = screen.getByPlaceholderText(/new category name/i);
@@ -267,7 +267,7 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
       expect(screen.getByRole('combobox', { name: /category/i }).textContent).toContain('Milk Tea');
     });
 
-    await user.click(screen.getByRole('button', { name: /\+ new/i }));
+    await user.click(screen.getByRole('button', { name: /^new$/i }));
     const input = screen.getByPlaceholderText(/new category name/i);
     const container = input.closest('div')!;
     await user.type(input, 'Unsaved Category');

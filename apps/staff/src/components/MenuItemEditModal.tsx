@@ -708,7 +708,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                     className="h-10 px-3 text-xs font-bold shrink-0"
                   >
                     <Plus className="size-3.5" />
-                    + New
+                    New
                   </Button>
                 </div>
               )}
