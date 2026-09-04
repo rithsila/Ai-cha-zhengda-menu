@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import {
   X,
@@ -11,8 +11,20 @@ import {
   AlertCircle,
   Award
 } from 'lucide-react';
-import { Button, CustomSelect, Segmented, Switch, useToast } from './ui';
+import { Button } from './ui/Button';
+import { CustomSelect } from './ui/CustomSelect';
+import { Segmented } from './ui/Segmented';
+import { Switch } from './ui/Switch';
+import { useToast } from './ui/Toast';
 import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
+
+export interface Category {
+  id: string;
+  brand: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+}
 
 export type ModifierOptionInput = {
   id?: string;
@@ -145,7 +157,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [brand, setBrand] = useState<'ai-cha' | 'zhengda'>('ai-cha');
-  const [category, setCategory] = useState('Milk Tea');
+  const [category, setCategory] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('1.50');
@@ -153,6 +165,12 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const [earnsStamp, setEarnsStamp] = useState(true);
   const [canClaim, setCanClaim] = useState(false);
   const [modifiers, setModifiers] = useState<ModifierGroupInput[]>([]);
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   const [uploadingImage, setUploadingImage] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -196,7 +214,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       );
     } else {
       setBrand('ai-cha');
-      setCategory('Milk Tea');
+      setCategory('');
       setName('');
       setDescription('');
       setBasePrice('1.50');
@@ -205,8 +223,146 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setCanClaim(false);
       setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
     }
+    setIsAddingCategory(false);
+    setNewCategoryName('');
     setError(null);
   }, [item, isOpen]);
+
+  const itemId = item?.id;
+  const itemBrand = item?.brand?.toLowerCase();
+  const itemCategory = item?.category;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    setLoadingCategories(true);
+
+    fetch(`${API_BASE}/api/categories?brand=${encodeURIComponent(brand)}`, {
+      headers: authHeaders(),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to fetch categories');
+        }
+        return res.json();
+      })
+      .then((data: Category[]) => {
+        if (!isMounted) return;
+        setCategories(data);
+
+        if (itemId && itemBrand === brand) {
+          if (itemCategory) {
+            setCategory(itemCategory);
+            return;
+          }
+        }
+
+        if (data.length > 0) {
+          setCategory(data[0].name);
+        } else {
+          setCategory('');
+        }
+      })
+      .catch((err) => {
+        console.error('Error fetching categories:', err);
+        if (isMounted) {
+          setCategories([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingCategories(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, brand, itemId, itemBrand, itemCategory]);
+
+  const handleBrandChange = (newBrand: 'ai-cha' | 'zhengda') => {
+    if (newBrand === brand) return;
+    setBrand(newBrand);
+    setIsAddingCategory(false);
+    setNewCategoryName('');
+  };
+
+  const handleQuickAddCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      toast({
+        title: 'Category name is required',
+        variant: 'error',
+      });
+      return;
+    }
+
+    setCreatingCategory(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ brand, name: trimmed }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to add category');
+      }
+
+      const createdName = data.name || trimmed;
+      setCategories((prev) => {
+        if (prev.some((c) => c.name.toLowerCase() === createdName.toLowerCase())) {
+          return prev;
+        }
+        return [
+          ...prev,
+          data.id
+            ? data
+            : {
+                id: `cat_${Date.now()}`,
+                brand,
+                name: createdName,
+                sortOrder: prev.length,
+                isActive: true,
+              },
+        ];
+      });
+
+      setCategory(createdName);
+      setIsAddingCategory(false);
+      setNewCategoryName('');
+      toast({
+        title: 'Category created',
+        description: `"${createdName}" has been added and selected.`,
+        variant: 'success',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not create category',
+        description: err.message || 'An error occurred',
+        variant: 'error',
+      });
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const categoryOptions = useMemo(() => {
+    const opts = categories.map((c) => ({
+      value: c.name,
+      label: c.name,
+    }));
+    if (category && !opts.some((o) => o.value.toLowerCase() === category.trim().toLowerCase())) {
+      opts.unshift({
+        value: category,
+        label: category,
+      });
+    }
+    return opts;
+  }, [categories, category]);
 
   if (!isOpen) return null;
 
@@ -476,7 +632,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                   { id: 'zhengda', label: 'Zhengda' },
                 ]}
                 value={brand}
-                onChange={(val) => setBrand(val as 'ai-cha' | 'zhengda')}
+                onChange={(val) => handleBrandChange(val as 'ai-cha' | 'zhengda')}
                 ariaLabel="Select Brand"
               />
             </div>
@@ -485,14 +641,77 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
                 Category
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Milk Tea, Ice Cream, Signature, Frappe"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
-              />
+              {isAddingCategory ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="New category name"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickAddCategory();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsAddingCategory(false);
+                        setNewCategoryName('');
+                      }
+                    }}
+                    className="h-10 flex-1 rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    loading={creatingCategory}
+                    onClick={handleQuickAddCategory}
+                    className="h-10 px-3 text-xs font-bold shrink-0"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    disabled={creatingCategory}
+                    onClick={() => {
+                      setIsAddingCategory(false);
+                      setNewCategoryName('');
+                    }}
+                    className="h-10 px-3 text-xs font-bold shrink-0"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CustomSelect
+                      value={category}
+                      onChange={(val) => setCategory(val)}
+                      options={categoryOptions}
+                      placeholder={loadingCategories ? 'Loading categories...' : 'Select category'}
+                      disabled={loadingCategories}
+                      aria-label="Category"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={() => {
+                      setIsAddingCategory(true);
+                      setNewCategoryName('');
+                    }}
+                    className="h-10 px-3 text-xs font-bold shrink-0"
+                  >
+                    <Plus className="size-3.5" />
+                    + New
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
