@@ -48,11 +48,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   // Free inside Arakawa today; the shop can change it with PUT /api/config.
   const [deliveryFeeRate, setDeliveryFeeRate] = useState(0);
   const [allowCashForStandard, setAllowCashForStandard] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
   
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
   // about the payment (creating it, polling, expiry, retry).
   const [paymentOrderId, setPaymentOrderId] = useState<string | null>(null);
-  const [paymentOrderCode, setPaymentOrderCode] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +80,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       // Reset state on close
       setStep(1);
       setError(null);
+      setDataLoaded(false);
       setMethod(initialPaymentMethod());
       setOrderType(storeStatus.enablePickup ? 'pickup' : 'delivery');
       setEditingAddress(false);
@@ -88,7 +89,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setClaimedCount(0);
       setBranchId('');
       setPaymentOrderId(null);
-      setPaymentOrderCode(null);
       return;
     }
 
@@ -127,6 +127,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         }
       } catch (err) {
         console.error('Failed to fetch checkout data', err);
+      } finally {
+        setDataLoaded(true);
       }
     };
     fetchData();
@@ -144,14 +146,20 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     }
   }, [storeStatus.enablePickup, storeStatus.enableDelivery]);
 
-  // Auto-select valid payment method based on manager toggles and customer tier
+  // Auto-select valid payment method based on manager toggles, customer tier, and saved preference
   useEffect(() => {
-    if ((!storeStatus.enableCash || !isCashUnlocked) && storeStatus.enableKhqr && khqrOffered) {
+    if (!isOpen || !dataLoaded) return;
+    const pref = getDefaultPaymentMethod();
+    if (pref === 'cash' && storeStatus.enableCash && isCashUnlocked) {
+      setMethod('cash');
+    } else if (pref === 'khqr' && storeStatus.enableKhqr && khqrOffered) {
       setMethod('khqr');
-    } else if (!storeStatus.enableKhqr || !khqrOffered) {
+    } else if (storeStatus.enableKhqr && khqrOffered) {
+      setMethod('khqr');
+    } else if (storeStatus.enableCash && isCashUnlocked) {
       setMethod('cash');
     }
-  }, [storeStatus.enableCash, storeStatus.enableKhqr, khqrOffered, isCashUnlocked]);
+  }, [isOpen, dataLoaded, storeStatus.enableCash, storeStatus.enableKhqr, khqrOffered, isCashUnlocked]);
 
   const deliveryFee = orderType === 'delivery' ? deliveryFeeRate : 0;
   // A delivery order needs a complete saved profile: room, name and phone.
@@ -282,7 +290,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
       if (method === 'khqr') {
         setPaymentOrderId(orderData.id);
-        setPaymentOrderCode(orderData.pickupCode ?? null);
         setStep(2);
         setIsLoading(false);
         return;
@@ -294,13 +301,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setError(t('orderFailed', 'We could not place your order. Please try again.'));
       setIsLoading(false);
     }
-  };
-
-  // The order is already saved when online payment fails, so finish it here and
-  // let the customer pay at the counter instead of leaving them stuck.
-  const handlePayCashInstead = () => {
-    if (paymentOrderCode) onSuccess(paymentOrderCode);
-    else onClose();
   };
 
   return (
@@ -332,7 +332,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             </button>
 
             <h2 className="text-lg font-bold text-tg-text">
-              {step === 2 ? (isViewingKhqr ? t('abaKhqr', 'ABA KHQR') : t('scanToPay', 'Scan to Pay')) : t('checkout', 'Checkout')}
+              {step === 2 ? (isViewingKhqr ? t('abaKhqr', 'ABA KHQR') : t('pay', 'Pay')) : t('checkout', 'Checkout')}
             </h2>
 
             <div className="text-sm font-semibold text-tg-hint min-w-[44px] text-right">
@@ -362,7 +362,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                 orderId={paymentOrderId}
                 totalAmount={finalTotal}
                 onPaid={(code) => onSuccess(code)}
-                onUseCash={handlePayCashInstead}
+                onExpired={onClose}
                 onCancel={() => setStep(1)}
                 isViewingKhqr={isViewingKhqr}
                 onViewingKhqrChange={setIsViewingKhqr}
@@ -465,9 +465,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         />
                       )}
                     </div>
-                    <p className="text-xs text-tg-hint">
-                      {t('arakawaOnly', 'We deliver inside Arakawa only, from our shop at J03 on the ground floor.')}
-                    </p>
                   </div>
                 )}
 

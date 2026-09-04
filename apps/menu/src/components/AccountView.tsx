@@ -108,6 +108,7 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const khqrOffered = useOnlinePaymentState() === 'available';
   const [defaultMethod, setMethod] = useState<PaymentMethod>(() => getDefaultPaymentMethod());
   const [profile, setProfile] = useState<any>(null);
+  const [allowCashForStandard, setAllowCashForStandard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -123,9 +124,17 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
     }
     const fetchData = async () => {
       try {
-        const userRes = await apiFetch(ME.profile());
+        const [userRes, cfgRes] = await Promise.all([
+          apiFetch(ME.profile()),
+          apiFetch('/api/config'),
+        ]);
 
         if (userRes.ok) setProfile(await userRes.json());
+        if (cfgRes.ok) {
+          const rows: { key: string; value: string }[] = await cfgRes.json();
+          const allowCashRow = rows.find(r => r.key === 'allowCashForStandard');
+          if (allowCashRow) setAllowCashForStandard(allowCashRow.value === '1');
+        }
       } catch (err) {
         console.error('Failed to fetch account data', err);
       } finally {
@@ -135,12 +144,20 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
     fetchData();
   }, [signedIn]);
 
+  const userTier = profile?.tier || 'standard';
+  const isCashUnlocked = userTier === 'gold' || allowCashForStandard;
+  const cashAllowed = storeStatus.enableCash && isCashUnlocked;
+
   useEffect(() => {
-    if (!khqrOffered && defaultMethod === 'khqr') {
+    if (loading) return;
+    if (!cashAllowed && defaultMethod === 'cash' && khqrOffered) {
+      setMethod('khqr');
+      setDefaultPaymentMethod('khqr');
+    } else if (!khqrOffered && defaultMethod === 'khqr' && cashAllowed) {
       setMethod('cash');
       setDefaultPaymentMethod('cash');
     }
-  }, [khqrOffered, defaultMethod]);
+  }, [loading, cashAllowed, khqrOffered, defaultMethod]);
 
   const handleChangeMethod = (method: PaymentMethod) => {
     setMethod(method);
@@ -272,12 +289,14 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           {t('defaultPaymentHint', 'We pick this for you at checkout. You can still change it there.')}
         </p>
 
-        <div className={`grid gap-3 pt-1 ${khqrOffered ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-3 pt-1 ${khqrOffered && cashAllowed ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {([
             ...(khqrOffered
               ? [{ key: 'khqr' as const, label: t('khqr', 'KHQR'), Icon: CreditCard }]
               : []),
-            { key: 'cash' as const, label: t('cash', 'Cash'), Icon: Money },
+            ...(cashAllowed
+              ? [{ key: 'cash' as const, label: t('cash', 'Cash'), Icon: Money }]
+              : []),
           ]).map(({ key, label, Icon }) => {
             const active = defaultMethod === key;
             return (
@@ -298,6 +317,12 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
             );
           })}
         </div>
+
+        {!isCashUnlocked && (
+          <p className="text-xs text-tg-hint mt-1">
+            {t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.')}
+          </p>
+        )}
       </div>
 
       {/* Shop info & Social Badges */}

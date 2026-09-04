@@ -422,7 +422,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 orderId={selectedOrderId}
                 onPaid={handlePaid}
                 onCancel={() => setSelectedOrderId(null)}
-                onUseCash={() => setSelectedOrderId(null)}
+                onExpired={() => setSelectedOrderId(null)}
               />
             </motion.div>
           </motion.div>

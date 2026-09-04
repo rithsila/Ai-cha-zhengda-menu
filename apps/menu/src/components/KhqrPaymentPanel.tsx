@@ -84,8 +84,7 @@ interface KhqrPaymentPanelProps {
   totalAmount?: number;
   onPaid: (pickupCode: string) => void;
   onCancel?: () => void;
-  /** Way out when online payment fails, so the customer is never stuck. */
-  onUseCash?: () => void;
+  onExpired?: () => void;
   isViewingKhqr?: boolean;
   onViewingKhqrChange?: (viewing: boolean) => void;
 }
@@ -103,7 +102,7 @@ export function KhqrPaymentPanel({
   totalAmount,
   onPaid,
   onCancel,
-  onUseCash,
+  onExpired,
   isViewingKhqr: controlledViewingKhqr,
   onViewingKhqrChange,
 }: KhqrPaymentPanelProps) {
@@ -136,6 +135,18 @@ export function KhqrPaymentPanel({
 
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
+
+  const onExpiredRef = useRef(onExpired);
+  onExpiredRef.current = onExpired;
+
+  // Auto return to menu 3 seconds after QR code expires
+  useEffect(() => {
+    if (!expired) return;
+    const timer = setTimeout(() => {
+      onExpiredRef.current?.();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [expired]);
 
   // Create (or re-create) the ABA payment for this order.
   useEffect(() => {
@@ -248,16 +259,6 @@ export function KhqrPaymentPanel({
     </button>
   ) : null;
 
-  const cashButton = onUseCash ? (
-    <button
-      type="button"
-      onClick={onUseCash}
-      className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 py-3 text-sm font-bold text-brand-primary active:scale-95 transition-transform"
-    >
-      {t('payWithCashInstead', 'Pay with cash instead')}
-    </button>
-  ) : null;
-
   if (isLoading) {
     return (
       <div className="flex flex-col gap-4 items-center w-full text-center py-10">
@@ -288,7 +289,6 @@ export function KhqrPaymentPanel({
             {t('tryAgain', 'Try again')}
           </Button>
         )}
-        {cashButton}
         {cancelButton}
       </div>
     );
@@ -306,7 +306,6 @@ export function KhqrPaymentPanel({
         <Button onClick={handleRetry} className="w-full mt-2">
           {t('tryAgain', 'Try again')}
         </Button>
-        {cashButton}
         {cancelButton}
       </div>
     );

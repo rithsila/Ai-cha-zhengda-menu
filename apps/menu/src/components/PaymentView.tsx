@@ -458,7 +458,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                 totalAmount={orders.find(o => o.id === selectedOrderId)?.totalAmount}
                 onPaid={handlePaid}
                 onCancel={() => setSelectedOrderId(null)}
-                onUseCash={() => setSelectedOrderId(null)}
+                onExpired={() => setSelectedOrderId(null)}
               />
             </motion.div>
           </motion.div>
