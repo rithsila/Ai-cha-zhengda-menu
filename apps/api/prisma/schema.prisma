@@ -24,6 +24,9 @@ model User {
   updatedAt      DateTime @default(now()) @updatedAt
   orders         Order[]
   prizeClaims    PrizeClaim[]
+
+  @@index([tier])
+  @@index([createdAt])
 }
 
 model Branch {

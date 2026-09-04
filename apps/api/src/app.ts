@@ -1824,35 +1824,43 @@ export function createApp() {
         ];
       }
 
-      const totalMatching = await prisma.user.count({ where });
+      const [totalMatching, users, tierCounts, pointsAndTickets] = await Promise.all([
+        prisma.user.count({ where }),
+        prisma.user.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.user.groupBy({ by: ['tier'], _count: { _all: true } }),
+        prisma.user.aggregate({
+          _sum: { loyaltyPoints: true, luckyTickets: true },
+        }),
+      ]);
 
-      const users = await prisma.user.findMany({
-        where,
-        include: {
-          orders: {
-            select: { totalAmount: true, status: true, createdAt: true },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      });
+      // Order totals for just the users on this page, aggregated in the DB.
+      const pageUserIds = users.map((u) => u.telegramUserId);
+      const orderTotals =
+        pageUserIds.length > 0
+          ? await prisma.order.groupBy({
+              by: ['telegramUserId'],
+              where: { telegramUserId: { in: pageUserIds }, status: { in: ['paid', 'completed'] } },
+              _count: { _all: true },
+              _sum: { totalAmount: true },
+              _max: { createdAt: true },
+            })
+          : [];
+      const orderTotalsByUserId = new Map(orderTotals.map((o) => [o.telegramUserId, o]));
 
-      // Global summary across all users
-      const allUsers = await prisma.user.findMany({
-        select: { tier: true, loyaltyPoints: true, luckyTickets: true },
-      });
-      const totalCustomers = allUsers.length;
-      const standardCount = allUsers.filter((u) => u.tier === 'standard').length;
-      const goldCount = allUsers.filter((u) => u.tier === 'gold').length;
-      const totalStamps = allUsers.reduce((sum, u) => sum + Math.floor((u.loyaltyPoints || 0) / 10), 0);
-      const totalLuckyTickets = allUsers.reduce((sum, u) => sum + (u.luckyTickets || 0), 0);
+      const standardCount = tierCounts.find((t) => t.tier === 'standard')?._count._all || 0;
+      const goldCount = tierCounts.find((t) => t.tier === 'gold')?._count._all || 0;
+      const totalCustomers = standardCount + goldCount;
+      const totalStamps = Math.floor((pointsAndTickets._sum.loyaltyPoints || 0) / 10);
+      const totalLuckyTickets = pointsAndTickets._sum.luckyTickets || 0;
 
       const customers = users.map((u) => {
-        const paidOrders = u.orders.filter((o) => o.status === 'paid' || o.status === 'completed');
-        const totalSpent = Math.round(paidOrders.reduce((sum, o) => sum + o.totalAmount, 0) * 100) / 100;
-        const lastOrderDate = u.orders.length > 0 ? u.orders[0].createdAt : null;
+        const totals = orderTotalsByUserId.get(u.telegramUserId);
+        const totalSpent = Math.round((totals?._sum.totalAmount || 0) * 100) / 100;
         return {
           telegramUserId: u.telegramUserId,
           phoneNumber: u.phoneNumber,
@@ -1868,9 +1876,9 @@ export function createApp() {
           trustNotes: u.trustNotes,
           createdAt: u.createdAt,
           updatedAt: u.updatedAt,
-          totalOrders: paidOrders.length,
+          totalOrders: totals?._count._all || 0,
           totalSpent,
-          lastOrderDate,
+          lastOrderDate: totals?._max.createdAt || null,
         };
       });
 
