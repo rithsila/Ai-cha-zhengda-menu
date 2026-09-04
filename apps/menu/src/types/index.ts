@@ -1,4 +1,11 @@
-export type Brand = 'ai-cha' | 'zhengda';
+export type Brand = 'ai-cha' | 'zhengda' | string;
+
+export interface MenuTabConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  enabled: boolean;
+}
 
 export interface ModifierOption {
   id: string;

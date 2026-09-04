@@ -51,7 +51,7 @@ export function Segmented<T extends string>({
       role="radiogroup"
       aria-label={ariaLabel}
       className={[
-        'inline-flex items-center gap-1 rounded-xl bg-surface-sunken p-1',
+        'inline-flex items-center gap-1 rounded-none bg-surface-sunken p-1',
         className,
       ]
         .filter(Boolean)
@@ -77,7 +77,7 @@ export function Segmented<T extends string>({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(option.id)}
             className={[
-              'inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap',
+              'inline-flex items-center justify-center gap-2 rounded-none font-semibold whitespace-nowrap',
               'transition-[background-color,color] duration-150 ease-out',
               sizeClasses[size],
               selected

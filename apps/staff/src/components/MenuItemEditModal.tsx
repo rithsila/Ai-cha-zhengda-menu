@@ -11,8 +11,8 @@ import {
   AlertCircle,
   Award
 } from 'lucide-react';
-import { Button, Segmented, Switch, useToast } from './ui';
-import { API_BASE, authHeaders } from '../lib/api';
+import { Button, CustomSelect, Segmented, Switch, useToast } from './ui';
+import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 
 export type ModifierOptionInput = {
   id?: string;
@@ -44,6 +44,94 @@ export type MenuItemFull = {
   canClaim?: boolean;
   modifiers?: ModifierGroupInput[];
 };
+
+const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
+  {
+    name: 'Size / Cup Type',
+    type: 'single',
+    required: true,
+    options: [
+      { name: 'Hot (400ml)', priceDelta: 0 },
+      { name: 'Cold M (500ml)', priceDelta: 0 },
+      { name: 'Cold L (700ml)', priceDelta: 0.25 },
+    ],
+  },
+  {
+    name: 'Ice Level',
+    type: 'single',
+    required: true,
+    options: [
+      { name: 'No Ice', priceDelta: 0 },
+      { name: 'Less Ice', priceDelta: 0 },
+      { name: 'Normal Ice', priceDelta: 0 },
+      { name: 'More Ice', priceDelta: 0 },
+    ],
+  },
+  {
+    name: 'Sugar Level',
+    type: 'single',
+    required: true,
+    options: [
+      { name: '0%', priceDelta: 0 },
+      { name: '25%', priceDelta: 0 },
+      { name: '50%', priceDelta: 0 },
+      { name: '75%', priceDelta: 0 },
+      { name: '100%', priceDelta: 0 },
+    ],
+  },
+  {
+    name: 'Toppings',
+    type: 'multiple',
+    required: false,
+    options: [
+      { name: 'Boba Pearl', priceDelta: 0.25 },
+      { name: 'Coconut Jelly', priceDelta: 0.25 },
+      { name: 'Oats', priceDelta: 0.25 },
+      { name: 'Oolong Tea Jelly', priceDelta: 0.25 },
+      { name: 'Brown Sugar Jelly', priceDelta: 0.25 },
+      { name: 'Red Bean', priceDelta: 0.25 },
+    ],
+  },
+];
+
+const DEFAULT_FOOD_MODIFIERS: ModifierGroupInput[] = [
+  {
+    name: 'Flavor Powder',
+    type: 'single',
+    required: true,
+    options: [
+      { name: 'Signature', priceDelta: 0 },
+      { name: 'Mala', priceDelta: 0 },
+      { name: 'Plum', priceDelta: 0 },
+      { name: 'Cumin', priceDelta: 0 },
+    ],
+  },
+  {
+    name: 'Signature Sauce',
+    type: 'single',
+    required: false,
+    options: [
+      { name: 'No Sauce', priceDelta: 0 },
+      { name: 'Sweet & Chili', priceDelta: 0 },
+      { name: 'Mala Sauce', priceDelta: 0 },
+      { name: 'Blackpepper', priceDelta: 0 },
+    ],
+  },
+];
+
+function cloneModifierPreset(preset: ModifierGroupInput[]): ModifierGroupInput[] {
+  return preset.map((g, gIdx) => ({
+    key: `group_${Date.now()}_${gIdx}`,
+    name: g.name,
+    type: g.type,
+    required: g.required,
+    options: g.options.map((o, oIdx) => ({
+      key: `opt_${Date.now()}_${gIdx}_${oIdx}`,
+      name: o.name,
+      priceDelta: o.priceDelta,
+    })),
+  }));
+}
 
 type Props = {
   isOpen: boolean;
@@ -115,7 +203,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setImage('');
       setEarnsStamp(true);
       setCanClaim(false);
-      setModifiers([]);
+      setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
     }
     setError(null);
   }, [item, isOpen]);
@@ -151,6 +239,18 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   };
 
   // Modifier Groups Management
+  const loadDrinkPreset = () => {
+    setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
+  };
+
+  const loadFoodPreset = () => {
+    setModifiers(cloneModifierPreset(DEFAULT_FOOD_MODIFIERS));
+  };
+
+  const clearAllModifiers = () => {
+    setModifiers([]);
+  };
+
   const addModifierGroup = () => {
     setModifiers((prev) => [
       ...prev,
@@ -330,11 +430,11 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       role="dialog"
       aria-modal="true"
     >
-      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-surface shadow-2xl overflow-hidden my-auto">
+      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-none border border-border bg-surface shadow-2xl overflow-hidden my-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent text-on-accent">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent text-on-accent">
               <Sparkles className="size-4" />
             </div>
             <div>
@@ -349,7 +449,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-ink-soft hover:bg-surface-sunken hover:text-ink"
+            className="rounded-none p-1.5 text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             <X className="size-5" />
           </button>
@@ -358,7 +458,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         {/* Form Body */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-6 space-y-6">
           {error && (
-            <div className="flex items-center gap-2 rounded-xl bg-danger-soft p-3 text-xs font-semibold text-danger">
+            <div className="flex items-center gap-2 rounded-none bg-danger-soft p-3 text-xs font-semibold text-danger">
               <AlertCircle className="size-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -391,7 +491,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="e.g. Milk Tea, Ice Cream, Signature, Frappe"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
               />
             </div>
           </div>
@@ -408,7 +508,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="e.g. Brown Sugar Boba Milk"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
               />
             </div>
 
@@ -424,7 +524,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="1.50"
                 value={basePrice}
                 onChange={(e) => setBasePrice(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm font-bold text-ink focus:border-accent outline-none tabular-nums"
+                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink focus:border-accent outline-none tabular-nums"
               />
             </div>
           </div>
@@ -439,7 +539,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               placeholder="Short appetizing description..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-xl border border-border bg-surface p-3 text-sm font-medium text-ink focus:border-accent outline-none"
+              className="w-full rounded-none border border-border bg-surface p-3 text-sm font-medium text-ink focus:border-accent outline-none"
             />
           </div>
 
@@ -449,10 +549,10 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               Item Image
             </label>
             <div className="flex flex-wrap items-center gap-4">
-              <div className="relative flex size-20 items-center justify-center rounded-xl border border-border bg-surface-sunken overflow-hidden">
+              <div className="relative flex size-20 items-center justify-center rounded-none border border-border bg-surface-sunken overflow-hidden">
                 {image ? (
                   <img
-                    src={image.startsWith('http://') || image.startsWith('https://') ? image : image.startsWith('/') ? `${API_BASE}${image}`.replace(/([^:]\/)\/+/g, '$1') : image}
+                    src={resolveImageUrl(image)}
                     alt="Preview"
                     className="h-full w-full object-cover"
                   />
@@ -505,7 +605,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-sunken/40 p-3.5">
+              <div className="flex items-center justify-between rounded-none border border-border bg-surface-sunken/40 p-3.5">
                 <div className="pr-3">
                   <p className="text-xs font-bold text-ink">Earns Stamp</p>
                   <p className="text-[11px] text-ink-soft">Customer gets 1 stamp on purchase</p>
@@ -517,7 +617,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-border bg-surface-sunken/40 p-3.5">
+              <div className="flex items-center justify-between rounded-none border border-border bg-surface-sunken/40 p-3.5">
                 <div className="pr-3">
                   <p className="text-xs font-bold text-ink">Free Claim Item</p>
                   <p className="text-[11px] text-ink-soft">Can be claimed with 10 stamps</p>
@@ -531,37 +631,91 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          {/* Modifiers & Options Section (Ice, Sugar, Size, Toppings) */}
+          {/* Options & Toppings Section (Size, Ice, Sugar, Toppings, Flavor, Sauce) */}
           <div className="border-t border-border pt-5 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Layers className="size-4 text-accent" />
                 <h4 className="text-sm font-bold text-ink">
-                  Modifiers &amp; Toppings ({modifiers.length})
+                  Options &amp; Toppings ({modifiers.length})
                 </h4>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={addModifierGroup}
-                className="text-xs font-bold"
-              >
-                <Plus className="size-3.5" />
-                Add Group (e.g. Topping/Sugar)
-              </Button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={loadDrinkPreset}
+                  className="text-xs font-semibold"
+                  title="Load standard Drink options (Size, Ice, Sugar, Toppings)"
+                >
+                  Drink Presets
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="md"
+                  onClick={loadFoodPreset}
+                  className="text-xs font-semibold"
+                  title="Load standard Food options (Flavor, Sauce)"
+                >
+                  Food Presets
+                </Button>
+                {modifiers.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    onClick={clearAllModifiers}
+                    className="text-xs font-semibold text-danger hover:bg-danger-soft"
+                    title="Remove all option groups"
+                  >
+                    Clear All
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={addModifierGroup}
+                  className="text-xs font-bold"
+                >
+                  <Plus className="size-3.5" />
+                  Add Custom Group
+                </Button>
+              </div>
             </div>
 
             {modifiers.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-ink-faint">
-                No modifiers configured. Tap above to add Size, Ice, Sugar level, or Toppings.
+              <div className="rounded-none border border-dashed border-border p-4 text-center text-xs text-ink-faint space-y-2">
+                <p>No options configured for this item.</p>
+                <div className="flex justify-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={loadDrinkPreset}
+                    className="text-xs"
+                  >
+                    Load Drink Options
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    onClick={loadFoodPreset}
+                    className="text-xs"
+                  >
+                    Load Food Options
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
                 {modifiers.map((group, gIdx) => (
                   <div
                     key={gIdx}
-                    className="rounded-xl border border-border bg-surface-sunken/40 p-4 space-y-3"
+                    className="rounded-none border border-border bg-surface-sunken/40 p-4 space-y-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
                       <div className="flex items-center gap-2 flex-1 min-w-48">
@@ -570,22 +724,25 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                           value={group.name}
                           onChange={(e) => updateGroup(gIdx, 'name', e.target.value)}
                           placeholder="Group name (e.g. Ice Level)"
-                          className="h-8 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent outline-none"
+                          className="h-8 flex-1 rounded-none border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent outline-none"
                         />
-                        <select
+                        <CustomSelect<'single' | 'multiple'>
                           value={group.type}
-                          onChange={(e) => updateGroup(gIdx, 'type', e.target.value)}
-                          className="h-8 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-ink outline-none"
-                        >
-                          <option value="single">Single Choice</option>
-                          <option value="multiple">Multiple Choice (e.g. Toppings)</option>
-                        </select>
+                          onChange={(val) => updateGroup(gIdx, 'type', val)}
+                          options={[
+                            { value: 'single', label: 'Single Choice' },
+                            { value: 'multiple', label: 'Multiple Choice (e.g. Toppings)' },
+                          ]}
+                          size="sm"
+                          fullWidth={false}
+                          className="min-w-44"
+                        />
                         <label className="flex items-center gap-1 text-xs text-ink-soft cursor-pointer">
                           <input
                             type="checkbox"
                             checked={group.required}
                             onChange={(e) => updateGroup(gIdx, 'required', e.target.checked)}
-                            className="rounded text-accent"
+                            className="rounded-none text-accent"
                           />
                           <span>Required</span>
                         </label>
@@ -594,7 +751,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                       <button
                         type="button"
                         onClick={() => removeModifierGroup(gIdx)}
-                        className="p-1 text-danger hover:bg-danger-soft rounded"
+                        className="p-1 text-danger hover:bg-danger-soft rounded-none"
                         title="Remove group"
                       >
                         <Trash2 className="size-4" />
@@ -612,7 +769,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                               updateOption(gIdx, oIdx, 'name', e.target.value)
                             }
                             placeholder="Option name (e.g. Boba)"
-                            className="h-8 flex-1 rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-ink focus:border-accent outline-none"
+                            className="h-8 flex-1 rounded-none border border-border bg-surface px-2.5 text-xs font-medium text-ink focus:border-accent outline-none"
                           />
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-ink-faint">+$</span>
@@ -630,13 +787,13 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                                 )
                               }
                               placeholder="0.00"
-                              className="h-8 w-20 rounded-lg border border-border bg-surface px-2 text-xs font-bold text-ink focus:border-accent outline-none tabular-nums"
+                              className="h-8 w-20 rounded-none border border-border bg-surface px-2 text-xs font-bold text-ink focus:border-accent outline-none tabular-nums"
                             />
                           </div>
                           <button
                             type="button"
                             onClick={() => removeOptionFromGroup(gIdx, oIdx)}
-                            className="p-1 text-ink-faint hover:text-danger rounded"
+                            className="p-1 text-ink-faint hover:text-danger rounded-none"
                           >
                             <X className="size-3.5" />
                           </button>

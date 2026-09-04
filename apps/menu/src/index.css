@@ -29,7 +29,7 @@
   --color-brand-soft: #fee2e2;    /* Soft Red Tint (100) */
 
   /* Typography */
-  --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Outfit', 'Battambang', system-ui, -apple-system, sans-serif;
 }
 
 @layer base {

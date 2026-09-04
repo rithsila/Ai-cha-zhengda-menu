@@ -26,6 +26,8 @@ import { OrdersView } from './components/OrdersView';
 import { RewardsView } from './components/RewardsView';
 import { AccountView } from './components/AccountView';
 import { Button } from './components/ui/Button';
+import { DevPersonaBar } from './components/DevPersonaBar';
+import { LuckyWheelIcon } from './components/ui/LuckyWheelIcon';
 
 type TabId = 'menu' | 'orders' | 'rewards' | 'account';
 
@@ -197,6 +199,19 @@ export default function App() {
   const [pickupCode, setPickupCode] = useState('');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
+  const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
+  const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/lucky-draw/config')
+      .then(async (res) => {
+        if (res.ok) {
+          const cfg = await res.json();
+          setLuckyDrawEnabled(cfg.enabled !== false);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -208,6 +223,31 @@ export default function App() {
 
   const storeStatus = useStoreStatus();
 
+  const menuTabs = useMemo(() => {
+    if (storeStatus.menuTabsConfig !== undefined && storeStatus.menuTabsConfig !== null) {
+      try {
+        const parsed = typeof storeStatus.menuTabsConfig === 'string'
+          ? JSON.parse(storeStatus.menuTabsConfig)
+          : storeStatus.menuTabsConfig;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((t: any) => t.enabled === true);
+        }
+      } catch {}
+    }
+    return [
+      { id: 'ai-cha', label: 'Ai-Cha', icon: '/images/aicha-logo.webp', enabled: true },
+      { id: 'zhengda', label: 'Zhengda', icon: '/images/zhengda_logo_cropped.webp', enabled: true },
+    ];
+  }, [storeStatus.menuTabsConfig]);
+
+  // Keep activeBrand in sync if current brand is not among enabled tabs
+  useEffect(() => {
+    if (menuTabs.length > 0 && !menuTabs.some((t) => t.id === activeBrand)) {
+      setActiveBrand(menuTabs[0].id);
+      setActiveCategory('All');
+    }
+  }, [menuTabs, activeBrand]);
+
   // Refresh payment and store status periodically
   useEffect(() => {
     refreshOnlinePaymentState();
@@ -217,7 +257,7 @@ export default function App() {
   }, []);
 
   const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchCatalog = useCallback(async () => {
     try {
@@ -269,8 +309,11 @@ export default function App() {
 
   // Derived state for current brand's items
   const brandItems = useMemo(() => {
+    if (menuTabs.length === 0) {
+      return dynamicCatalog;
+    }
     return dynamicCatalog.filter((i) => i.brand === activeBrand);
-  }, [activeBrand, dynamicCatalog]);
+  }, [activeBrand, dynamicCatalog, menuTabs]);
 
   const categories = useMemo(() => {
     return ['All', ...new Set(brandItems.map((i) => i.category))];
@@ -449,10 +492,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-tg-bg text-tg-text pb-44">
+      <DevPersonaBar />
       {/* Top Banner Section */}
       <div 
         className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
-        style={{ backgroundImage: 'url(/banner.webp)' }}
+        style={{ backgroundImage: `url(${storeStatus.menuBannerUrl || '/banner.webp'})` }}
       >
         <div className="absolute inset-0 bg-black/20 z-0 pointer-events-none"></div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent z-0 pointer-events-none"></div>
@@ -473,6 +517,17 @@ export default function App() {
                 className={`p-3 rounded-xl flex items-center justify-center transition-colors backdrop-blur-md border border-white/20 shadow-sm ${isSearchVisible ? 'bg-brand-primary text-white' : 'bg-black/30 text-white hover:bg-black/40'}`}
               >
                 <MagnifyingGlass size={20} weight={isSearchVisible ? "bold" : "regular"} />
+              </button>
+            )}
+            {activeTab === 'rewards' && luckyDrawEnabled && (
+              <button 
+                type="button"
+                onClick={() => setLuckyDrawOpen(true)} 
+                aria-label={t('spinLuckyWheel', 'Lucky Draw Wheel')}
+                title={t('spinLuckyWheel', 'Lucky Draw Wheel')}
+                className="flex items-center justify-center p-0.5 rounded-full hover:scale-110 active:scale-95 transition-transform drop-shadow-md focus:outline-none"
+              >
+                <LuckyWheelIcon size={38} />
               </button>
             )}
             <button onClick={cycleLanguage} className="bg-black/30 hover:bg-black/40 border border-white/20 backdrop-blur-md p-3 rounded-xl text-white flex items-center gap-2 font-bold text-sm transition-colors shadow-sm">
@@ -518,7 +573,7 @@ export default function App() {
             {!searchQuery && (
               <div className="mt-2">
                 {/* Brand Tabs */}
-                <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} />
+                <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} tabs={menuTabs} />
               </div>
             )}
 
@@ -545,7 +600,13 @@ export default function App() {
 
       <div className="px-4 pt-4">
         {activeTab === 'orders' && <OrdersView onReorder={handleReorder} onBrowseMenu={() => setActiveTab('menu')} />}
-        {activeTab === 'rewards' && <RewardsView onBrowseMenu={() => setActiveTab('menu')} />}
+        {activeTab === 'rewards' && (
+          <RewardsView
+            onBrowseMenu={() => setActiveTab('menu')}
+            forceOpenLuckyDraw={luckyDrawOpen}
+            onCloseLuckyDraw={() => setLuckyDrawOpen(false)}
+          />
+        )}
         {activeTab === 'account' && <AccountView onBrowseMenu={() => setActiveTab('menu')} />}
         {activeTab === 'menu' && (
           <>
@@ -644,11 +705,11 @@ export default function App() {
         <motion.div 
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[4.75rem] left-4 right-4 max-w-sm mx-auto z-30"
+          className="fixed bottom-[4.5rem] left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] z-30"
         >
           <button 
             onClick={() => setIsCartOpen(true)}
-            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-3.5 rounded-2xl font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_14px_32px_rgba(229,57,53,0.38),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
+            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-2.5 rounded-full font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_12px_30px_rgba(229,57,53,0.35),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
           >
             <div className="flex items-center gap-2 text-sm">
               <ShoppingCart size={18} weight="fill" />

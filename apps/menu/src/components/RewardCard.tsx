@@ -3,8 +3,10 @@ import { Sparkle } from '@phosphor-icons/react';
 
 interface RewardCardProps {
   points: number;
-  earnPerDollar?: number;
   pointsPerDollar?: number;
+  tier?: string;
+  orderCount?: number;
+  goldThreshold?: number;
 }
 
 // 10 Stamp circle positions (percentages matching 1050x600 card)
@@ -23,7 +25,13 @@ const STAMP_SLOTS = [
   { id: 10, left: '61.00%', top: '79.92%', rotate: '6deg' },
 ];
 
-export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
+export function RewardCard({
+  points,
+  pointsPerDollar = 100,
+  tier = 'standard',
+  orderCount: _orderCount = 0,
+  goldThreshold: _goldThreshold = 3,
+}: RewardCardProps) {
   const { t } = useTranslation();
 
   // 10 points = 1 stamp (or 100 points = 10 stamps = 1 full card)
@@ -36,13 +44,18 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
   const completedCards = Math.floor(totalStamps / 10);
   const stampsRemaining = 10 - currentStamps;
 
+  const isGold = tier === 'gold';
+
   return (
-    <div className="flex flex-col gap-3 w-full">
+    <div className="flex flex-col gap-2.5 w-full">
+
       {/* Physical Card Mockup Container */}
-      <div className="relative w-full aspect-[1050/600] rounded-2xl overflow-hidden shadow-xl border-2 border-red-600/20 bg-red-600 select-none">
+      <div className={`relative w-full aspect-[1050/600] rounded-2xl overflow-hidden shadow-xl border-2 select-none ${
+        isGold ? 'border-amber-400/40 bg-amber-500 shadow-amber-500/10' : 'border-red-600/20 bg-red-600'
+      }`}>
         {/* Card Template Background */}
         <img
-          src="/images/reward-card.webp"
+          src={isGold ? "/images/reward-card-gold.webp" : "/images/reward-card.webp"}
           alt="Ai-Cha & Zhengda Reward Card"
           loading="eager"
           decoding="async"
@@ -75,12 +88,18 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
                   }}
                 />
               ) : isNext ? (
-                <div className="w-full h-full rounded-full border-2 border-dashed border-red-400/40 animate-pulse flex items-center justify-center">
-                  <span className="text-[9px] font-black text-red-700/60">{slot.id}</span>
+                <div className={`w-full h-full rounded-full border-2 border-dashed animate-pulse flex items-center justify-center ${
+                  isGold ? 'border-amber-600/50' : 'border-red-400/40'
+                }`}>
+                  <span className={`text-[9px] font-black ${
+                    isGold ? 'text-amber-900/80' : 'text-red-700/60'
+                  }`}>{slot.id}</span>
                 </div>
               ) : (
                 <div className="w-full h-full rounded-full flex items-center justify-center">
-                  <span className="text-[9px] font-bold text-red-800/30">{slot.id}</span>
+                  <span className={`text-[9px] font-bold ${
+                    isGold ? 'text-amber-900/40' : 'text-red-800/30'
+                  }`}>{slot.id}</span>
                 </div>
               )}
             </div>
@@ -92,7 +111,9 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
       <div className="bg-tg-secondary-bg rounded-2xl p-4 shadow-sm border border-tg-hint/10 flex flex-col gap-2">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <span className="font-black text-lg text-brand-primary">{currentStamps}/10</span>
+            <span className={`font-black text-lg ${isGold ? 'text-amber-600' : 'text-brand-primary'}`}>
+              {currentStamps}/10
+            </span>
             <span className="text-sm font-bold text-tg-text">{t('stampsCollected', 'Stamps Collected')}</span>
           </div>
           {completedCards > 0 && (
@@ -106,7 +127,11 @@ export function RewardCard({ points, pointsPerDollar = 100 }: RewardCardProps) {
         {/* Progress Bar */}
         <div className="w-full bg-tg-hint/15 h-2.5 rounded-full overflow-hidden">
           <div
-            className="bg-gradient-to-r from-red-600 to-brand-primary h-full rounded-full transition-all duration-500"
+            className={`h-full rounded-full transition-all duration-500 ${
+              isGold
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                : 'bg-gradient-to-r from-red-600 to-brand-primary'
+            }`}
             style={{ width: `${(currentStamps / 10) * 100}%` }}
           />
         </div>

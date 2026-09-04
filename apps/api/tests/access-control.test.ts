@@ -26,8 +26,14 @@ const staffAuth = () => ({ Authorization: `Bearer ${staffToken}` });
 const managerAuth = () => ({ Authorization: `Bearer ${managerToken}` });
 
 beforeAll(async () => {
+  // Reset rate config so a previous run of config.test.ts can't change this suite's math
   await prisma.systemConfig.deleteMany({
     where: { key: { in: ['pointsPerDollar', 'earnPointsPerDollar'] } },
+  });
+  await prisma.systemConfig.upsert({
+    where: { key: 'allowCashForStandard' },
+    update: { value: '1' },
+    create: { key: 'allowCashForStandard', value: '1' },
   });
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Access Tea', basePrice: 2.0 },

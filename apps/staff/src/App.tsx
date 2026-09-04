@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Award,
   BarChart3,
   Bell,
   BellOff,
@@ -10,20 +11,30 @@ import {
   ListPlus,
   LogOut,
   Menu as MenuIcon,
+  MessageSquare,
   Package,
   Phone,
   QrCode,
   RefreshCw,
   ShieldAlert,
   ShoppingBag,
+  Sliders,
   Sparkles,
+  Store,
   TriangleAlert,
   Truck,
   User,
+  Users,
+  Users2,
   X,
 } from 'lucide-react';
 import { MenuManagement } from './components/MenuManagement';
-import { ManagerDashboard } from './components/ManagerDashboard';
+import { SalesAnalytics } from './components/SalesAnalytics';
+import { CustomerCrm } from './components/crm/CustomerCrm';
+import { CustomerFeedback } from './components/CustomerFeedback';
+import { RewardManagement } from './components/RewardManagement';
+import { SettingsManagement } from './components/SettingsManagement';
+import type { SettingsSubTab } from './components/SettingsManagement';
 import { OrderCard } from './components/OrderCard';
 import { CancelOrderModal } from './components/CancelOrderModal';
 import {
@@ -31,12 +42,17 @@ import {
   STALE_AFTER_MS,
   TONE_THRESHOLDS,
   formatElapsed,
+  formatCountdown,
   isAwaitingPayment,
+  isZhengda,
+  parseModifiers,
+  paymentExpiryAt,
 } from './lib/orders';
 import {
   Badge,
   Button,
   Card,
+  CustomSelect,
   EmptyState,
   TelegramAuthScreen,
   Skeleton,
@@ -46,6 +62,7 @@ import {
 } from './components/ui';
 import {
   API_BASE,
+  apiFetch,
   authHeaders,
   clearSession,
   handleUnauthorized,
@@ -61,7 +78,14 @@ const POLL_MS = 5000;
 const CLOCK_MS = 15000;
 const PANEL_ID = 'staff-panel';
 
-type TabId = 'orders' | 'menu' | 'manager';
+type TabId =
+  | 'orders'
+  | 'menu'
+  | 'analytics'
+  | 'customers'
+  | 'feedback'
+  | 'rewards'
+  | 'settings';
 
 const LANES: Array<{ key: string; title: string; statuses: string[] }> = [
   { key: 'pending', title: 'Pending', statuses: ['pending', 'paid'] },
@@ -111,9 +135,9 @@ function ConnectionStatusBadge({
       type="button"
       onClick={onRefresh}
       aria-label={`Refresh orders now. Status: ${meta.label}`}
-      className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-xs font-semibold text-ink-soft transition-all hover:border-border-strong hover:bg-surface-sunken hover:text-ink"
+      className="inline-flex h-9 items-center gap-2 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink-soft transition-all hover:border-border-strong hover:bg-surface-sunken hover:text-ink"
     >
-      <span className={`size-2 shrink-0 rounded-full ${meta.dot} ring-2 ring-surface`} />
+      <span className={`size-2 shrink-0 rounded-none ${meta.dot} ring-2 ring-surface`} />
       <span>{meta.label}</span>
       {seconds != null ? (
         <span className="tabular-nums text-ink-faint">({seconds}s)</span>
@@ -131,7 +155,7 @@ function BoardLegend() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-border bg-surface">
+    <div className="rounded-none border border-border bg-surface">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -152,16 +176,16 @@ function BoardLegend() {
             <h4 className="font-bold text-ink">Order Waiting Status</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-surface-sunken" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-surface-sunken" />
                 On time / newly placed
               </li>
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-status-pending" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-status-pending" />
                 Getting close — pending {TONE_THRESHOLDS.pending.warn}m, preparing{' '}
                 {TONE_THRESHOLDS.preparing.warn}m, ready {TONE_THRESHOLDS.ready.warn}m
               </li>
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-danger" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-danger" />
                 Over target — pending {TONE_THRESHOLDS.pending.late}m, preparing{' '}
                 {TONE_THRESHOLDS.preparing.late}m, ready {TONE_THRESHOLDS.ready.late}m
               </li>
@@ -169,7 +193,7 @@ function BoardLegend() {
             <h4 className="mt-4 font-bold text-ink">QR Payment Verification</h4>
             <ul className="mt-2 space-y-1.5 text-ink-soft">
               <li className="flex items-center gap-2">
-                <span className="inline-block size-2.5 shrink-0 rounded-full bg-danger" />
+                <span className="inline-block size-2.5 shrink-0 rounded-none bg-danger" />
                 Red border ticket: QR payment still pending. Do not serve until paid.
               </li>
             </ul>
@@ -178,14 +202,18 @@ function BoardLegend() {
             <h4 className="font-bold text-ink">Keyboard Quick Keys</h4>
             <dl className="mt-2 space-y-1.5 text-ink-soft">
               {[
-                ['1', 'Switch to Orders Board'],
-                ['2', 'Switch to Menu Stock'],
-                ['3', 'Switch to Admin'],
+                ['1', 'Switch to Orders'],
+                ['2', 'Switch to Menu'],
+                ['3', 'Switch to Analytics'],
+                ['4', 'Switch to Customers'],
+                ['5', 'Switch to Feedback'],
+                ['6', 'Switch to Rewards'],
+                ['7', 'Switch to Settings'],
                 ['R', 'Force Refresh data'],
                 ['M', 'Toggle Alert Chime'],
               ].map(([key, what]) => (
                 <div key={key} className="flex items-center gap-3">
-                  <kbd className="flex h-5 w-6 items-center justify-center rounded bg-surface-sunken font-mono text-[10px] font-bold text-ink shadow-sm">
+                  <kbd className="flex h-5 w-6 items-center justify-center rounded-none bg-surface-sunken font-mono text-[10px] font-bold text-ink shadow-sm">
                     {key}
                   </kbd>
                   <dd>{what}</dd>
@@ -202,8 +230,18 @@ function BoardLegend() {
 function StaffApp({ onLogout }: { onLogout: () => void }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
+  const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('store');
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
+  const [usersCount, setUsersCount] = useState(0);
   const sessionRole = loadSession()?.role;
   const isManager = sessionRole === 'manager';
+
+  useEffect(() => {
+    if (!isManager) return;
+    apiFetch<any[]>('/api/staff-accounts')
+      .then((data) => setUsersCount(data.length))
+      .catch(() => {});
+  }, [isManager]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -217,6 +255,8 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [paymentQueueOpen, setPaymentQueueOpen] = useState(false);
+  const [paymentConfirmId, setPaymentConfirmId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const [muted, setMutedState] = useState(() => isMuted());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -464,6 +504,22 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
     [setStatus],
   );
 
+  const markPaymentPaidAtCounter = useCallback(
+    (orderId: string) => {
+      if (paymentConfirmId === orderId) {
+        setPaymentConfirmId(null);
+        markPaidAtCounter(orderId);
+        return;
+      }
+
+      setPaymentConfirmId(orderId);
+      window.setTimeout(() => {
+        setPaymentConfirmId((current) => (current === orderId ? null : current));
+      }, 4000);
+    },
+    [markPaidAtCounter, paymentConfirmId],
+  );
+
   useEffect(() => {
     const id = focusAfterRef.current;
     if (!id) return;
@@ -493,7 +549,14 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       const key = event.key.toLowerCase();
       if (key === '1') setActiveTab('orders');
       else if (key === '2') setActiveTab('menu');
-      else if (key === '3') setActiveTab('manager');
+      else if (key === '3') setActiveTab('analytics');
+      else if (key === '4') setActiveTab('customers');
+      else if (key === '5') setActiveTab('feedback');
+      else if (key === '6') setActiveTab('rewards');
+      else if (key === '7') {
+        setActiveTab('settings');
+        setSettingsExpanded(true);
+      }
       else if (key === 'r') fetchOrders(true);
       else if (key === 'm') toggleMute();
       else return;
@@ -506,28 +569,43 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const openCount = openOrders.length;
   const showBranch = selectedBranch === '' && branches.length > 1;
 
-  const currentBranchName =
-    branches.find((b) => b.id === selectedBranch)?.name || 'All Branches';
-
-  const navItems = [
+  const operationNavItems = [
     {
       id: 'orders' as TabId,
-      label: 'Live Orders',
+      label: 'Orders',
       icon: <LayoutDashboard className="size-5" />,
       badge: openCount > 0 ? String(openCount) : undefined,
       shortcut: '1',
     },
     {
       id: 'menu' as TabId,
-      label: 'Menu & Stock',
+      label: 'Menu',
       icon: <ListPlus className="size-5" />,
       shortcut: '2',
     },
     {
-      id: 'manager' as TabId,
-      label: 'Admin',
+      id: 'analytics' as TabId,
+      label: 'Analytics',
       icon: <BarChart3 className="size-5" />,
       shortcut: '3',
+    },
+    {
+      id: 'customers' as TabId,
+      label: 'Customers',
+      icon: <Users className="size-5" />,
+      shortcut: '4',
+    },
+    {
+      id: 'feedback' as TabId,
+      label: 'Feedback',
+      icon: <MessageSquare className="size-5" />,
+      shortcut: '5',
+    },
+    {
+      id: 'rewards' as TabId,
+      label: 'Rewards',
+      icon: <Award className="size-5" />,
+      shortcut: '6',
     },
   ];
 
@@ -550,7 +628,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         {/* Sidebar Brand Header */}
         <div className="flex h-18 items-center justify-between border-b border-border px-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-accent text-on-accent shadow-sm">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent text-on-accent shadow-sm">
               <Sparkles className="size-5" />
             </div>
             <div>
@@ -565,7 +643,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           <button
             type="button"
             onClick={() => setMobileMenuOpen(false)}
-            className="rounded-lg p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
+            className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
           >
             <X className="size-5" />
           </button>
@@ -578,79 +656,172 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               <Building2 className="size-3.5" />
               <span>Store Branch</span>
             </div>
-            <select
+            <CustomSelect
               value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="h-10 w-full rounded-xl border border-border bg-surface-sunken/50 px-3 text-xs font-bold text-ink outline-none transition-colors focus:border-accent"
-            >
-              <option value="">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedBranch(val)}
+              options={[
+                { value: '', label: 'All Branches' },
+                ...branches.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+              buttonClassName="h-10 bg-surface-sunken/50 text-xs font-bold"
+            />
           </div>
         )}
 
         {/* Navigation Menu */}
-        <nav className="flex-1 space-y-1.5 p-4" aria-label="Main navigation">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-            Operations
-          </p>
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
+        <nav className="flex-1 space-y-4 p-4 overflow-y-auto" aria-label="Main navigation">
+          <div>
+            <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              Operations
+            </p>
+            <div className="space-y-1">
+              {operationNavItems.map((item) => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      isActive
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {item.badge ? (
+                        <span
+                          className={`rounded-none px-2 py-0.5 text-xs font-black tabular-nums ${
+                            isActive
+                              ? 'bg-white/25 text-on-accent'
+                              : 'bg-accent/15 text-accent'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      ) : null}
+                      <kbd
+                        className={`hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
+                          isActive
+                            ? 'bg-white/20 text-on-accent'
+                            : 'bg-surface-sunken text-ink-faint'
+                        }`}
+                      >
+                        {item.shortcut}
+                      </kbd>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              System &amp; Settings
+            </p>
+            <div className="space-y-1">
               <button
-                key={item.id}
                 type="button"
                 onClick={() => {
-                  setActiveTab(item.id);
-                  setMobileMenuOpen(false);
+                  if (activeTab !== 'settings') {
+                    setActiveTab('settings');
+                    setSettingsExpanded(true);
+                  } else {
+                    setSettingsExpanded((prev) => !prev);
+                  }
                 }}
-                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-3 text-sm font-bold transition-all duration-150 ${
-                  isActive
-                    ? 'bg-accent text-on-accent shadow-sm'
+                className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                  activeTab === 'settings'
+                    ? 'bg-surface-sunken text-ink'
                     : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  {item.icon}
-                  <span>{item.label}</span>
+                  <Sliders className="size-5" />
+                  <span>Settings</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  {item.badge ? (
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-black tabular-nums ${
-                        isActive
-                          ? 'bg-white/25 text-on-accent'
-                          : 'bg-accent/15 text-accent'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  ) : null}
-                  <kbd
-                    className={`hidden rounded px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline ${
-                      isActive
-                        ? 'bg-white/20 text-on-accent'
-                        : 'bg-surface-sunken text-ink-faint'
-                    }`}
-                  >
-                    {item.shortcut}
+                  <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
+                    7
                   </kbd>
+                  <ChevronDown
+                    className={`size-4 text-ink-soft transition-transform duration-200 ${
+                      settingsExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
                 </div>
               </button>
-            );
-          })}
+
+              {settingsExpanded && (
+                <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setSettingsSubTab('store');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'settings' && settingsSubTab === 'store'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Store className="size-4" />
+                      <span>Store</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setSettingsSubTab('users');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'settings' && settingsSubTab === 'users'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Users2 className="size-4" />
+                      <span>Users</span>
+                    </div>
+                    {usersCount > 0 && (
+                      <span
+                        className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                          activeTab === 'settings' && settingsSubTab === 'users'
+                            ? 'bg-white/25 text-on-accent'
+                            : 'bg-accent/15 text-accent'
+                        }`}
+                      >
+                        {usersCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </nav>
 
         {/* Sidebar Footer Controls */}
         <div className="border-t border-border p-4 space-y-3">
-          <div className="flex items-center justify-between rounded-xl bg-surface-sunken/40 p-2 text-xs">
+          <div className="flex items-center justify-between rounded-none bg-surface-sunken/40 p-2 text-xs">
             <div className="flex items-center gap-2 font-medium text-ink-soft">
               <span
-                className={`size-2 rounded-full ${
+                className={`size-2 rounded-none ${
                   connState === 'live'
                     ? 'bg-success'
                     : connState === 'retrying'
@@ -714,7 +885,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="rounded-xl border border-border p-2 text-ink-soft hover:bg-surface-sunken lg:hidden"
+              className="rounded-none border border-border p-2 text-ink-soft hover:bg-surface-sunken lg:hidden"
               aria-label="Open sidebar"
             >
               <MenuIcon className="size-5" />
@@ -723,21 +894,38 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-extrabold text-ink sm:text-lg whitespace-nowrap">
                   {activeTab === 'orders'
-                    ? 'Live Orders'
+                    ? 'Orders'
                     : activeTab === 'menu'
-                      ? 'Menu & Stock'
-                      : 'Admin'}
+                      ? 'Menu'
+                      : activeTab === 'analytics'
+                        ? 'Analytics'
+                        : activeTab === 'customers'
+                          ? 'Customers'
+                          : activeTab === 'feedback'
+                            ? 'Feedback'
+                            : activeTab === 'rewards'
+                              ? 'Rewards'
+                              : settingsSubTab === 'users'
+                                ? 'Users'
+                                : 'Store Settings'}
                 </h2>
-                <Badge variant="default" className="hidden sm:inline-flex">
-                  {currentBranchName}
-                </Badge>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
                 {activeTab === 'orders'
                   ? `${openCount} active tickets in queue`
                   : activeTab === 'menu'
                     ? 'Quick toggle out-of-stock items'
-                    : 'Sales data, customer loyalty, and catalog perks'}
+                    : activeTab === 'analytics'
+                      ? 'Sales performance, revenue, and daily trends'
+                      : activeTab === 'customers'
+                        ? 'Customer points, stamps, and loyalty CRM'
+                        : activeTab === 'feedback'
+                          ? 'Issues and customer support reports'
+                          : activeTab === 'rewards'
+                            ? 'Redemption catalog and lucky draw wheel'
+                            : settingsSubTab === 'users'
+                              ? 'Authorized staff and manager accounts'
+                              : 'Store profile, ordering options, and branch details'}
               </p>
             </div>
           </div>
@@ -781,33 +969,42 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           <div className="mx-auto max-w-7xl">
           {activeTab === 'menu' ? (
             <MenuManagement />
-          ) : activeTab === 'manager' ? (
-            isManager ? (
-              <ManagerDashboard />
-            ) : (
-              <div className="mx-auto max-w-md pt-8">
-                <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
-                  <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-danger-soft text-danger">
-                    <ShieldAlert className="size-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-ink">Admin Restricted</h3>
-                    <p className="mt-1 text-xs text-ink-soft leading-relaxed">
-                      Your Telegram account is logged in as <strong>Staff</strong>. Analytics, customer points, and team access management require a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
-                    </p>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={onLogout}
-                    className="gap-2 font-bold w-full"
-                  >
-                    <LogOut className="size-4" />
-                    Switch to Manager Account
-                  </Button>
-                </Card>
-              </div>
-            )
+          ) : activeTab !== 'orders' && !isManager ? (
+            <div className="mx-auto max-w-md pt-8">
+              <Card padding="lg" className="border-border bg-surface text-center space-y-4 shadow-md">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-none bg-danger-soft text-danger">
+                  <ShieldAlert className="size-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-ink">Manager Restricted</h3>
+                  <p className="mt-1 text-xs text-ink-soft leading-relaxed">
+                    Your Telegram account is logged in as <strong>Staff</strong>. Accessing this section requires a <strong>Manager</strong> or <strong>Admin</strong> Telegram account.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={onLogout}
+                  className="gap-2 font-bold w-full"
+                >
+                  <LogOut className="size-4" />
+                  Switch to Manager Account
+                </Button>
+              </Card>
+            </div>
+          ) : activeTab === 'analytics' ? (
+            <SalesAnalytics />
+          ) : activeTab === 'customers' ? (
+            <CustomerCrm />
+          ) : activeTab === 'feedback' ? (
+            <CustomerFeedback />
+          ) : activeTab === 'rewards' ? (
+            <RewardManagement />
+          ) : activeTab === 'settings' ? (
+            <SettingsManagement
+              subTab={settingsSubTab}
+              onUsersCountChange={setUsersCount}
+            />
           ) : loading ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -833,7 +1030,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               {strandedOrders.length > 0 ? (
                 <section
                   aria-label="Orders needing attention"
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-danger bg-danger-soft px-4 py-3"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-none border border-danger bg-danger-soft px-4 py-3"
                 >
                   <h2 className="flex items-center gap-2 font-bold text-danger">
                     <TriangleAlert className="size-5 shrink-0" aria-hidden="true" />
@@ -848,46 +1045,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                 </section>
               ) : null}
 
-              {/* Unpaid KHQR Payment Orders */}
-              {awaitingPaymentOrders.length > 0 ? (
-                <section
-                  aria-labelledby="awaiting-payment-heading"
-                  className="overflow-hidden rounded-2xl border-2 border-danger bg-surface shadow-sm"
-                >
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 bg-danger-soft px-4 py-3">
-                    <h2
-                      id="awaiting-payment-heading"
-                      className="flex items-center gap-2 font-bold text-danger"
-                    >
-                      <QrCode className="size-5 shrink-0" aria-hidden="true" />
-                      Waiting for Payment Verification
-                      <span className="rounded-full bg-danger px-2 py-0.5 text-xs text-white tabular-nums">
-                        {awaitingPaymentOrders.length}
-                      </span>
-                    </h2>
-                    <p className="text-xs font-semibold text-danger">
-                      Not paid yet — do not prepare yet. Automatically moves when payment completes.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 items-start gap-4 p-4 md:grid-cols-3">
-                    {awaitingPaymentOrders.map((order) => (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        now={now}
-                        updating={updatingIds.has(order.id)}
-                        isNew={newIds.has(order.id)}
-                        showBranch={showBranch}
-                        onAction={advance}
-                        onCancel={cancelOrder}
-                        onMarkPaid={markPaidAtCounter}
-                        onSeen={markSeen}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
               {/* 3-Column Kanban Board */}
               <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-3">
                 {laneOrders.map((lane) => {
@@ -896,7 +1053,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     <section
                       key={lane.key}
                       aria-labelledby={`lane-${lane.key}`}
-                      className="flex min-w-0 flex-col rounded-2xl border border-border bg-surface-sunken/30 p-3"
+                      className="flex min-w-0 flex-col rounded-none border border-border bg-surface-sunken/30 p-3"
                     >
                       <div className="mb-3 flex items-center justify-between px-1">
                         <div className="flex items-center gap-2">
@@ -905,7 +1062,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                               {lane.title}
                             </h2>
                           </Badge>
-                          <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-black tabular-nums text-ink shadow-xs">
+                          <span className="rounded-none bg-surface px-2 py-0.5 text-xs font-black tabular-nums text-ink shadow-xs">
                             {lane.orders.length}
                           </span>
                         </div>
@@ -917,7 +1074,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                       </div>
 
                       {lane.orders.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-border py-8 text-center text-xs font-medium text-ink-faint">
+                        <div className="rounded-none border border-dashed border-border py-8 text-center text-xs font-medium text-ink-faint">
                           No {lane.title.toLowerCase()} orders
                         </div>
                       ) : (
@@ -954,7 +1111,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                   >
                     <span className="font-bold text-ink">
                       Completed &amp; Finished Today
-                      <span className="ml-2 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-bold text-ink-soft tabular-nums">
+                      <span className="ml-2 rounded-none bg-surface-sunken px-2 py-0.5 text-xs font-bold text-ink-soft tabular-nums">
                         {shownClosed.length < closedOrders.length
                           ? `${shownClosed.length} of ${closedOrders.length}`
                           : closedOrders.length}
@@ -974,25 +1131,40 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                         const finished = order.updatedAt ? new Date(order.updatedAt).getTime() : created;
                         const durationMins = Math.max(1, Math.round((finished - created) / 60000));
                         const isDelivery = order.orderType === 'delivery';
+                        // The expiry sweep stores this as `cancelled` so it is
+                        // excluded from every active workflow. It was never a
+                        // staff cancellation, though: the customer did not
+                        // complete the KHQR payment before its QR expired.
+                        const paymentExpired =
+                          order.status === 'cancelled' &&
+                          order.paymentMethod.toLowerCase() === 'khqr' &&
+                          (paymentExpiryAt(order) ?? Infinity) <= now;
 
                         return (
                           <li
                             key={order.id}
-                            className="flex flex-col gap-2.5 p-4 hover:bg-surface-sunken/20 transition-colors"
+                            className={`flex flex-col gap-2.5 border p-4 ${
+                              order.status === 'cancelled'
+                                ? 'border-danger/30 bg-danger-soft/10'
+                                : 'border-border hover:border-accent/30 hover:bg-surface-sunken/20'
+                            } transition-colors`}
                           >
+                            {/* Top Header: Code, status, price, and permitted recovery action. */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-base font-black tracking-tight text-ink">
                                   {order.pickupCode || '—'}
                                 </span>
-                                {order.status === 'cancelled' ? (
+                                {paymentExpired ? (
+                                  <Badge variant="danger">Payment failed: QR expired</Badge>
+                                ) : order.status === 'cancelled' ? (
                                   <Badge variant="danger">
                                     Cancelled{order.cancelReason ? `: ${order.cancelReason}` : ''}
                                   </Badge>
                                 ) : PAID_STATUSES.has(order.status) ? (
                                   <Badge variant="completed">Paid &amp; Done</Badge>
                                 ) : null}
-                                <span className="inline-flex items-center gap-1 rounded-lg bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-soft">
+                                <span className="inline-flex items-center gap-1 rounded-none bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-ink-soft">
                                   {isDelivery ? (
                                     <>
                                       <Truck className="size-3 text-status-preparing" />
@@ -1011,23 +1183,62 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                 <span className="text-base font-black tabular-nums text-ink">
                                   ${order.totalAmount.toFixed(2)}
                                 </span>
-                                <Button
-                                  variant="secondary"
-                                  size="md"
-                                  loading={updatingIds.has(order.id)}
-                                  onClick={() => setStatus(order.id, 'ready')}
-                                  aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
-                                >
-                                  Reopen Ticket
-                                </Button>
+                                {!paymentExpired ? (
+                                  <Button
+                                    variant="secondary"
+                                    size="md"
+                                    loading={updatingIds.has(order.id)}
+                                    onClick={() => setStatus(order.id, 'ready')}
+                                    aria-label={`Put order ${order.pickupCode ?? ''} back on the board`}
+                                  >
+                                    Reopen Ticket
+                                  </Button>
+                                ) : null}
                               </div>
                             </div>
 
-                            {/* Customer and Location Row */}
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
+                            {/* Items List: Clean bulleted items with dot-separated modifiers */}
+                            {order.items && order.items.length > 0 ? (
+                              <ul className="space-y-1.5 py-1">
+                                {order.items.map((item) => {
+                                  const zhengda = isZhengda(item.menuItem?.brand);
+                                  const mods = item.modifiers ? parseModifiers(item.modifiers) : [];
+                                  return (
+                                    <li key={item.id} className="text-sm">
+                                      <div className="flex items-start gap-2">
+                                        <span
+                                          aria-hidden="true"
+                                          className={`mt-1.5 size-2 shrink-0 rounded-none ${
+                                            zhengda ? 'bg-zhengda' : 'bg-accent'
+                                          }`}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="font-bold text-ink">
+                                            {item.quantity}× {item.menuItem?.name || 'Item'}
+                                          </div>
+                                          {mods.length > 0 ? (
+                                            <div className="text-xs text-ink-soft flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5">
+                                              {mods.map((mod, idx) => (
+                                                <span key={idx} className="inline-flex items-center">
+                                                  {idx > 0 && <span className="mr-1.5 text-ink-faint">·</span>}
+                                                  {mod}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : null}
+
+                            {/* Customer, Location & Timing combined metadata bar */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/40 pt-2 text-xs text-ink-faint">
                               {order.contactName ? (
                                 <div className="flex items-center gap-1 font-bold text-ink">
-                                  <User className="size-3.5 text-ink-faint shrink-0" />
+                                  <User className="size-3 text-ink-faint shrink-0" />
                                   <span>{order.contactName}</span>
                                 </div>
                               ) : null}
@@ -1037,41 +1248,32 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                   href={`tel:${order.contactPhone}`}
                                   className="inline-flex items-center gap-1 font-bold text-accent hover:underline"
                                 >
-                                  <Phone className="size-3.5 shrink-0" />
+                                  <Phone className="size-3 shrink-0" />
                                   <span>{order.contactPhone}</span>
                                 </a>
                               ) : null}
 
                               {order.deliveryBuilding && order.deliveryRoom ? (
                                 <div className="flex items-center gap-1 font-medium text-ink-soft">
-                                  <Building2 className="size-3.5 text-ink-faint shrink-0" />
+                                  <Building2 className="size-3 text-ink-faint shrink-0" />
                                   <span>Bldg {order.deliveryBuilding} · Rm {order.deliveryRoom}</span>
                                 </div>
                               ) : null}
-                            </div>
 
-                            {/* Timing, Duration and Items */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2 text-xs text-ink-faint">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="tabular-nums">
-                                  Placed: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                                <span>·</span>
-                                <span className="tabular-nums">
-                                  Finished: {new Date(finished).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                                <span>·</span>
-                                <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-md">
-                                  <Clock className="size-3 text-accent" />
-                                  Cook / Prep duration: {durationMins}m
-                                </span>
-                              </div>
+                              <span className="text-border">|</span>
 
-                              {order.items && order.items.length > 0 ? (
-                                <div className="text-ink-soft font-medium truncate max-w-md">
-                                  {order.items.map((i) => `${i.quantity}× ${i.menuItem?.name || 'Item'}`).join(', ')}
-                                </div>
-                              ) : null}
+                              <span className="tabular-nums">
+                                Placed: {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span>·</span>
+                              <span className="tabular-nums">
+                                Finished: {new Date(finished).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-1 font-bold text-ink-soft bg-surface-sunken/80 px-2 py-0.5 rounded-none">
+                                <Clock className="size-3 text-accent" />
+                                {durationMins}m prep
+                              </span>
                             </div>
                           </li>
                         );
@@ -1079,6 +1281,140 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                     </ul>
                   ) : null}
                 </Card>
+              ) : null}
+
+              {/* Unpaid KHQR queue: deliberately after live work and finished tickets. */}
+              {awaitingPaymentOrders.length > 0 ? (
+                <section
+                  aria-labelledby="awaiting-payment-heading"
+                  className="overflow-hidden border border-danger/50 bg-surface"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPaymentQueueOpen((open) => !open)}
+                    aria-expanded={paymentQueueOpen}
+                    className="flex min-h-12 w-full items-center justify-between gap-3 bg-danger-soft/50 p-4 text-left hover:bg-danger-soft"
+                  >
+                    <span className="min-w-0">
+                      <span
+                        id="awaiting-payment-heading"
+                        className="flex flex-wrap items-center gap-x-2 gap-y-1 font-bold text-danger"
+                      >
+                        <QrCode className="size-4 shrink-0" aria-hidden="true" />
+                        Waiting for Payment Verification
+                        <span className="rounded-none bg-danger px-2 py-0.5 text-xs font-bold text-on-danger tabular-nums">
+                          {awaitingPaymentOrders.length}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs font-medium text-danger">
+                        Unpaid KHQR tickets — not part of the preparation queue.
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`size-5 shrink-0 text-danger transition-transform duration-150 ${
+                        paymentQueueOpen ? 'rotate-180' : ''
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
+
+                  {paymentQueueOpen ? (
+                    <div className="border-t border-danger/30">
+                      <div className="max-h-[30rem] overflow-auto">
+                        <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
+                          <caption className="sr-only">
+                            Unpaid KHQR orders awaiting payment verification
+                          </caption>
+                          <thead className="sticky top-0 z-10 bg-surface-sunken text-xs font-bold uppercase tracking-wider text-ink-faint">
+                            <tr>
+                              <th scope="col" className="px-4 py-3">Ticket</th>
+                              <th scope="col" className="px-4 py-3">Customer</th>
+                              <th scope="col" className="px-4 py-3">Order</th>
+                              <th scope="col" className="px-4 py-3">Placed</th>
+                              <th scope="col" className="px-4 py-3 text-right">Total</th>
+                              <th scope="col" className="px-4 py-3">QR status</th>
+                              <th scope="col" className="px-4 py-3 text-right">Counter</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {awaitingPaymentOrders.map((order) => {
+                              const expiresAt = paymentExpiryAt(order);
+                              const remaining = expiresAt == null ? null : expiresAt - now;
+                              const qrStatus =
+                                remaining == null
+                                  ? 'No QR issued'
+                                  : remaining <= 0
+                                    ? `Expired ${formatCountdown(-remaining)} ago`
+                                    : `${formatCountdown(remaining)} left`;
+                              const itemSummary = order.items
+                                .slice(0, 2)
+                                .map((item) => `${item.quantity}× ${item.menuItem?.name || 'Item'}`)
+                                .join(' · ');
+
+                              return (
+                                <tr key={order.id} className="bg-surface transition-colors hover:bg-surface-sunken/40">
+                                  <td className="whitespace-nowrap px-4 py-3 align-top">
+                                    <div className="font-black tracking-tight text-ink">{order.pickupCode || '—'}</div>
+                                    <div className="mt-0.5 text-xs text-ink-faint">
+                                      {order.orderType === 'delivery' ? 'Delivery' : 'Pickup'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 align-top">
+                                    <div className="font-semibold text-ink">{order.contactName || 'Walk-in customer'}</div>
+                                    {order.contactPhone ? (
+                                      <a href={`tel:${order.contactPhone}`} className="mt-0.5 inline-flex text-xs font-semibold text-accent hover:underline">
+                                        {order.contactPhone}
+                                      </a>
+                                    ) : null}
+                                  </td>
+                                  <td className="max-w-64 px-4 py-3 align-top">
+                                    <div className="truncate font-medium text-ink" title={itemSummary}>
+                                      {itemSummary || 'No items'}
+                                    </div>
+                                    {order.items.length > 2 ? (
+                                      <div className="mt-0.5 text-xs text-ink-faint">+{order.items.length - 2} more item{order.items.length - 2 === 1 ? '' : 's'}</div>
+                                    ) : null}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 align-top tabular-nums text-ink-soft">
+                                    <div>{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                    <div className="mt-0.5 text-xs text-ink-faint">{formatElapsed(order.createdAt, now).label} ago</div>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 align-top text-right font-black tabular-nums text-ink">
+                                    ${order.totalAmount.toFixed(2)}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 align-top">
+                                    <span className="inline-flex items-center gap-1.5 font-semibold tabular-nums text-danger">
+                                      <QrCode className="size-3.5 shrink-0" aria-hidden="true" />
+                                      {qrStatus}
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-3 text-right align-top">
+                                    <Button
+                                      variant={paymentConfirmId === order.id ? 'success' : 'secondary'}
+                                      size="md"
+                                      loading={updatingIds.has(order.id)}
+                                      onClick={() => markPaymentPaidAtCounter(order.id)}
+                                      aria-label={
+                                        paymentConfirmId === order.id
+                                          ? `Confirm that order ${order.pickupCode ?? ''} was paid at the counter`
+                                          : `Mark order ${order.pickupCode ?? ''} as paid at the counter`
+                                      }
+                                    >
+                                      {paymentConfirmId === order.id ? 'Confirm paid' : 'Paid at counter'}
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="border-t border-border px-4 py-2.5 text-xs font-medium text-ink-soft">
+                        Payment confirmation moves a ticket to Pending automatically. Do not prepare it before payment is confirmed.
+                      </p>
+                    </div>
+                  ) : null}
+                </section>
               ) : null}
 
               <BoardLegend />
@@ -1142,4 +1478,3 @@ export default function App() {
     </ToastProvider>
   );
 }
-

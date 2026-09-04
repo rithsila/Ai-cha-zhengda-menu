@@ -109,7 +109,7 @@ function ToastView({
       onMouseLeave={resume}
       className={[
         'pointer-events-auto flex w-full max-w-sm items-start gap-3',
-        'rounded-xl border border-border bg-surface-raised p-4 shadow-raised',
+        'rounded-none border border-border bg-surface-raised p-4 shadow-raised',
         'transition-[transform,opacity] duration-200 ease-out',
         visible ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
       ].join(' ')}

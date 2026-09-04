@@ -45,6 +45,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
   // Free inside Arakawa today; the shop can change it with PUT /api/config.
   const [deliveryFeeRate, setDeliveryFeeRate] = useState(0);
+  const [allowCashForStandard, setAllowCashForStandard] = useState(false);
+  const [showCashLockedBanner, setShowCashLockedBanner] = useState(false);
   
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
   // about the payment (creating it, polling, expiry, retry).
@@ -83,6 +85,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setBranchId('');
       setPaymentOrderId(null);
       setPaymentOrderCode(null);
+      setShowCashLockedBanner(false);
       return;
     }
 
@@ -104,7 +107,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           if (data.length > 0) setBranchId(data[0].id);
         }
         if (userRes?.ok) {
-          setUserProfile(await userRes.json());
+          const user = await userRes.json();
+          setUserProfile(user);
         }
         if (catRes.ok) {
           setCatalogItems(await catRes.json());
@@ -115,6 +119,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           if (Number.isFinite(rate) && rate > 0) setPointsPerDollar(rate);
           const fee = Number(rows.find(r => r.key === 'deliveryFee')?.value);
           if (Number.isFinite(fee) && fee >= 0) setDeliveryFeeRate(fee);
+          const allowCashRow = rows.find(r => r.key === 'allowCashForStandard');
+          if (allowCashRow) setAllowCashForStandard(allowCashRow.value === '1');
         }
       } catch (err) {
         console.error('Failed to fetch checkout data', err);
@@ -122,6 +128,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     };
     fetchData();
   }, [isOpen, signedIn, storeStatus.enablePickup]);
+
+  const userTier = userProfile?.tier || 'standard';
+  const isCashUnlocked = userTier === 'gold' || allowCashForStandard;
 
   // Auto-select valid order type based on manager toggles
   useEffect(() => {
@@ -132,14 +141,14 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     }
   }, [storeStatus.enablePickup, storeStatus.enableDelivery]);
 
-  // Auto-select valid payment method based on manager toggles
+  // Auto-select valid payment method based on manager toggles and customer tier
   useEffect(() => {
-    if (!storeStatus.enableCash && storeStatus.enableKhqr && khqrOffered) {
+    if ((!storeStatus.enableCash || !isCashUnlocked) && storeStatus.enableKhqr && khqrOffered) {
       setMethod('khqr');
     } else if (!storeStatus.enableKhqr || !khqrOffered) {
       setMethod('cash');
     }
-  }, [storeStatus.enableCash, storeStatus.enableKhqr, khqrOffered]);
+  }, [storeStatus.enableCash, storeStatus.enableKhqr, khqrOffered, isCashUnlocked]);
 
   const deliveryFee = orderType === 'delivery' ? deliveryFeeRate : 0;
   // A delivery order needs a complete saved profile: room, name and phone.
@@ -216,11 +225,14 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setError(t('cashDisabled', 'Cash payment is currently turned off.'));
       return;
     }
+    if (method === 'cash' && !isCashUnlocked) {
+      setError(t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.'));
+      return;
+    }
     if (method === 'khqr' && (!storeStatus.enableKhqr || !khqrOffered)) {
       setError(t('khqrDisabled', 'KHQR payment is currently turned off.'));
       return;
     }
-
     setIsLoading(true);
     setError(null);
     try {
@@ -330,6 +342,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             {step === 2 && paymentOrderId ? (
               <KhqrPaymentPanel
                 orderId={paymentOrderId}
+                totalAmount={finalTotal}
                 onPaid={(code) => onSuccess(code)}
                 onUseCash={handlePayCashInstead}
               />
@@ -532,7 +545,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
                   {storeStatus.enableKhqr && khqrOffered ? (
                     <button
-                      onClick={() => setMethod('khqr')}
+                      type="button"
+                      onClick={() => {
+                        setShowCashLockedBanner(false);
+                        setMethod('khqr');
+                      }}
                       aria-pressed={method === 'khqr'}
                       className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
                         method === 'khqr'
@@ -553,25 +570,69 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   ) : null}
 
                   {storeStatus.enableCash ? (
-                    <button 
-                      onClick={() => setMethod('cash')}
-                      aria-pressed={method === 'cash'}
-                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
-                        method === 'cash' 
-                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
-                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold text-base text-tg-text">{t('cash')}</div>
-                        <div className="text-xs text-tg-hint mt-1">{t('cashDescription', 'Pay at counter or upon delivery')}</div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        method === 'cash' ? 'border-brand-primary' : 'border-tg-hint/25'
-                      }`}>
-                        {method === 'cash' && <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />}
-                      </div>
-                    </button>
+                    <div className="flex flex-col gap-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (!isCashUnlocked) {
+                            setShowCashLockedBanner(true);
+                            if (khqrOffered) setMethod('khqr');
+                            return;
+                          }
+                          setShowCashLockedBanner(false);
+                          setMethod('cash');
+                        }}
+                        aria-pressed={method === 'cash'}
+                        className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
+                          !isCashUnlocked
+                            ? 'bg-tg-secondary-bg/60 border-tg-hint/15 opacity-80'
+                            : method === 'cash' 
+                            ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                            : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
+                        }`}
+                      >
+                        <div className="flex-1 pr-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-base text-tg-text">{t('cash')}</span>
+                            {isCashUnlocked ? (
+                              userTier === 'gold' && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 font-extrabold text-[11px] border border-amber-400/30 flex items-center gap-1">
+                                  ⭐ {t('goldPerk', 'Gold Perk')}
+                                </span>
+                              )
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-tg-hint/15 text-tg-hint font-bold text-[11px] flex items-center gap-1">
+                                🔒 {t('goldMember', 'Gold Only')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-tg-hint mt-1">
+                            {isCashUnlocked
+                              ? t('cashDescription', 'Pay at counter or upon delivery')
+                              : t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.')}
+                          </div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
+                          !isCashUnlocked
+                            ? 'border-tg-hint/20'
+                            : method === 'cash'
+                            ? 'border-brand-primary'
+                            : 'border-tg-hint/25'
+                        }`}>
+                          {isCashUnlocked && method === 'cash' && (
+                            <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />
+                          )}
+                          {!isCashUnlocked && <span className="text-[10px]">🔒</span>}
+                        </div>
+                      </button>
+
+                      {showCashLockedBanner && !isCashUnlocked && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300 font-medium flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <span className="text-base leading-none">🔒</span>
+                          <span>{t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.')}</span>
+                        </div>
+                      )}
+                    </div>
                   ) : null}
 
                   {!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered) && (

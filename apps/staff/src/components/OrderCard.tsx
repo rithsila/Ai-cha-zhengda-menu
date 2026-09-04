@@ -20,6 +20,8 @@ import {
   formatCountdown,
   formatElapsed,
   isAwaitingPayment,
+  isZhengda,
+  parseModifiers,
   paymentExpiryAt,
 } from '../lib/orders';
 import type { Tone } from '../lib/orders';
@@ -34,24 +36,6 @@ const TONE_CLASSES: Record<Tone, string> = {
   warn: 'bg-status-pending-soft text-status-pending',
   late: 'bg-danger-soft text-danger',
 };
-
-function parseModifiers(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return [];
-    }
-    return Object.values(parsed)
-      .filter((value): value is Array<{ name?: string }> => Array.isArray(value))
-      .flatMap((options) => options.map((option) => option?.name ?? String(option)));
-  } catch {
-    return [];
-  }
-}
-
-function isZhengda(brand: string): boolean {
-  return brand.toLowerCase() === 'zhengda';
-}
 
 /** Payment is the one fact staff must not get wrong, so it is the loudest pill. */
 function PaymentTag({ order }: { order: Order }) {
@@ -85,7 +69,7 @@ function PaymentTag({ order }: { order: Order }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-base font-bold ${classes}`}
+      className={`inline-flex items-center gap-2 rounded-none px-3 py-1.5 text-base font-bold ${classes}`}
       title={note}
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -120,7 +104,7 @@ function ElapsedTag({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-semibold tabular-nums ${TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-none px-2.5 py-1 text-sm font-semibold tabular-nums ${TONE_CLASSES[tone]}`}
     >
       {/* Urgency must survive a red-green colour deficiency, so it carries a glyph too. */}
       {tone !== 'normal' ? (
@@ -294,7 +278,7 @@ function OrderCardImpl({
             <button
               type="button"
               onClick={() => onCancel(order)}
-              className="rounded-lg px-2 py-1 text-xs font-bold text-danger/70 hover:bg-danger-soft hover:text-danger transition-colors"
+              className="rounded-none px-2 py-1 text-xs font-bold text-danger/70 hover:bg-danger-soft hover:text-danger transition-colors"
               aria-label={`Cancel order ${order.pickupCode ?? ''}`}
             >
               Cancel
@@ -309,12 +293,12 @@ function OrderCardImpl({
       <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
         <PaymentTag order={order} />
         {order.orderType === 'delivery' ? (
-          <span className="inline-flex items-center gap-1.5 rounded-xl bg-status-preparing-soft px-3 py-1.5 text-sm font-semibold text-status-preparing">
+          <span className="inline-flex items-center gap-1.5 rounded-none bg-status-preparing-soft px-3 py-1.5 text-sm font-semibold text-status-preparing">
             <Truck className="size-4 shrink-0" aria-hidden="true" />
             Delivery
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-xl bg-surface-sunken px-3 py-1.5 text-sm font-semibold text-ink-soft">
+          <span className="inline-flex items-center gap-1.5 rounded-none bg-surface-sunken px-3 py-1.5 text-sm font-semibold text-ink-soft">
             <ShoppingBag className="size-4 shrink-0" aria-hidden="true" />
             Pickup
           </span>
@@ -322,7 +306,7 @@ function OrderCardImpl({
       </div>
 
       {(order.contactName || order.contactPhone || order.deliveryBuilding || order.deliveryRoom || order.deliveryAddress) ? (
-        <div className="mx-4 mt-3 rounded-xl border border-border/60 bg-surface-sunken/70 p-3 space-y-2">
+        <div className="mx-4 mt-3 rounded-none border border-border/60 bg-surface-sunken/70 p-3 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-ink-faint uppercase">
               {order.orderType === 'delivery' ? (
@@ -338,7 +322,7 @@ function OrderCardImpl({
               )}
             </p>
             {order.deliveryBuilding && order.deliveryRoom ? (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-surface px-2 py-0.5 text-xs font-black text-ink shadow-xs">
+              <span className="inline-flex items-center gap-1 rounded-none bg-surface px-2 py-0.5 text-xs font-black text-ink shadow-xs">
                 <Building2 className="size-3 text-ink-soft" />
                 Bldg {order.deliveryBuilding} · Rm {order.deliveryRoom}
               </span>
@@ -362,7 +346,7 @@ function OrderCardImpl({
             {order.contactPhone ? (
               <a
                 href={`tel:${order.contactPhone}`}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent/10 px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent hover:text-on-accent transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-none bg-accent/10 px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent hover:text-on-accent transition-colors"
                 title={`Call ${order.contactPhone}`}
               >
                 <Phone className="size-3.5 shrink-0" />
@@ -386,7 +370,7 @@ function OrderCardImpl({
                */}
               <span
                 aria-hidden="true"
-                className={`mt-2 size-2.5 shrink-0 rounded-full ${
+                className={`mt-2 size-2.5 shrink-0 rounded-none ${
                   zhengda ? 'bg-zhengda' : 'bg-accent'
                 }`}
               />

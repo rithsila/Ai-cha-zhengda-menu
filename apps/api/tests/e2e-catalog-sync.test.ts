@@ -9,6 +9,11 @@ describe('End-to-End Catalog Management & Sync Flow', () => {
   const managerToken = issueToken('manager').token;
 
   beforeEach(async () => {
+    await prisma.systemConfig.upsert({
+      where: { key: 'allowCashForStandard' },
+      update: { value: '1' },
+      create: { key: 'allowCashForStandard', value: '1' },
+    });
     await prisma.orderItem.deleteMany();
     await prisma.order.deleteMany();
     await prisma.modifierOption.deleteMany();

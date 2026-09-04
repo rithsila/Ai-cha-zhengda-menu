@@ -3,7 +3,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { issueToken } from '../src/auth';
-import { enableAba, postWebhook, stubAbaFetch, approvedStatus } from './helpers/aba';
+import { enableAba, stubAbaFetch, approvedStatus } from './helpers/aba';
 import { asCustomer } from './helpers/customer';
 
 const app = createApp();
@@ -115,7 +115,7 @@ describe('settlement on completion (cash path)', () => {
   });
 });
 
-describe('settlement on webhook (ABA path)', () => {
+describe('settlement on ABA status confirmation', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('marks paid and settles points', async () => {
@@ -124,10 +124,12 @@ describe('settlement on webhook (ABA path)', () => {
     await prisma.order.update({ where: { id: created.body.id }, data: { transactionId: tranId } });
     const before = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
 
-    // The webhook now needs a real signature, and the server double-checks the
-    // payment with ABA before settling anything.
+    // The server asks ABA before settling anything; no browser return or
+    // client-supplied status can mark this order paid.
     stubAbaFetch({ status: approvedStatus(created.body.totalAmount) });
-    const res = await postWebhook(app, { tran_id: tranId, status: 'APPROVED' });
+    const res = await request(app)
+      .get(`/api/payment/aba/status/${created.body.id}`)
+      .set(asCustomer(uid));
     expect(res.status).toBe(200);
 
     const order = await prisma.order.findUnique({ where: { id: created.body.id } });

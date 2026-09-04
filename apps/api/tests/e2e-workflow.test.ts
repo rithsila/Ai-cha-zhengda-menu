@@ -3,7 +3,7 @@ import request from 'supertest';
 import crypto from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { issueToken } from '../src/auth';
-import { enableAba, postWebhook, stubAbaFetch, approvedStatus } from './helpers/aba';
+import { enableAba, stubAbaFetch, approvedStatus } from './helpers/aba';
 
 const app = createApp();
 const BOT_TOKEN = 'test-bot-token-e2e';
@@ -32,12 +32,14 @@ describe('End-to-End System & Workflow Validation', () => {
 
   beforeAll(async () => {
     process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
-    delete process.env.ABA_WEBHOOK_SECRET; // skip signature check for mock ABA test
-
     // Reset database config
     await prisma.systemConfig.deleteMany({});
+    await prisma.systemConfig.create({
+      data: { key: 'allowCashForStandard', value: '1' },
+    });
     await prisma.orderItem.deleteMany({});
     await prisma.order.deleteMany({});
+    await prisma.prizeClaim.deleteMany({});
     await prisma.reward.deleteMany({});
     await prisma.modifierOption.deleteMany({});
     await prisma.modifierGroup.deleteMany({});
@@ -209,7 +211,7 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(userSettled?.loyaltyPoints).toBe(220);
   });
 
-  it('4. Customer places a delivery order with ABA KHQR payment and webhook confirmation', async () => {
+  it('4. Customer places a delivery order with ABA KHQR payment and status confirmation', async () => {
     // Single item $3.00 + $0.00 delivery fee (free inside Arakawa) = $3.00
     const createRes = await request(app).post('/api/orders').set(customerAuth()).send({
       items: [{ menuItemId: snackItemId, quantity: 1, totalPrice: 3.00, selectedModifiers: {} }],
@@ -233,12 +235,14 @@ describe('End-to-End System & Workflow Validation', () => {
 
     const beforePoints = (await prisma.user.findUnique({ where: { telegramUserId: customerTelegramId } }))!.loyaltyPoints;
 
-    // ABA webhook fires. It must be signed, and the server confirms the amount
-    // with ABA before it will mark anything paid.
+    // The server confirms the amount with ABA before it will mark anything
+    // paid. Returning from ABA Mobile alone can never settle this order.
     enableAba();
     stubAbaFetch({ status: approvedStatus(order.totalAmount) });
-    const webhookRes = await postWebhook(app, { tran_id: tranId, status: 'APPROVED' });
-    expect(webhookRes.status).toBe(200);
+    const statusRes = await request(app)
+      .get(`/api/payment/aba/status/${order.id}`)
+      .set(customerAuth());
+    expect(statusRes.status).toBe(200);
     vi.restoreAllMocks();
 
     const paidOrder = await prisma.order.findUnique({ where: { id: order.id } });
@@ -345,7 +349,7 @@ describe('End-to-End System & Workflow Validation', () => {
     // 4. Give customer exactly 100 points (10 stamps)
     await prisma.user.update({
       where: { telegramUserId: customerTelegramId },
-      data: { loyaltyPoints: 100 },
+      data: { loyaltyPoints: 100, tier: 'gold' },
     });
 
     // 5. Customer places order: 1 Jasmine Tea ($2.50, claimable) + 1 Snack ($3.00, no stamps)

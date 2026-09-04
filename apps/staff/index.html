@@ -7,22 +7,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Battambang:wght@300;400;700;900&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <title>Ai-Cha &amp; Zhengda — Staff</title>
     <script>
-      // Resolve theme before first paint to avoid a dark-mode flash.
-      // Mirrors useTheme: localStorage holds only an explicit "light"/"dark" pin;
-      // anything else (absent/invalid) means "system" -> follow the OS setting.
+      // Resolve theme before first paint to avoid flashes.
       try {
         var t = window.localStorage.getItem('staff-theme');
-        if (t !== 'light' && t !== 'dark') {
+        if (!t) {
           t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         document.documentElement.dataset.theme = t;
       } catch {
-        document.documentElement.dataset.theme = 'light';
+        document.documentElement.dataset.theme = 'dark';
       }
     </script>
   </head>

@@ -6,6 +6,7 @@ node_modules/
 out/
 build/
 dist/
+apps/api/.env
 
 # Environment variables
 .env

@@ -8,7 +8,7 @@ export function Skeleton({ className = '' }: SkeletonProps) {
     <div
       aria-hidden="true"
       className={[
-        'rounded-lg bg-surface-sunken motion-safe:animate-pulse',
+        'rounded-none bg-surface-sunken motion-safe:animate-pulse',
         className,
       ]
         .filter(Boolean)

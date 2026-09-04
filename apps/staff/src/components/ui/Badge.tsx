@@ -51,7 +51,7 @@ export function Badge({
   return (
     <span
       className={[
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
+        'inline-flex items-center gap-1.5 rounded-none px-2 py-0.5 text-xs font-semibold',
         variantClasses[variant],
         className,
       ]
@@ -61,7 +61,7 @@ export function Badge({
       {dot ? (
         <span
           aria-hidden="true"
-          className="size-1.5 shrink-0 rounded-full bg-current"
+          className="size-1.5 shrink-0 rounded-none bg-current"
         />
       ) : null}
       {icon ? (

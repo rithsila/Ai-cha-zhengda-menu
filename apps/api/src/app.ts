@@ -2,11 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { randomUUID } from 'crypto';
-import { ABAPayWay, generateKHQR, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
+import { ABAPayWay, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
 import {
   settleOrderPoints,
   refundOrderPoints,
   getConfigNumber,
+  getConfigString,
   getConfigValue,
   getStoreStatus,
   validateConfig,
@@ -25,12 +26,14 @@ import {
 import { sendOtpSms } from './sms';
 import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
+  verifyInitData, devIdentityAllowed, TelegramInitDataUser,
 } from './telegram-initdata';
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
 import { sendTelegramNotification } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes, createPrizeClaimRecord } from './lucky-draw';
 import { uploadToR2, isR2Configured } from './r2';
 
 // The tuned SQLite client lives in db.ts; re-exported here because every
@@ -73,16 +76,11 @@ export function createApp() {
 
   app.use(helmet());
 
-  // Middleware to parse raw body for webhook verification
-  app.use(express.json({
-    verify: (req: any, res, buf) => {
-      req.rawBody = buf;
-    }
-  }));
+  app.use(express.json());
 
   // Only the shop's own front-ends may call the API from a browser. Requests
-  // with no Origin (the ABA webhook, curl, the bot) are not browser requests
-  // and are left alone; the routes' own auth still applies to them.
+  // with no Origin (curl and the bot) are not browser requests and are left
+  // alone; the routes' own auth still applies to them.
   app.use(cors({
     origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     credentials: true,
@@ -176,12 +174,41 @@ export function createApp() {
       return res.status(403).json({ error: 'Not available in production' });
     }
     try {
-      const { telegramUserId = 'dev_test_customer', firstName = 'Test', lastName = 'Customer' } = req.body || {};
+      const {
+        telegramUserId = 'dev_test_customer',
+        firstName = 'Test',
+        lastName = 'Customer',
+        tier = 'standard',
+        loyaltyPoints = 50,
+        luckyTickets = 2,
+        phoneNumber = '+85512345678',
+        building = 'A',
+        roomNumber = '1110',
+      } = req.body || {};
       const uid = String(telegramUserId).trim();
       await prisma.user.upsert({
         where: { telegramUserId: uid },
-        update: { firstName, lastName },
-        create: { telegramUserId: uid, firstName, lastName, loyaltyPoints: 150 },
+        update: {
+          firstName,
+          lastName,
+          tier: tier === 'gold' ? 'gold' : 'standard',
+          loyaltyPoints: Number.isFinite(Number(loyaltyPoints)) ? Number(loyaltyPoints) : 50,
+          luckyTickets: Number.isFinite(Number(luckyTickets)) ? Number(luckyTickets) : 2,
+          phoneNumber,
+          building,
+          roomNumber,
+        },
+        create: {
+          telegramUserId: uid,
+          firstName,
+          lastName,
+          tier: tier === 'gold' ? 'gold' : 'standard',
+          loyaltyPoints: Number.isFinite(Number(loyaltyPoints)) ? Number(loyaltyPoints) : 50,
+          luckyTickets: Number.isFinite(Number(luckyTickets)) ? Number(luckyTickets) : 2,
+          phoneNumber,
+          building,
+          roomNumber,
+        },
       });
       const { token, expiresAt } = issueCustomerToken(uid);
       res.json({ ok: true, token, telegramUserId: uid, expiresAt });
@@ -373,7 +400,6 @@ export function createApp() {
       merchantId,
       apiKey,
       baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
-      webhookSecret: process.env.ABA_WEBHOOK_SECRET || '',
     });
   }
 
@@ -408,10 +434,39 @@ export function createApp() {
       if (!telegramUserId) {
         return res.status(400).json({ error: 'Missing telegramUserId' });
       }
+
+      // If x-telegram-init-data is present, parse initData and sync/upsert username, firstName, lastName
+      let initDataUser: TelegramInitDataUser | null = null;
+      const rawInitData = req.headers['x-telegram-init-data'];
+      if (typeof rawInitData === 'string' && rawInitData) {
+        const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+        initDataUser = verifyInitData(rawInitData, botToken);
+        if (!initDataUser && devIdentityAllowed()) {
+          try {
+            const params = new URLSearchParams(rawInitData);
+            const rawUser = params.get('user');
+            if (rawUser) initDataUser = JSON.parse(rawUser);
+          } catch {}
+        }
+      }
+
+      const updateData: Record<string, string> = {};
+      if (initDataUser) {
+        if (initDataUser.username) updateData.username = initDataUser.username;
+        if (initDataUser.first_name) updateData.firstName = initDataUser.first_name;
+        if (initDataUser.last_name) updateData.lastName = initDataUser.last_name;
+      }
+
       const user = await prisma.user.upsert({
         where: { telegramUserId },
-        update: {},
-        create: { telegramUserId, loyaltyPoints: 0 }
+        update: updateData,
+        create: {
+          telegramUserId,
+          loyaltyPoints: 0,
+          username: initDataUser?.username || null,
+          firstName: initDataUser?.first_name || null,
+          lastName: initDataUser?.last_name || null,
+        }
       });
       res.json(user);
     } catch (error) {
@@ -473,7 +528,19 @@ export function createApp() {
     }
   });
 
-  // Static folder for uploaded menu images
+  // Static folder for menu images & uploaded images
+  const menuImagesDirs = [
+    path.resolve(process.cwd(), '../menu/public/images'),
+    path.resolve(__dirname, '../../menu/public/images'),
+    path.resolve(process.cwd(), 'public/images'),
+  ];
+  for (const imgDir of menuImagesDirs) {
+    if (fs.existsSync(imgDir)) {
+      app.use('/images', express.static(imgDir));
+      break;
+    }
+  }
+
   const uploadDir = path.resolve(process.cwd(), 'public/uploads');
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -813,6 +880,14 @@ export function createApp() {
         ? await prisma.user.findUnique({ where: { telegramUserId } })
         : null;
 
+      if (paymentMethod === 'cash') {
+        const allowCashForStandard = await getConfigString(prisma, 'allowCashForStandard', String(CONFIG_DEFAULTS.allowCashForStandard));
+        const userTier = saved?.tier || 'standard';
+        if (userTier === 'standard' && allowCashForStandard !== '1') {
+          return res.status(403).json({ error: 'Cash on delivery is reserved for Gold members. Please pay via KHQR.' });
+        }
+      }
+
       if (orderType === 'delivery') {
         const b = (building ?? saved?.building ?? '').toString().trim().toUpperCase();
         const r = (roomNumber ?? saved?.roomNumber ?? '').toString().trim();
@@ -854,7 +929,6 @@ export function createApp() {
       const serverTotal = Math.round((itemsTotal + deliveryFee) * 100) / 100;
 
       const POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'pointsPerDollar', Number(CONFIG_DEFAULTS.pointsPerDollar));
-      const EARN_POINTS_PER_DOLLAR = await getConfigNumber(prisma, 'earnPointsPerDollar', Number(CONFIG_DEFAULTS.earnPointsPerDollar));
 
       let requestedPoints = 0;
       // An anonymous order has no balance to spend from.
@@ -1131,13 +1205,12 @@ export function createApp() {
   // ---------------------------------------------------------------------------
   // ABA PayWay Integration
   //
-  // Three routes:
+  // Two routes:
   //   POST /api/payment/aba/create        -> start a payment, return QR + links
-  //   POST /api/payment/aba/webhook       -> ABA tells us a payment landed
-  //   GET  /api/payment/aba/status/:id    -> we ask ABA whether it landed
+  //   GET  /api/payment/aba/status/:id    -> ask ABA whether it landed
   //
-  // The status route exists because webhooks cannot reach a laptop on
-  // localhost. It is the only thing that makes the flow testable in dev.
+  // The client polls the status route after starting a payment. A return URL is
+  // never proof that the payer finished: only ABA's server-side status is.
   // ---------------------------------------------------------------------------
 
   const AMOUNT_TOLERANCE = 0.01; // one cent, for float comparison
@@ -1175,8 +1248,8 @@ export function createApp() {
    * Confirm a transaction with ABA and, only if it really is approved for the
    * right amount, mark the order paid and settle its loyalty points.
    *
-   * Never trusts a caller-supplied status: both the webhook and the status
-   * route go back to ABA. Idempotent, because ABA retries webhooks.
+   * Never trusts a caller-supplied status: this function always asks ABA.
+   * It is idempotent because the client polls until it sees APPROVED.
    */
   async function confirmAbaPayment(aba: ABAPayWay, orderId: string, transactionId: string) {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
@@ -1192,7 +1265,13 @@ export function createApp() {
       return { ok: false as const, code: 409, body: { error: 'This order was cancelled' } };
     }
 
-    const result = await aba.checkStatus(transactionId);
+    let result = await aba.checkStatus(transactionId);
+    // ABA can take about a second to index a brand-new transaction. Retry that
+    // one specific response once; other errors are real failures to surface.
+    if (!result.success && result.errorCode === '6') {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      result = await aba.checkStatus(transactionId);
+    }
     if (!result.success) {
       return { ok: false as const, code: 502, body: { error: result.error || 'Could not reach ABA PayWay' } };
     }
@@ -1273,34 +1352,33 @@ export function createApp() {
       // Reuse the transaction id if one exists, so refreshing the checkout page
       // does not leave an orphaned transaction behind at ABA.
       const transactionId = order.transactionId || generateTransactionId();
-      const expiresAt = getQRExpiration();
 
       await prisma.order.update({
         where: { id: order.id },
-        data: { transactionId, paymentExpiresAt: expiresAt },
+        // Store the id before the payer leaves the Mini App. If ABA Mobile
+        // backgrounds or kills the WebView, status polling can resume later.
+        data: { transactionId },
       });
 
+      const webAppUrl = process.env.WEBAPP_URL || 'http://localhost:5173';
       const purchase = await aba.createPurchase({
         transactionId,
         amount: order.totalAmount,
         currency: 'USD',
-        items: Buffer.from(
-          JSON.stringify(
-            order.items.map((line) => ({
-              name: line.menuItem?.name ?? 'Item',
-              quantity: line.quantity,
-              price: line.price,
-            }))
-          )
-        ).toString('base64'),
-        // Without this ABA returns no qr_string and no deeplink, and the
-        // customer is shown an empty QR box.
-        paymentOption: 'abapay_khqr',
+        // The SDK encodes this array to ABA's required base64 JSON format.
+        items: order.items.map((line) => ({
+          name: line.menuItem?.name ?? 'Item',
+          quantity: line.quantity,
+          price: line.price,
+        })),
+        // One request returns the app deeplink for a phone and the QR image for
+        // a desktop or a device without ABA Mobile.
+        paymentOption: 'abapay_khqr_deeplink',
         firstName: 'Ai-Cha',
         lastName: 'Customer',
-        returnUrl: process.env.ABA_WEBHOOK_URL || '',
-        cancelUrl: process.env.WEBAPP_URL || '',
-        continueSuccessUrl: process.env.WEBAPP_URL || '',
+        returnUrl: webAppUrl,
+        cancelUrl: webAppUrl,
+        continueSuccessUrl: webAppUrl,
         returnParams: order.id,
       });
 
@@ -1311,67 +1389,37 @@ export function createApp() {
         return res.status(502).json({ error: purchase.error || 'Failed to create ABA purchase' });
       }
 
-      const khqrSvg = await generateKHQR({
-        emvData: purchase.qrString ?? '',
-        amount: order.totalAmount,
-        currency: 'USD',
-        merchantName: 'Ai-Cha & Zhengda',
-        headerColor: '#d42b2b',
+      if (!purchase.qrImage) {
+        console.error(`ABA did not return a QR image for order ${order.id}`);
+        return res.status(502).json({ error: 'ABA did not return a QR image for this payment' });
+      }
+
+      const parsedExpiration = purchase.expiresAt ? new Date(purchase.expiresAt) : null;
+      const expiresAt = parsedExpiration && !Number.isNaN(parsedExpiration.getTime())
+        ? parsedExpiration
+        : new Date(Date.now() + 3 * 60 * 1000);
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { paymentExpiresAt: expiresAt },
       });
 
       res.json({
+        // checkoutUrl is optional in ABA's current API. The menu relies on the
+        // deeplink and QR image instead, but keeps it for compatible callers.
         checkoutUrl: purchase.checkoutUrl,
         abapayDeeplink: purchase.abapayDeeplink,
-        qrString: purchase.qrString,
-        khqrSvg,
+        appStoreUrl: purchase.appStoreUrl,
+        playStoreUrl: purchase.playStoreUrl,
+        qrImage: purchase.qrImage,
+        amount: order.totalAmount,
+        merchantName: 'Ai-Cha & Zhengda',
         transactionId,
         expiresAt: expiresAt.toISOString(),
       });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to generate ABA payment' });
-    }
-  });
-
-  app.post('/api/payment/aba/webhook', async (req: any, res) => {
-    try {
-      const aba = getAbaClient();
-      if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
-
-      // No secret means no way to tell ABA apart from anyone else on the
-      // internet, so refuse rather than trust the payload.
-      const secret = process.env.ABA_WEBHOOK_SECRET || '';
-      if (!secret) {
-        return res.status(503).json({
-          error: 'ABA_WEBHOOK_SECRET is not set, so webhooks cannot be verified and are rejected.',
-        });
-      }
-
-      const rawBody = req.rawBody?.toString('utf-8') ?? '';
-      const signature = String(req.headers['x-payway-signature'] || '');
-      const isValid = await aba.verifyWebhook(rawBody, signature, secret);
-      if (!isValid) return res.status(401).json({ error: 'Invalid signature' });
-
-      // ABA sends either a base64 'response' blob or flat fields.
-      let tranId: string | undefined;
-      if (req.body?.response) {
-        const decoded = Buffer.from(req.body.response, 'base64').toString('utf-8');
-        tranId = JSON.parse(decoded)?.tran_id;
-      } else {
-        tranId = req.body?.tran_id;
-      }
-      if (!tranId) return res.status(400).json({ error: 'Missing tran_id' });
-
-      const order = await prisma.order.findUnique({ where: { transactionId: tranId } });
-      if (!order) return res.status(404).json({ error: 'Order not found for that transaction' });
-
-      const result = await confirmAbaPayment(aba, order.id, tranId);
-      if (!result.ok) return res.status(result.code).json(result.body);
-
-      res.json({ message: 'Webhook processed', status: result.status, orderStatus: result.orderStatus });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to process webhook' });
     }
   });
 
@@ -1566,6 +1614,615 @@ export function createApp() {
       res.status(500).json({ error: 'Failed to fetch analytics' });
     }
   });
+
+  // CRM & Customer Management Endpoints (Manager Only)
+  app.get('/api/customers', requireManager, async (req, res) => {
+    try {
+      const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+      const rawTier = typeof req.query.tier === 'string' ? req.query.tier.trim().toLowerCase() : 'all';
+      const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit || '50'), 10) || 50));
+
+      const where: any = {};
+      if (rawTier === 'standard' || rawTier === 'gold') {
+        where.tier = rawTier;
+      }
+
+      if (search) {
+        where.OR = [
+          { telegramUserId: { contains: search } },
+          { phoneNumber: { contains: search } },
+          { username: { contains: search } },
+          { firstName: { contains: search } },
+          { lastName: { contains: search } },
+          { contactName: { contains: search } },
+        ];
+      }
+
+      const totalMatching = await prisma.user.count({ where });
+
+      const users = await prisma.user.findMany({
+        where,
+        include: {
+          orders: {
+            select: { totalAmount: true, status: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Global summary across all users
+      const allUsers = await prisma.user.findMany({
+        select: { tier: true, loyaltyPoints: true, luckyTickets: true },
+      });
+      const totalCustomers = allUsers.length;
+      const standardCount = allUsers.filter((u) => u.tier === 'standard').length;
+      const goldCount = allUsers.filter((u) => u.tier === 'gold').length;
+      const totalStamps = allUsers.reduce((sum, u) => sum + Math.floor((u.loyaltyPoints || 0) / 10), 0);
+      const totalLuckyTickets = allUsers.reduce((sum, u) => sum + (u.luckyTickets || 0), 0);
+
+      const customers = users.map((u) => {
+        const paidOrders = u.orders.filter((o) => o.status === 'paid' || o.status === 'completed');
+        const totalSpent = Math.round(paidOrders.reduce((sum, o) => sum + o.totalAmount, 0) * 100) / 100;
+        const lastOrderDate = u.orders.length > 0 ? u.orders[0].createdAt : null;
+        return {
+          telegramUserId: u.telegramUserId,
+          phoneNumber: u.phoneNumber,
+          username: u.username,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          contactName: u.contactName,
+          building: u.building,
+          roomNumber: u.roomNumber,
+          tier: u.tier,
+          loyaltyPoints: u.loyaltyPoints,
+          luckyTickets: u.luckyTickets,
+          trustNotes: u.trustNotes,
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+          totalOrders: paidOrders.length,
+          totalSpent,
+          lastOrderDate,
+        };
+      });
+
+      res.json({
+        customers,
+        pagination: {
+          page,
+          limit,
+          total: totalMatching,
+          totalPages: Math.ceil(totalMatching / limit),
+        },
+        summary: {
+          totalCustomers,
+          standardCount,
+          goldCount,
+          totalStamps,
+          totalLuckyTickets,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch customers' });
+    }
+  });
+
+  app.get('/api/customers/:telegramUserId', requireStaff, async (req, res) => {
+    try {
+      const telegramUserId = String(req.params.telegramUserId);
+      const user = await prisma.user.findUnique({
+        where: { telegramUserId },
+        include: {
+          prizeClaims: {
+            orderBy: { createdAt: 'desc' },
+          },
+          orders: {
+            take: 20,
+            orderBy: { createdAt: 'desc' },
+            include: {
+              items: {
+                include: { menuItem: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      const allOrders = await prisma.order.findMany({
+        where: { telegramUserId },
+        select: { totalAmount: true, status: true },
+      });
+      const paidOrders = allOrders.filter((o) => o.status === 'paid' || o.status === 'completed');
+      const totalSpent = Math.round(paidOrders.reduce((sum, o) => sum + o.totalAmount, 0) * 100) / 100;
+      const totalOrders = paidOrders.length;
+
+      res.json({
+        ...user,
+        totalOrders,
+        totalSpent,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch customer details' });
+    }
+  });
+
+  app.put('/api/customers/:telegramUserId/tier', requireManager, async (req, res) => {
+    try {
+      const telegramUserId = String(req.params.telegramUserId);
+      const { tier, trustNotes } = req.body || {};
+
+      if (tier !== 'standard' && tier !== 'gold') {
+        return res.status(400).json({ error: "tier must be 'standard' or 'gold'" });
+      }
+
+      const existing = await prisma.user.findUnique({ where: { telegramUserId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      const updated = await prisma.user.update({
+        where: { telegramUserId },
+        data: {
+          tier,
+          ...(trustNotes !== undefined ? { trustNotes: typeof trustNotes === 'string' ? trustNotes.trim() : null } : {}),
+        },
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to update customer tier' });
+    }
+  });
+
+  app.put('/api/customers/:telegramUserId/lucky-tickets', requireManager, async (req, res) => {
+    try {
+      const telegramUserId = String(req.params.telegramUserId);
+      const { delta, tickets } = req.body || {};
+
+      const existing = await prisma.user.findUnique({ where: { telegramUserId } });
+      if (!existing) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+
+      let newTickets: number;
+      if (tickets !== undefined) {
+        if (!Number.isInteger(tickets) || tickets < 0) {
+          return res.status(400).json({ error: 'tickets must be a whole number of 0 or more' });
+        }
+        newTickets = tickets;
+      } else if (delta !== undefined) {
+        if (!Number.isInteger(delta)) {
+          return res.status(400).json({ error: 'delta must be an integer' });
+        }
+        newTickets = Math.max(0, existing.luckyTickets + delta);
+      } else {
+        return res.status(400).json({ error: 'tickets or delta is required' });
+      }
+
+      const updated = await prisma.user.update({
+        where: { telegramUserId },
+        data: { luckyTickets: newTickets },
+      });
+
+      res.json(updated);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to update lucky tickets' });
+    }
+  });
+
+  // Customer Lucky Draw Config & Prize Segments
+  app.get('/api/lucky-draw/config', async (req, res) => {
+    try {
+      const enabled = (await getConfigString(prisma, 'luckyDrawEnabled', '1')) === '1';
+      const costPerSpin = await getConfigNumber(prisma, 'luckyTicketsCostPerSpin', 5);
+      const prizes = await getLuckyWheelPrizes(prisma);
+      res.json({
+        enabled,
+        costPerSpin,
+        prizes,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch lucky draw config' });
+    }
+  });
+
+  // Customer Lucky Draw Spin
+  app.post('/api/lucky-draw/spin', requireCustomer, async (req, res) => {
+    try {
+      const telegramUserId = (req as any).telegramUserId;
+      if (!telegramUserId) {
+        return res.status(401).json({ error: 'Telegram sign-in required' });
+      }
+
+      const enabled = (await getConfigString(prisma, 'luckyDrawEnabled', '1')) === '1';
+      if (!enabled) {
+        return res.status(400).json({ error: 'Lucky draw is currently not active' });
+      }
+
+      const costPerSpin = await getConfigNumber(prisma, 'luckyTicketsCostPerSpin', 5);
+      const prizes = await getLuckyWheelPrizes(prisma);
+
+      const user = await prisma.user.findUnique({
+        where: { telegramUserId },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User profile not found' });
+      }
+
+      if ((user.luckyTickets || 0) < costPerSpin) {
+        return res.status(400).json({
+          error: `Not enough lucky tickets. You have ${user.luckyTickets || 0} tickets, but need ${costPerSpin} to spin.`,
+          requiredTickets: costPerSpin,
+          currentTickets: user.luckyTickets || 0,
+        });
+      }
+
+      const prize = pickRandomPrize(prizes);
+
+      // Deduct tickets and award prize
+      const updatedUser = await withWriteRetry(async () => {
+        const updatePayload: any = {
+          luckyTickets: { decrement: costPerSpin },
+        };
+
+        if (prize.type === 'points' && prize.value > 0) {
+          updatePayload.loyaltyPoints = { increment: prize.value };
+        } else if (prize.type === 'tickets' && prize.value > 0) {
+          updatePayload.luckyTickets = { decrement: costPerSpin - prize.value };
+        }
+
+        return prisma.user.update({
+          where: { telegramUserId },
+          data: updatePayload,
+        });
+      });
+
+      let prizeClaim: any = null;
+      if (prize.type === 'item') {
+        prizeClaim = await createPrizeClaimRecord(prisma, {
+          telegramUserId,
+          prizeId: prize.id,
+          prizeName: prize.name,
+          prizeIcon: prize.icon,
+          prizeType: prize.type,
+          source: 'wheel_spin',
+        });
+      }
+
+      res.json({
+        ok: true,
+        prize: {
+          id: prize.id,
+          name: prize.name,
+          label: prize.label,
+          icon: prize.icon,
+          color: prize.color,
+          type: prize.type,
+          value: prize.value,
+          segmentIndex: prize.segmentIndex,
+          claimCode: prizeClaim?.code,
+          claimId: prizeClaim?.id,
+          expiresAt: prizeClaim?.expiresAt,
+        },
+        user: {
+          telegramUserId: updatedUser.telegramUserId,
+          luckyTickets: updatedUser.luckyTickets,
+          loyaltyPoints: updatedUser.loyaltyPoints,
+          tier: updatedUser.tier,
+        },
+        costPerSpin,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to complete lucky draw spin' });
+    }
+  });
+
+  // Customer: View my won prizes & claims
+  app.get('/api/me/prizes', requireCustomer, async (req, res) => {
+    try {
+      const telegramUserId = (req as any).telegramUserId;
+      if (!telegramUserId) {
+        return res.status(401).json({ error: 'Telegram sign-in required' });
+      }
+
+      const now = new Date();
+      await prisma.prizeClaim.updateMany({
+        where: {
+          telegramUserId,
+          status: 'pending',
+          expiresAt: { lt: now },
+        },
+        data: { status: 'expired' },
+      });
+
+      const claims = await prisma.prizeClaim.findMany({
+        where: { telegramUserId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      res.json(claims);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch customer prize claims' });
+    }
+  });
+
+  // Lucky Draw Trigger (Manager Only)
+  app.post('/api/lucky-draw/draw', requireManager, async (req, res) => {
+    try {
+      const { prizeName, tierFilter } = req.body || {};
+      const filterTier = typeof tierFilter === 'string' ? tierFilter.trim().toLowerCase() : 'all';
+
+      const whereClause: any = {
+        luckyTickets: { gt: 0 },
+      };
+      if (filterTier === 'standard' || filterTier === 'gold') {
+        whereClause.tier = filterTier;
+      }
+
+      const eligibleUsers = await prisma.user.findMany({
+        where: whereClause,
+      });
+
+      if (eligibleUsers.length === 0) {
+        return res.status(400).json({ error: 'No eligible participants with tickets found' });
+      }
+
+      const totalTickets = eligibleUsers.reduce((sum, u) => sum + u.luckyTickets, 0);
+      const randomTicket = Math.floor(Math.random() * totalTickets);
+
+      let runningSum = 0;
+      let winner = eligibleUsers[0];
+      for (const u of eligibleUsers) {
+        runningSum += u.luckyTickets;
+        if (runningSum > randomTicket) {
+          winner = u;
+          break;
+        }
+      }
+
+      let prizeClaim: any = null;
+      if (prizeName && String(prizeName).trim()) {
+        prizeClaim = await createPrizeClaimRecord(prisma, {
+          telegramUserId: winner.telegramUserId,
+          prizeName: String(prizeName).trim(),
+          prizeIcon: '🏆',
+          prizeType: 'item',
+          source: 'manager_draw',
+        });
+      }
+
+      res.json({
+        winner: {
+          telegramUserId: winner.telegramUserId,
+          phoneNumber: winner.phoneNumber,
+          username: winner.username,
+          firstName: winner.firstName,
+          lastName: winner.lastName,
+          contactName: winner.contactName,
+          tier: winner.tier,
+          luckyTickets: winner.luckyTickets,
+        },
+        prizeName: prizeName ? String(prizeName).trim() : null,
+        claimCode: prizeClaim?.code,
+        claimId: prizeClaim?.id,
+        expiresAt: prizeClaim?.expiresAt,
+        totalParticipants: eligibleUsers.length,
+        totalTickets,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to draw winner' });
+    }
+  });
+
+  // Staff/Manager: List all prize claims (with filter and search)
+  app.get('/api/lucky-draw/claims', requireStaff, async (req, res) => {
+    try {
+      const { status, search, limit } = req.query;
+      const take = Math.min(100, Math.max(1, Number(limit) || 50));
+
+      const where: any = {};
+      if (status && typeof status === 'string' && status !== 'all') {
+        where.status = status.trim().toLowerCase();
+      }
+
+      if (search && typeof search === 'string' && search.trim()) {
+        const q = search.trim();
+        where.OR = [
+          { code: { contains: q } },
+          { prizeName: { contains: q } },
+          { telegramUserId: { contains: q } },
+          { user: { firstName: { contains: q } } },
+          { user: { lastName: { contains: q } } },
+          { user: { contactName: { contains: q } } },
+          { user: { phoneNumber: { contains: q } } },
+        ];
+      }
+
+      const claims = await prisma.prizeClaim.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+              username: true,
+              tier: true,
+              building: true,
+              roomNumber: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take,
+      });
+
+      res.json(claims);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to fetch lucky draw claims' });
+    }
+  });
+
+  // Staff: Verify a gift claim code
+  app.post('/api/lucky-draw/verify-claim', requireStaff, async (req, res) => {
+    try {
+      const { code } = req.body || {};
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Claim code is required' });
+      }
+
+      let rawCode = code.trim().toUpperCase();
+      if (!rawCode.startsWith('LUCKY-') && rawCode.length <= 8) {
+        rawCode = `LUCKY-${rawCode}`;
+      }
+
+      const claim = await prisma.prizeClaim.findUnique({
+        where: { code: rawCode },
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+              username: true,
+              tier: true,
+              building: true,
+              roomNumber: true,
+            },
+          },
+        },
+      });
+
+      if (!claim) {
+        return res.status(404).json({
+          valid: false,
+          error: `Claim code "${rawCode}" not found. Please verify the code.`,
+        });
+      }
+
+      const now = new Date();
+      if (claim.status === 'pending' && claim.expiresAt && claim.expiresAt < now) {
+        await prisma.prizeClaim.update({
+          where: { id: claim.id },
+          data: { status: 'expired' },
+        });
+        claim.status = 'expired';
+      }
+
+      const isValid = claim.status === 'pending';
+
+      res.json({
+        valid: isValid,
+        status: claim.status,
+        claim,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to verify claim code' });
+    }
+  });
+
+  // Staff: Redeem and hand over gift to customer
+  app.post('/api/lucky-draw/redeem-claim', requireStaff, async (req, res) => {
+    try {
+      const { code, notes, staffName } = req.body || {};
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Claim code is required' });
+      }
+
+      let rawCode = code.trim().toUpperCase();
+      if (!rawCode.startsWith('LUCKY-') && rawCode.length <= 8) {
+        rawCode = `LUCKY-${rawCode}`;
+      }
+
+      const claim = await prisma.prizeClaim.findUnique({
+        where: { code: rawCode },
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+            },
+          },
+        },
+      });
+
+      if (!claim) {
+        return res.status(404).json({ error: `Claim code "${rawCode}" not found.` });
+      }
+
+      if (claim.status === 'claimed') {
+        return res.status(400).json({
+          error: `Gift was already claimed on ${claim.claimedAt ? new Date(claim.claimedAt).toLocaleString() : 'earlier date'}${claim.claimedByStaffName ? ` by ${claim.claimedByStaffName}` : ''}.`,
+          claim,
+        });
+      }
+
+      const now = new Date();
+      if (claim.expiresAt && claim.expiresAt < now) {
+        await prisma.prizeClaim.update({
+          where: { id: claim.id },
+          data: { status: 'expired' },
+        });
+        return res.status(400).json({ error: 'This gift claim code has expired.', claim });
+      }
+
+      const updatedClaim = await prisma.prizeClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'claimed',
+          claimedAt: now,
+          claimedByStaffName: staffName ? String(staffName).trim() : 'Store Staff',
+          notes: notes ? String(notes).trim() : null,
+        },
+        include: {
+          user: {
+            select: {
+              telegramUserId: true,
+              firstName: true,
+              lastName: true,
+              contactName: true,
+              phoneNumber: true,
+            },
+          },
+        },
+      });
+
+      res.json({
+        ok: true,
+        message: `Successfully handed over ${updatedClaim.prizeName}!`,
+        claim: updatedClaim,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Failed to redeem gift claim' });
+    }
+  });
+
 
   // Find-only user lookup (manager only — exposes PII)
   app.get('/api/users/:telegramUserId', requireManager, async (req, res) => {

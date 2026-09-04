@@ -60,13 +60,26 @@ export function clearWebLoginToken(): void {
   }
 }
 
-export async function loginAsDevCustomer(telegramUserId = 'dev_test_customer'): Promise<boolean> {
+export interface DevCustomerOptions {
+  telegramUserId?: string;
+  firstName?: string;
+  lastName?: string;
+  tier?: 'standard' | 'gold';
+  loyaltyPoints?: number;
+  luckyTickets?: number;
+  phoneNumber?: string;
+  building?: string;
+  roomNumber?: string;
+}
+
+export async function loginAsDevCustomer(options: DevCustomerOptions | string = 'dev_test_customer'): Promise<boolean> {
   try {
+    const body = typeof options === 'string' ? { telegramUserId: options } : options;
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:4000';
     const res = await fetch(`${apiBase}/api/auth/dev-customer-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telegramUserId }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const data = await res.json();

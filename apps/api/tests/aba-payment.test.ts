@@ -4,11 +4,8 @@ import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { issueToken } from '../src/auth';
 import {
-  ABA_ENV,
   enableAba,
   disableAba,
-  postWebhook,
-  signWebhook,
   stubAbaFetch,
   approvedStatus,
 } from './helpers/aba';
@@ -38,7 +35,7 @@ async function makeOrderWithTransaction() {
   const transactionId = `tx-${randomUUID()}`;
   await prisma.order.update({
     where: { id: order.id },
-    data: { transactionId, paymentExpiresAt: new Date(Date.now() + 15 * 60 * 1000) },
+    data: { transactionId, paymentExpiresAt: new Date(Date.now() + 3 * 60 * 1000) },
   });
   return { ...order, transactionId };
 }
@@ -97,15 +94,14 @@ describe('POST /api/payment/aba/create', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns a checkout url, a QR image and a transaction id', async () => {
+  it('returns ABA’s QR image, deeplink, and a persisted transaction id', async () => {
     stubAbaFetch();
     const order = await makeOrder();
 
     const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
     expect(res.status).toBe(200);
-    expect(res.body.checkoutUrl).toContain('checkout');
-    expect(res.body.abapayDeeplink).toContain('abapay://');
-    expect(res.body.khqrSvg).toMatch(/^data:image\/svg\+xml;base64,/);
+    expect(res.body.abapayDeeplink).toContain('abamobilebank://');
+    expect(res.body.qrImage).toMatch(/^data:image\/png;base64,/);
     expect(res.body.transactionId).toBeTruthy();
     expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
 
@@ -114,9 +110,7 @@ describe('POST /api/payment/aba/create', () => {
     expect(saved!.paymentExpiresAt).toBeTruthy();
   });
 
-  // Without payment_option ABA returns no qr_string at all, and the customer
-  // is shown an empty grey box instead of a QR code.
-  it('asks ABA for KHQR and sends items as base64 JSON', async () => {
+  it('asks ABA for a deeplink-capable KHQR payment and encodes order items', async () => {
     const spy = stubAbaFetch();
     const order = await makeOrder();
 
@@ -125,7 +119,7 @@ describe('POST /api/payment/aba/create', () => {
     const purchaseCall = spy.mock.calls.find((c) => String(c[0]).includes('/payments/purchase'));
     expect(purchaseCall).toBeTruthy();
     const body = new URLSearchParams((purchaseCall![1] as any).body);
-    expect(body.get('payment_option')).toBe('abapay_khqr');
+    expect(body.get('payment_option')).toBe('abapay_khqr_deeplink');
     expect(body.get('return_params')).toBe(order.id);
 
     const items = JSON.parse(Buffer.from(body.get('items')!, 'base64').toString('utf-8'));
@@ -158,111 +152,6 @@ describe('POST /api/payment/aba/create', () => {
     const res = await request(app).post('/api/payment/aba/create').set(asCustomer(uid)).send({ orderId: order.id });
     expect(res.status).toBe(502);
     expect(res.body.error).toContain('Wrong Hash');
-  });
-});
-
-describe('POST /api/payment/aba/webhook', () => {
-  it('rejects the webhook when no secret is configured', async () => {
-    // The old code skipped verification when the secret was missing, which let
-    // anyone on the internet mark an order paid.
-    enableAba({ ABA_WEBHOOK_SECRET: '' });
-    delete process.env.ABA_WEBHOOK_SECRET;
-    const { transactionId } = await makeOrderWithTransaction();
-
-    const res = await request(app)
-      .post('/api/payment/aba/webhook')
-      .send({ tran_id: transactionId, status: 'APPROVED' });
-
-    expect(res.status).toBe(503);
-  });
-
-  it('rejects an unsigned webhook', async () => {
-    const { id, transactionId } = await makeOrderWithTransaction();
-
-    const res = await request(app)
-      .post('/api/payment/aba/webhook')
-      .send({ tran_id: transactionId, status: 'APPROVED' });
-
-    expect(res.status).toBe(401);
-    const order = await prisma.order.findUnique({ where: { id } });
-    expect(order!.status).toBe('pending');
-  });
-
-  it('rejects a webhook signed with the wrong secret', async () => {
-    const { id, transactionId } = await makeOrderWithTransaction();
-    const body = { tran_id: transactionId, status: 'APPROVED' };
-
-    const res = await request(app)
-      .post('/api/payment/aba/webhook')
-      .set('x-payway-signature', signWebhook(body, 'attacker-guess'))
-      .send(body);
-
-    expect(res.status).toBe(401);
-    const order = await prisma.order.findUnique({ where: { id } });
-    expect(order!.status).toBe('pending');
-  });
-
-  it('refuses to settle when the paid amount is short', async () => {
-    const { id, totalAmount, transactionId } = await makeOrderWithTransaction();
-    stubAbaFetch({ status: approvedStatus(totalAmount - 2) });
-
-    const res = await postWebhook(app, { tran_id: transactionId, status: 'APPROVED' });
-
-    expect(res.status).toBe(400);
-    const order = await prisma.order.findUnique({ where: { id } });
-    expect(order!.status).toBe('pending');
-    expect(order!.pointsSettled).toBe(false);
-  });
-
-  it('marks the order paid and credits points for a valid approved payment', async () => {
-    const { id, totalAmount, transactionId } = await makeOrderWithTransaction();
-    stubAbaFetch({ status: approvedStatus(totalAmount) });
-    const before = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
-
-    const res = await postWebhook(app, { tran_id: transactionId, status: 'APPROVED' });
-
-    expect(res.status).toBe(200);
-    const order = await prisma.order.findUnique({ where: { id } });
-    expect(order!.status).toBe('paid');
-    expect(order!.pointsSettled).toBe(true);
-    const after = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
-    expect(after).toBe(before + order!.pointsEarned);
-  });
-
-  it('does not credit points twice when ABA retries the webhook', async () => {
-    const { id, totalAmount, transactionId } = await makeOrderWithTransaction();
-    stubAbaFetch({ status: approvedStatus(totalAmount) });
-
-    await postWebhook(app, { tran_id: transactionId, status: 'APPROVED' });
-    const afterFirst = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
-
-    const second = await postWebhook(app, { tran_id: transactionId, status: 'APPROVED' });
-    expect(second.status).toBe(200);
-
-    const afterSecond = (await prisma.user.findUnique({ where: { telegramUserId: uid } }))!.loyaltyPoints;
-    expect(afterSecond).toBe(afterFirst);
-    const order = await prisma.order.findUnique({ where: { id } });
-    expect(order!.status).toBe('paid');
-  });
-
-  it('accepts the base64 response envelope ABA sometimes sends', async () => {
-    const { id, totalAmount, transactionId } = await makeOrderWithTransaction();
-    stubAbaFetch({ status: approvedStatus(totalAmount) });
-
-    const envelope = {
-      response: Buffer.from(JSON.stringify({ tran_id: transactionId, status: 0 })).toString('base64'),
-    };
-    const res = await postWebhook(app, envelope);
-
-    expect(res.status).toBe(200);
-    const order = await prisma.order.findUnique({ where: { id } });
-    expect(order!.status).toBe('paid');
-  });
-
-  it('returns 404 when no order matches the transaction', async () => {
-    stubAbaFetch();
-    const res = await postWebhook(app, { tran_id: 'no-such-transaction', status: 'APPROVED' });
-    expect(res.status).toBe(404);
   });
 });
 

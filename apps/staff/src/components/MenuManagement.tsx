@@ -159,7 +159,7 @@ export function MenuManagement() {
               }
             }}
             aria-describedby="menu-search-hint"
-            className="h-11 w-full rounded-xl border border-border bg-surface pr-4 pl-10 text-base text-ink transition-colors placeholder:text-ink-faint focus:border-accent"
+            className="h-10 w-full bg-surface border border-border pr-4 pl-10 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent font-sans transition-colors"
           />
         </div>
 
@@ -191,26 +191,26 @@ export function MenuManagement() {
             setEditingItem(null);
             setModalOpen(true);
           }}
-          className="font-bold text-xs"
+          className="font-medium text-xs h-10"
         >
           <Plus className="size-4" />
           Add Item
         </Button>
 
         {isFiltered ? (
-          <Button variant="ghost" onClick={clearFilters}>
+          <Button variant="ghost" onClick={clearFilters} className="h-10 text-xs">
             <X className="size-4" aria-hidden="true" />
             Clear
           </Button>
         ) : null}
       </div>
 
-      <p id="menu-search-hint" className="text-sm text-ink-soft" aria-live="polite">
+      <p id="menu-search-hint" className="text-xs font-mono text-ink-soft" aria-live="polite">
         {isFiltered
           ? `${filteredItems.length} of ${items.length} items · ${soldOutCount} sold out`
           : `${items.length} items · ${soldOutCount} sold out`}
         {soleMatch ? (
-          <span className="ml-2 inline-flex items-center gap-1.5 font-semibold text-accent">
+          <span className="ml-2 inline-flex items-center gap-1.5 font-sans font-medium text-accent">
             <CornerDownLeft className="size-3.5" aria-hidden="true" />
             Enter to mark {soleMatch.isSoldOut ? 'available' : 'sold out'}
           </span>
@@ -227,7 +227,7 @@ export function MenuManagement() {
         </Card>
       ) : loadError ? (
         <EmptyState
-          icon={<CircleAlert className="size-10" />}
+          icon={<CircleAlert className="size-10 text-danger" />}
           title="Couldn't load the menu"
           description="Check your connection and try again."
           action={
@@ -238,7 +238,7 @@ export function MenuManagement() {
         />
       ) : filteredItems.length === 0 ? (
         <EmptyState
-          icon={<Search className="size-10" />}
+          icon={<Search className="size-10 text-ink-faint" />}
           title="No items match"
           description="Try a different search or clear the filters."
           action={
@@ -253,54 +253,53 @@ export function MenuManagement() {
             <table className="w-full border-collapse text-left">
               <caption className="sr-only">Menu items and availability</caption>
               <thead>
-                {/* Sticky: a hundred items is a long scroll to lose the columns. */}
-                <tr className="sticky top-0 z-10 bg-surface-sunken">
-                  <th scope="col" className="p-3.5 text-sm font-semibold text-ink-soft">
+                <tr className="sticky top-0 z-10 bg-surface-sunken border-b border-border">
+                  <th scope="col" className="p-3 text-[11px] font-mono uppercase tracking-wider text-ink-soft">
                     Item
                   </th>
                   <th
                     scope="col"
-                    className="hidden p-3.5 text-sm font-semibold text-ink-soft sm:table-cell"
+                    className="hidden p-3 text-[11px] font-mono uppercase tracking-wider text-ink-soft sm:table-cell"
                   >
                     Category
                   </th>
                   <th
                     scope="col"
-                    className="hidden p-3.5 text-sm font-semibold text-ink-soft sm:table-cell"
+                    className="hidden p-3 text-[11px] font-mono uppercase tracking-wider text-ink-soft sm:table-cell"
                   >
                     Price
                   </th>
                   <th
                     scope="col"
-                    className="p-3.5 text-right text-sm font-semibold text-ink-soft"
+                    className="p-3 text-right text-[11px] font-mono uppercase tracking-wider text-ink-soft"
                   >
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {filteredItems.map((item) => {
                   const zhengda = item.brand.toLowerCase() === 'zhengda';
                   const busy = pendingIds.has(item.id!);
                   return (
                     <tr
                       key={item.id}
-                      className={`border-t border-border transition-colors hover:bg-surface-sunken/60 ${
-                        item.isSoldOut ? 'bg-surface-sunken/30' : ''
+                      className={`transition-colors hover:bg-surface-sunken/60 ${
+                        item.isSoldOut ? 'bg-danger-soft/20' : ''
                       }`}
                     >
-                      <td className="p-3.5">
+                      <td className="p-3">
                         <div className="flex flex-col gap-1">
                           <span className="flex items-center gap-2.5">
                             <span
                               aria-hidden="true"
-                              className={`size-2.5 shrink-0 rounded-full ${
-                                zhengda ? 'bg-zhengda' : 'bg-accent'
+                              className={`size-2 shrink-0 rounded-none ${
+                                zhengda ? 'bg-zhengda shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 'bg-accent shadow-[0_0_8px_rgba(16,185,129,0.5)]'
                               }`}
                             />
                             <span
-                              className={`font-medium ${
-                                item.isSoldOut ? 'text-ink-faint' : 'text-ink'
+                              className={`font-medium text-sm ${
+                                item.isSoldOut ? 'text-ink-faint line-through' : 'text-ink'
                               }`}
                             >
                               <span className="sr-only">
@@ -309,34 +308,34 @@ export function MenuManagement() {
                               {item.name}
                             </span>
                           </span>
-                          <div className="flex items-center gap-1.5 pl-5">
+                          <div className="flex items-center gap-1.5 pl-4.5">
                             {item.earnsStamp !== false ? (
-                              <span className="inline-flex items-center rounded-md bg-success-soft px-1.5 py-0.5 text-[10px] font-bold text-success">
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-bold bg-success-soft border border-success/30 text-success">
                                 +1 Stamp
                               </span>
                             ) : (
-                              <span className="inline-flex items-center rounded-md bg-surface-sunken px-1.5 py-0.5 text-[10px] font-medium text-ink-faint">
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium bg-surface-sunken border border-border text-ink-faint">
                                 No Stamp
                               </span>
                             )}
                             {item.canClaim && (
-                              <span className="inline-flex items-center rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-bold bg-purple-500/10 border border-purple-500/20 text-purple-500 dark:text-purple-400">
                                 🎁 Free Claim
                               </span>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="hidden p-3.5 text-sm text-ink-soft sm:table-cell">
+                      <td className="hidden p-3 text-xs text-ink-soft sm:table-cell font-sans">
                         {item.category}
                       </td>
-                      <td className="hidden p-3.5 text-sm font-bold tabular-nums text-ink sm:table-cell">
+                      <td className="hidden p-3 text-sm font-mono font-bold text-ink sm:table-cell">
                         ${Number(item.basePrice ?? 0).toFixed(2)}
                       </td>
-                      <td className="p-3.5">
-                        <span className="flex items-center justify-end gap-2 sm:gap-3">
+                      <td className="p-3">
+                        <span className="flex items-center justify-end gap-2">
                           {item.isSoldOut ? (
-                            <Badge variant="danger" dot>
+                            <Badge variant="danger" dot className="font-mono text-[10px]">
                               Sold out
                             </Badge>
                           ) : null}
@@ -348,9 +347,9 @@ export function MenuManagement() {
                               setEditingItem(item);
                               setModalOpen(true);
                             }}
-                            className="font-bold text-xs"
+                            className="font-mono text-xs h-8 px-2.5"
                           >
-                            <Edit className="size-3.5" />
+                            <Edit className="size-3" />
                             Edit
                           </Button>
 
@@ -358,6 +357,7 @@ export function MenuManagement() {
                             variant={item.isSoldOut ? 'success' : 'secondary'}
                             loading={busy}
                             onClick={() => setSoldOut(item, !item.isSoldOut)}
+                            className="font-mono text-xs h-8 px-2.5"
                           >
                             {item.isSoldOut ? 'Mark available' : 'Mark sold out'}
                           </Button>

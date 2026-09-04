@@ -74,7 +74,7 @@ export function Tabs({
       aria-label={ariaLabel}
       onKeyDown={handleKeyDown}
       className={[
-        'inline-flex items-center gap-1 rounded-xl bg-surface-sunken p-1',
+        'inline-flex items-center gap-1 rounded-none bg-surface-sunken p-1',
         // Never let the bar push the page wide on a phone; scroll it instead.
         'max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className,
@@ -98,7 +98,7 @@ export function Tabs({
             tabIndex={isActive ? 0 : -1}
             onClick={() => onChange(tab.id)}
             className={[
-              'inline-flex items-center justify-center gap-2 rounded-lg font-semibold',
+              'inline-flex items-center justify-center gap-2 rounded-none font-semibold',
               'transition-[background-color,color,transform] duration-150 ease-out',
               tabSizeClasses[size],
               isActive
@@ -113,7 +113,7 @@ export function Tabs({
             ) : null}
             <span className="whitespace-nowrap">{tab.label}</span>
             {typeof tab.badge === 'number' ? (
-              <span className="min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-xs font-semibold leading-none text-on-accent">
+              <span className="min-w-5 rounded-none bg-accent px-1.5 py-0.5 text-center text-xs font-semibold leading-none text-on-accent">
                 {tab.badge}
               </span>
             ) : null}

@@ -5,5 +5,16 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
+  },
+  "env": {
+    "staging": {
+      "name": "ai-cha-zhengda-staff-staging",
+      "routes": [
+        {
+          "pattern": "staging-staff.aichazhengdaarakawa.com",
+          "custom_domain": true
+        }
+      ]
+    }
   }
 }
