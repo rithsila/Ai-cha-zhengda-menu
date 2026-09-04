@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, CornerDownLeft, Edit, Plus, Search, X } from 'lucide-react';
+import { CircleAlert, CornerDownLeft, Edit, Layers, Plus, Search, X } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import {
   Badge,
@@ -11,6 +11,7 @@ import {
   useToast,
 } from './ui';
 import { MenuItemEditModal, type MenuItemFull } from './MenuItemEditModal';
+import { CategoryManagementModal } from './CategoryManagementModal';
 
 type AvailabilityFilter = 'all' | 'available' | 'soldout';
 type BrandFilter = 'all' | 'ai-cha' | 'zhengda';
@@ -29,6 +30,7 @@ export function MenuManagement() {
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItemFull | null>(null);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
   const fetchCatalog = async () => {
     setLoading(true);
@@ -184,6 +186,15 @@ export function MenuManagement() {
           onChange={setBrand}
           ariaLabel="Filter by brand"
         />
+
+        <Button
+          variant="secondary"
+          onClick={() => setCategoryModalOpen(true)}
+          className="font-medium text-xs h-10"
+        >
+          <Layers className="size-4" />
+          Manage Categories
+        </Button>
 
         <Button
           variant="primary"
@@ -381,6 +392,17 @@ export function MenuManagement() {
           setEditingItem(null);
         }}
         onSaved={fetchCatalog}
+      />
+
+      {/* Category Management Modal */}
+      <CategoryManagementModal
+        isOpen={categoryModalOpen}
+        onClose={() => {
+          setCategoryModalOpen(false);
+          fetchCatalog();
+        }}
+        items={items}
+        onUpdated={fetchCatalog}
       />
     </div>
   );
