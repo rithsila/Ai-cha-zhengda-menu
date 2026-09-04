@@ -257,11 +257,17 @@ export default function App() {
   }, []);
 
   const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
+  const [categoriesList, setCategoriesList] = useState<
+    Array<{ brand: string; name: string; sortOrder: number }>
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchCatalog = useCallback(async () => {
     try {
-      const res = await apiFetch('/api/catalog');
+      const [res, catRes] = await Promise.all([
+        apiFetch('/api/catalog'),
+        apiFetch('/api/categories').catch(() => null),
+      ]);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -287,6 +293,18 @@ export default function App() {
             })),
           }));
           setDynamicCatalog(mapped);
+        }
+      }
+      if (catRes && catRes.ok) {
+        const catData = await catRes.json();
+        if (Array.isArray(catData)) {
+          setCategoriesList(
+            catData.map((c: any) => ({
+              brand: c.brand,
+              name: c.name,
+              sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 999,
+            }))
+          );
         }
       }
     } catch (error) {
@@ -316,8 +334,26 @@ export default function App() {
   }, [activeBrand, dynamicCatalog, menuTabs]);
 
   const categories = useMemo(() => {
-    return ['All', ...new Set(brandItems.map((i) => i.category))];
-  }, [brandItems]);
+    const brandCategories = categoriesList.filter(
+      (c) => c.brand?.toLowerCase() === activeBrand.toLowerCase()
+    );
+    const orderMap = new Map<string, number>();
+    brandCategories.forEach((c) => {
+      orderMap.set(c.name.trim().toLowerCase(), c.sortOrder);
+    });
+
+    const unique = Array.from(new Set(brandItems.map((i) => i.category)));
+    unique.sort((a, b) => {
+      const orderA = orderMap.get(a.trim().toLowerCase()) ?? 999;
+      const orderB = orderMap.get(b.trim().toLowerCase()) ?? 999;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.localeCompare(b);
+    });
+
+    return ['All', ...unique];
+  }, [brandItems, categoriesList, activeBrand]);
 
   // Filtered items
   const visibleItems = useMemo(() => {
