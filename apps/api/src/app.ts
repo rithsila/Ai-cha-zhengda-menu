@@ -792,6 +792,191 @@ export function createApp() {
     }
   });
 
+  app.get('/api/categories', async (req, res) => {
+    try {
+      const brand = typeof req.query.brand === 'string' && req.query.brand.trim()
+        ? req.query.brand.trim().toLowerCase()
+        : undefined;
+      const where: any = {};
+      if (brand) {
+        where.brand = brand;
+      }
+      const categories = await prisma.category.findMany({
+        where,
+        orderBy: { sortOrder: 'asc' },
+      });
+      res.json(categories);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+  });
+
+  app.post('/api/categories', requireManager, async (req, res) => {
+    try {
+      const { brand, name, sortOrder } = req.body || {};
+      if (!name || typeof name !== 'string' || !brand || typeof brand !== 'string') {
+        return res.status(400).json({ error: 'Brand and name are required' });
+      }
+      const normalizedBrand = brand.trim().toLowerCase();
+      const normalizedName = name.trim();
+      if (!normalizedBrand || !normalizedName) {
+        return res.status(400).json({ error: 'Brand and name must not be empty' });
+      }
+
+      let order: number;
+      if (sortOrder !== undefined && Number.isFinite(Number(sortOrder))) {
+        order = Number(sortOrder);
+      } else {
+        const maxCategory = await prisma.category.findFirst({
+          where: { brand: normalizedBrand },
+          orderBy: { sortOrder: 'desc' },
+        });
+        order = maxCategory ? maxCategory.sortOrder + 1 : 0;
+      }
+
+      const category = await prisma.category.create({
+        data: {
+          brand: normalizedBrand,
+          name: normalizedName,
+          sortOrder: order,
+        },
+      });
+      res.status(201).json(category);
+    } catch (error: any) {
+      console.error(error);
+      if (error?.code === 'P2002') {
+        return res.status(400).json({ error: 'Category with this name already exists for this brand' });
+      }
+      res.status(500).json({ error: 'Failed to create category' });
+    }
+  });
+
+  app.put('/api/categories/reorder', requireManager, async (req, res) => {
+    try {
+      const { items } = req.body || {};
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'items array is required' });
+      }
+      await prisma.$transaction(async (tx) => {
+        for (const item of items) {
+          if (item && item.id && Number.isFinite(Number(item.sortOrder))) {
+            await tx.category.update({
+              where: { id: String(item.id) },
+              data: { sortOrder: Number(item.sortOrder) },
+            });
+          }
+        }
+      }, WRITE_TX_OPTIONS);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to reorder categories' });
+    }
+  });
+
+  app.put('/api/categories/:id', requireManager, async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const { name, sortOrder, isActive } = req.body || {};
+
+      const existing = await prisma.category.findUnique({
+        where: { id },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+
+      const updateData: any = {};
+      let newName: string | undefined;
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim()) {
+          return res.status(400).json({ error: 'Valid category name is required' });
+        }
+        newName = name.trim();
+        updateData.name = newName;
+      }
+      if (sortOrder !== undefined) {
+        const parsed = Number(sortOrder);
+        if (!Number.isNaN(parsed)) {
+          updateData.sortOrder = parsed;
+        }
+      }
+      if (isActive !== undefined) {
+        updateData.isActive = Boolean(isActive);
+      }
+
+      let updated;
+      if (newName && newName !== existing.name) {
+        updated = await prisma.$transaction(async (tx) => {
+          const updatedCat = await tx.category.update({
+            where: { id },
+            data: updateData,
+          });
+          await tx.menuItem.updateMany({
+            where: {
+              brand: existing.brand,
+              category: existing.name,
+            },
+            data: {
+              category: newName,
+            },
+          });
+          return updatedCat;
+        }, WRITE_TX_OPTIONS);
+      } else {
+        updated = await prisma.category.update({
+          where: { id },
+          data: updateData,
+        });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error(error);
+      if (error?.code === 'P2002') {
+        return res.status(400).json({ error: 'Category with this name already exists for this brand' });
+      }
+      res.status(500).json({ error: 'Failed to update category' });
+    }
+  });
+
+  app.delete('/api/categories/:id', requireManager, async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const category = await prisma.category.findUnique({
+        where: { id },
+      });
+      if (!category) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+
+      const activeItemCount = await prisma.menuItem.count({
+        where: {
+          brand: category.brand,
+          category: category.name,
+          isActive: true,
+        },
+      });
+
+      if (activeItemCount > 0) {
+        return res.status(400).json({
+          error: `Cannot delete category: ${activeItemCount} items are assigned to it`,
+        });
+      }
+
+      await prisma.category.delete({
+        where: { id },
+      });
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to delete category' });
+    }
+  });
+
   app.post('/api/orders', resolveCustomer, async (req, res) => {
     try {
       const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward } = req.body;
