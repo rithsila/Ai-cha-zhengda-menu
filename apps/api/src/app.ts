@@ -595,8 +595,8 @@ export function createApp() {
   app.post('/api/catalog', requireManager, async (req, res) => {
     try {
       const { brand, category, name, description, basePrice, image, modifiers, earnsStamp, canClaim } = req.body || {};
-      if (!name || typeof name !== 'string' || !brand || typeof brand !== 'string' || !category || typeof category !== 'string') {
-        return res.status(400).json({ error: 'Name, brand, and category are required' });
+      if (!name || typeof name !== 'string' || !category || typeof category !== 'string') {
+        return res.status(400).json({ error: 'Name and category are required' });
       }
       const parsedPrice = Number(basePrice);
       if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
@@ -605,7 +605,7 @@ export function createApp() {
 
       const item = await prisma.menuItem.create({
         data: {
-          brand: brand.trim().toLowerCase(),
+          brand: typeof brand === 'string' && brand.trim() ? brand.trim().toLowerCase() : 'default',
           category: category.trim(),
           name: name.trim(),
           description: typeof description === 'string' ? description.trim() : null,
@@ -815,13 +815,13 @@ export function createApp() {
   app.post('/api/categories', requireManager, async (req, res) => {
     try {
       const { brand, name, sortOrder } = req.body || {};
-      if (!name || typeof name !== 'string' || !brand || typeof brand !== 'string') {
-        return res.status(400).json({ error: 'Brand and name are required' });
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ error: 'Name is required' });
       }
-      const normalizedBrand = brand.trim().toLowerCase();
+      const normalizedBrand = typeof brand === 'string' && brand.trim() ? brand.trim().toLowerCase() : 'default';
       const normalizedName = name.trim();
-      if (!normalizedBrand || !normalizedName) {
-        return res.status(400).json({ error: 'Brand and name must not be empty' });
+      if (!normalizedName) {
+        return res.status(400).json({ error: 'Name must not be empty' });
       }
 
       let order: number;
@@ -829,7 +829,6 @@ export function createApp() {
         order = Number(sortOrder);
       } else {
         const maxCategory = await prisma.category.findFirst({
-          where: { brand: normalizedBrand },
           orderBy: { sortOrder: 'desc' },
         });
         order = maxCategory ? maxCategory.sortOrder + 1 : 0;
@@ -846,7 +845,7 @@ export function createApp() {
     } catch (error: any) {
       console.error(error);
       if (error?.code === 'P2002') {
-        return res.status(400).json({ error: 'Category with this name already exists for this brand' });
+        return res.status(400).json({ error: 'Category with this name already exists' });
       }
       res.status(500).json({ error: 'Failed to create category' });
     }

@@ -13,18 +13,11 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { CustomSelect } from './ui/CustomSelect';
-import { Segmented } from './ui/Segmented';
 import { Switch } from './ui/Switch';
 import { useToast } from './ui/Toast';
 import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 
-export interface Category {
-  id: string;
-  brand: string;
-  name: string;
-  sortOrder: number;
-  isActive: boolean;
-}
+import type { Category } from './CategoryManagementModal';
 
 export type ModifierOptionInput = {
   id?: string;
@@ -44,7 +37,7 @@ export type ModifierGroupInput = {
 
 export type MenuItemFull = {
   id?: string;
-  brand: string;
+  brand?: string;
   category: string;
   name: string;
   description?: string | null;
@@ -156,7 +149,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [brand, setBrand] = useState<'ai-cha' | 'zhengda'>('ai-cha');
+  const [brand, setBrand] = useState<string>('default');
   const [category, setCategory] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -189,7 +182,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
 
   useEffect(() => {
     if (item) {
-      setBrand(item.brand.toLowerCase() === 'zhengda' ? 'zhengda' : 'ai-cha');
+      setBrand(item.brand || 'default');
       setCategory(item.category || '');
       setName(item.name || '');
       setDescription(item.description || '');
@@ -213,7 +206,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         })) || []
       );
     } else {
-      setBrand('ai-cha');
+      setBrand('default');
       setCategory('');
       setName('');
       setDescription('');
@@ -228,8 +221,6 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     setError(null);
   }, [item, isOpen]);
 
-  const itemId = item?.id;
-  const itemBrand = item?.brand?.toLowerCase();
   const itemCategory = item?.category;
 
   useEffect(() => {
@@ -238,7 +229,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     let isMounted = true;
     setLoadingCategories(true);
 
-    fetch(`${API_BASE}/api/categories?brand=${encodeURIComponent(brand)}`, {
+    fetch(`${API_BASE}/api/categories`, {
       headers: authHeaders(),
     })
       .then(async (res) => {
@@ -252,11 +243,9 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         if (!isMounted) return;
         setCategories(data);
 
-        if (itemId && itemBrand === brand) {
-          if (itemCategory) {
-            setCategory(itemCategory);
-            return;
-          }
+        if (itemCategory) {
+          setCategory(itemCategory);
+          return;
         }
 
         if (data.length > 0) {
@@ -280,14 +269,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [isOpen, brand, itemId, itemBrand, itemCategory]);
-
-  const handleBrandChange = (newBrand: 'ai-cha' | 'zhengda') => {
-    if (newBrand === brand) return;
-    setBrand(newBrand);
-    setIsAddingCategory(false);
-    setNewCategoryName('');
-  };
+  }, [isOpen, itemCategory]);
 
   const handleQuickAddCategory = async () => {
     const trimmed = newCategoryName.trim();
@@ -620,27 +602,11 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
           )}
 
-          {/* Brand & Category */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-                Brand
-              </label>
-              <Segmented
-                options={[
-                  { id: 'ai-cha', label: 'Ai-Cha' },
-                  { id: 'zhengda', label: 'Zhengda' },
-                ]}
-                value={brand}
-                onChange={(val) => handleBrandChange(val as 'ai-cha' | 'zhengda')}
-                ariaLabel="Select Brand"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-                Category
-              </label>
+          {/* Category */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+              Category
+            </label>
               {isAddingCategory ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -713,7 +679,6 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 </div>
               )}
             </div>
-          </div>
 
           {/* Name & Base Price */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

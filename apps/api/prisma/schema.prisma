@@ -36,19 +36,17 @@ model Branch {
 
 model Category {
   id        String   @id @default(uuid())
-  brand     String   // "ai-cha" | "zhengda"
-  name      String
+  brand     String   @default("default") // legacy field, defaulted
+  name      String   @unique
   sortOrder Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@unique([brand, name])
 }
 
 model MenuItem {
   id          String          @id @default(uuid())
-  brand       String
+  brand       String          @default("default")
   category    String
   name        String
   description String?
