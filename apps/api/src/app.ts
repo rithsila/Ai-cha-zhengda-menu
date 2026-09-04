@@ -1397,7 +1397,7 @@ export function createApp() {
       const parsedExpiration = purchase.expiresAt ? new Date(purchase.expiresAt) : null;
       const expiresAt = parsedExpiration && !Number.isNaN(parsedExpiration.getTime())
         ? parsedExpiration
-        : getQRExpiration();
+        : new Date(Date.now() + 3 * 60 * 1000);
 
       await prisma.order.update({
         where: { id: order.id },

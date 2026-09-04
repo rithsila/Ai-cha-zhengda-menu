@@ -159,7 +159,7 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
           qrImage: data.qrImage,
           amount: data.amount,
           merchantName: data.merchantName,
-          expiresAt: data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 15 * 60 * 1000,
+          expiresAt: data.expiresAt ? new Date(data.expiresAt).getTime() : Date.now() + 3 * 60 * 1000,
         });
       } catch {
         if (cancelled) return;
@@ -333,7 +333,7 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
               clipPath: 'polygon(0 0, 100% 0, 100% 100%, 84% 75%, 0 75%)',
             }}
           >
-            <div className="pb-1.5 flex items-center justify-center w-full max-w-[95px]">
+            <div className="pb-1.5 flex items-center justify-center w-full max-w-[68px]">
               <KhqrLogo className="w-full h-auto text-white" />
             </div>
           </div>

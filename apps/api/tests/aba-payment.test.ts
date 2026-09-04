@@ -35,7 +35,7 @@ async function makeOrderWithTransaction() {
   const transactionId = `tx-${randomUUID()}`;
   await prisma.order.update({
     where: { id: order.id },
-    data: { transactionId, paymentExpiresAt: new Date(Date.now() + 15 * 60 * 1000) },
+    data: { transactionId, paymentExpiresAt: new Date(Date.now() + 3 * 60 * 1000) },
   });
   return { ...order, transactionId };
 }
