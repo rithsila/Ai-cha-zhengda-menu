@@ -48,7 +48,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   // Free inside Arakawa today; the shop can change it with PUT /api/config.
   const [deliveryFeeRate, setDeliveryFeeRate] = useState(0);
   const [allowCashForStandard, setAllowCashForStandard] = useState(false);
-  const [showCashLockedBanner, setShowCashLockedBanner] = useState(false);
   
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
   // about the payment (creating it, polling, expiry, retry).
@@ -90,7 +89,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setBranchId('');
       setPaymentOrderId(null);
       setPaymentOrderCode(null);
-      setShowCashLockedBanner(false);
       return;
     }
 
@@ -677,10 +675,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   {storeStatus.enableKhqr && khqrOffered ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowCashLockedBanner(false);
-                        setMethod('khqr');
-                      }}
+                      onClick={() => setMethod('khqr')}
                       aria-pressed={method === 'khqr'}
                       className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
                         method === 'khqr'
@@ -700,73 +695,38 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     </button>
                   ) : null}
 
-                  {storeStatus.enableCash ? (
-                    <div className="flex flex-col gap-1.5">
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          if (!isCashUnlocked) {
-                            setShowCashLockedBanner(true);
-                            if (khqrOffered) setMethod('khqr');
-                            return;
-                          }
-                          setShowCashLockedBanner(false);
-                          setMethod('cash');
-                        }}
-                        aria-pressed={method === 'cash'}
-                        className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
-                          !isCashUnlocked
-                            ? 'bg-tg-secondary-bg/60 border-tg-hint/15 opacity-80'
-                            : method === 'cash' 
-                            ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
-                            : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
-                        }`}
-                      >
-                        <div className="flex-1 pr-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-base text-tg-text">{t('cash')}</span>
-                            {isCashUnlocked ? (
-                              userTier === 'gold' && (
-                                <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-700 dark:text-amber-300 font-extrabold text-[11px] border border-amber-400/30 flex items-center gap-1">
-                                  ⭐ {t('goldPerk', 'Gold Perk')}
-                                </span>
-                              )
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full bg-tg-hint/15 text-tg-hint font-bold text-[11px] flex items-center gap-1">
-                                🔒 {t('goldMember', 'Gold Only')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-tg-hint mt-1">
-                            {isCashUnlocked
-                              ? t('cashDescription', 'Pay at counter or upon delivery')
-                              : t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.')}
-                          </div>
+                  {storeStatus.enableCash && isCashUnlocked ? (
+                    <button 
+                      type="button"
+                      onClick={() => setMethod('cash')}
+                      aria-pressed={method === 'cash'}
+                      className={`rounded-2xl border p-4 flex justify-between items-center transition-all text-left ${
+                        method === 'cash' 
+                          ? 'bg-brand-primary/10 border-brand-primary/30 shadow-sm' 
+                          : 'bg-tg-secondary-bg border-tg-hint/15 hover:bg-tg-hint/5'
+                      }`}
+                    >
+                      <div className="flex-1 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-base text-tg-text">{t('cash')}</span>
                         </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
-                          !isCashUnlocked
-                            ? 'border-tg-hint/20'
-                            : method === 'cash'
-                            ? 'border-brand-primary'
-                            : 'border-tg-hint/25'
-                        }`}>
-                          {isCashUnlocked && method === 'cash' && (
-                            <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />
-                          )}
-                          {!isCashUnlocked && <span className="text-[10px]">🔒</span>}
+                        <div className="text-xs text-tg-hint mt-1">
+                          {t('cashDescription', 'Pay at counter or upon delivery')}
                         </div>
-                      </button>
-
-                      {showCashLockedBanner && !isCashUnlocked && (
-                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300 font-medium flex items-start gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                          <span className="text-base leading-none">🔒</span>
-                          <span>{t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.')}</span>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
+                        method === 'cash'
+                          ? 'border-brand-primary'
+                          : 'border-tg-hint/25'
+                      }`}>
+                        {method === 'cash' && (
+                          <div className="w-2.5 h-2.5 bg-brand-primary rounded-full" />
+                        )}
+                      </div>
+                    </button>
                   ) : null}
 
-                  {!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered) && (
+                  {(!storeStatus.enableCash || !isCashUnlocked) && (!storeStatus.enableKhqr || !khqrOffered) && (
                     <p className="text-xs text-[#E53935] font-medium bg-[#E53935]/10 p-3 rounded-xl border border-[#E53935]/20 text-center">
                       {t('noPaymentAvailable', 'No payment methods are available right now.')}
                     </p>
