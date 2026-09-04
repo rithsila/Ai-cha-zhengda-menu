@@ -345,7 +345,7 @@ export function CategoryManagementModal({
           )}
 
           {/* Add Category Row */}
-          <form onSubmit={handleAddCategory} className="flex gap-2">
+          <form onSubmit={handleAddCategory} className="flex items-center gap-2">
             <input
               type="text"
               placeholder="New category name..."
@@ -356,11 +356,12 @@ export function CategoryManagementModal({
             <Button
               type="submit"
               variant="primary"
+              size="sm"
               disabled={!newCategoryName.trim() || adding}
               loading={adding}
-              className="h-10 px-4 font-medium text-xs rounded-none"
+              className="font-medium rounded-none"
             >
-              <Plus className="size-4 mr-1" />
+              <Plus className="size-4" />
               Add
             </Button>
           </form>

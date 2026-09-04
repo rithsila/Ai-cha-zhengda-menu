@@ -8,7 +8,7 @@ export type ButtonVariant =
   | 'danger'
   | 'success';
 
-export type ButtonSize = 'md' | 'lg' | 'icon';
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
 interface ButtonBaseProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
@@ -36,12 +36,14 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
+  sm: 'h-10 px-3 text-xs',
   md: 'h-11 px-4 text-sm',
   lg: 'h-13 px-6 text-base',
   icon: 'size-11 justify-center p-0',
 };
 
 const contentGapClasses: Record<ButtonSize, string> = {
+  sm: 'gap-1.5',
   md: 'gap-2',
   lg: 'gap-2.5',
   icon: '',

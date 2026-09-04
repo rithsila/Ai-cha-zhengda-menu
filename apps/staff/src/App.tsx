@@ -1038,12 +1038,14 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               </span>
             ) : null}
 
-            <ConnectionStatusBadge
-              state={connState}
-              lastSuccessAt={lastSuccessAt}
-              refreshing={refreshing}
-              onRefresh={() => fetchOrders(true)}
-            />
+            {activeTab !== 'menu' ? (
+              <ConnectionStatusBadge
+                state={connState}
+                lastSuccessAt={lastSuccessAt}
+                refreshing={refreshing}
+                onRefresh={() => fetchOrders(true)}
+              />
+            ) : null}
           </div>
         </header>
 
