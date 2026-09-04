@@ -52,21 +52,27 @@ export function setMuted(muted: boolean): void {
   }
 }
 
-function tone(audio: AudioContext, freq: number, startAt: number, length: number) {
+function tone(
+  audio: AudioContext,
+  freq: number,
+  startAt: number,
+  length: number,
+  peakGain = 0.24,
+) {
   const osc = audio.createOscillator();
   const gain = audio.createGain();
   osc.type = 'sine';
   osc.frequency.setValueAtTime(freq, startAt);
   // Exponential decay, never to exactly 0 — Web Audio cannot ramp to zero.
   gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(0.22, startAt + 0.012);
+  gain.gain.exponentialRampToValueAtTime(peakGain, startAt + 0.012);
   gain.gain.exponentialRampToValueAtTime(0.0001, startAt + length);
   osc.connect(gain).connect(audio.destination);
   osc.start(startAt);
   osc.stop(startAt + length + 0.02);
 }
 
-/** Chime + vibrate for a newly arrived order. No-ops when muted. */
+/** Chime + vibrate for a newly arrived action-ready order. No-ops when muted. */
 export function playNewOrderAlert(): void {
   if (isMuted()) return;
 
@@ -74,13 +80,80 @@ export function playNewOrderAlert(): void {
   if (audio) {
     if (audio.state === 'suspended') void audio.resume();
     const t = audio.currentTime;
-    tone(audio, 880, t, 0.16);
-    tone(audio, 1320, t + 0.14, 0.26);
+    // Rising 3-tone chord (A5 -> C#6 -> E6): bright, pleasant, and cuts through blender noise
+    tone(audio, 880, t, 0.14, 0.25);
+    tone(audio, 1108.73, t + 0.12, 0.16, 0.25);
+    tone(audio, 1320, t + 0.25, 0.28, 0.28);
   }
 
   try {
     navigator.vibrate?.([180, 90, 180]);
   } catch {
     /* unsupported — the chime is the primary signal */
+  }
+}
+
+/** Softer reminder chime for orders that have been waiting untouched. No-ops when muted. */
+export function playReminderAlert(): void {
+  if (isMuted()) return;
+
+  const audio = getContext();
+  if (audio) {
+    if (audio.state === 'suspended') void audio.resume();
+    const t = audio.currentTime;
+    // Gentle 2-tap reminder pulse
+    tone(audio, 784, t, 0.12, 0.18);
+    tone(audio, 784, t + 0.16, 0.18, 0.18);
+  }
+
+  try {
+    navigator.vibrate?.([120, 80, 120]);
+  } catch {
+    /* unsupported */
+  }
+}
+
+/** Urgent alert for orders that exceeded target time (overdue). No-ops when muted. */
+export function playOverdueAlert(): void {
+  if (isMuted()) return;
+
+  const audio = getContext();
+  if (audio) {
+    if (audio.state === 'suspended') void audio.resume();
+    const t = audio.currentTime;
+    // 3 rapid warning beeps
+    tone(audio, 659.25, t, 0.11, 0.28);
+    tone(audio, 659.25, t + 0.14, 0.11, 0.28);
+    tone(audio, 880, t + 0.28, 0.24, 0.32);
+  }
+
+  try {
+    navigator.vibrate?.([250, 100, 250, 100, 250]);
+  } catch {
+    /* unsupported */
+  }
+}
+
+export type AlertSoundType = 'newOrder' | 'reminder' | 'overdue';
+
+/** Test alert tone regardless of mute setting (for settings page). */
+export function testAlertSound(type: AlertSoundType): void {
+  unlockAlerts();
+  const audio = getContext();
+  if (!audio) return;
+  if (audio.state === 'suspended') void audio.resume();
+  const t = audio.currentTime;
+
+  if (type === 'newOrder') {
+    tone(audio, 880, t, 0.14, 0.25);
+    tone(audio, 1108.73, t + 0.12, 0.16, 0.25);
+    tone(audio, 1320, t + 0.25, 0.28, 0.28);
+  } else if (type === 'reminder') {
+    tone(audio, 784, t, 0.12, 0.18);
+    tone(audio, 784, t + 0.16, 0.18, 0.18);
+  } else if (type === 'overdue') {
+    tone(audio, 659.25, t, 0.11, 0.28);
+    tone(audio, 659.25, t + 0.14, 0.11, 0.28);
+    tone(audio, 880, t + 0.28, 0.24, 0.32);
   }
 }

@@ -38,9 +38,10 @@ import type { SettingsSubTab } from './components/SettingsManagement';
 import { OrderCard } from './components/OrderCard';
 import { CancelOrderModal } from './components/CancelOrderModal';
 import {
+  DEFAULT_THRESHOLDS,
   PAID_STATUSES,
   STALE_AFTER_MS,
-  TONE_THRESHOLDS,
+  elapsedTone,
   formatElapsed,
   formatCountdown,
   isAwaitingPayment,
@@ -48,6 +49,7 @@ import {
   parseModifiers,
   paymentExpiryAt,
 } from './lib/orders';
+import type { ThresholdConfig } from './lib/orders';
 import {
   Badge,
   Button,
@@ -69,7 +71,13 @@ import {
   loadSession,
   onUnauthorized,
 } from './lib/api';
-import { isMuted, playNewOrderAlert, setMuted } from './lib/alert';
+import {
+  isMuted,
+  playNewOrderAlert,
+  playReminderAlert,
+  playOverdueAlert,
+  setMuted,
+} from './lib/alert';
 import type { BadgeVariant } from './components/ui';
 import type { Branch, ConnectionState, Order } from './types';
 
@@ -151,8 +159,9 @@ function ConnectionStatusBadge({
   );
 }
 
-function BoardLegend() {
+function BoardLegend({ thresholds }: { thresholds?: ThresholdConfig }) {
   const [open, setOpen] = useState(false);
+  const t = thresholds ?? DEFAULT_THRESHOLDS;
 
   return (
     <div className="rounded-none border border-border bg-surface">
@@ -181,13 +190,13 @@ function BoardLegend() {
               </li>
               <li className="flex items-center gap-2">
                 <span className="inline-block size-2.5 shrink-0 rounded-none bg-status-pending" />
-                Getting close — pending {TONE_THRESHOLDS.pending.warn}m, preparing{' '}
-                {TONE_THRESHOLDS.preparing.warn}m, ready {TONE_THRESHOLDS.ready.warn}m
+                Getting close — pending {t.pendingWarn}m, preparing{' '}
+                {t.preparingWarn}m, ready {t.readyWarn}m
               </li>
               <li className="flex items-center gap-2">
                 <span className="inline-block size-2.5 shrink-0 rounded-none bg-danger" />
-                Over target — pending {TONE_THRESHOLDS.pending.late}m, preparing{' '}
-                {TONE_THRESHOLDS.preparing.late}m, ready {TONE_THRESHOLDS.ready.late}m
+                Over target — pending {t.pendingLate}m, preparing{' '}
+                {t.preparingLate}m, ready {t.readyLate}m
               </li>
             </ul>
             <h4 className="mt-4 font-bold text-ink">QR Payment Verification</h4>
@@ -248,6 +257,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
 
+  const [thresholds, setThresholds] = useState<ThresholdConfig>(DEFAULT_THRESHOLDS);
+  const [reminderSeconds, setReminderSeconds] = useState(60);
+
   const [connState, setConnState] = useState<ConnectionState>('live');
   const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -263,8 +275,37 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
 
   const failuresRef = useRef(0);
-  const knownIdsRef = useRef<Set<string> | null>(null);
+  const chimedOrderIdsRef = useRef<Set<string> | null>(null);
+  const lastReminderSoundRef = useRef<number>(0);
+  const lastOverdueSoundRef = useRef<number>(0);
   const focusAfterRef = useRef<string | null>(null);
+
+  const fetchThresholdConfig = useCallback(async () => {
+    try {
+      const data = await apiFetch<Array<{ key: string; value: string }>>('/api/config');
+      if (Array.isArray(data)) {
+        const map = new Map(data.map((row) => [row.key, row.value]));
+        setThresholds({
+          pendingWarn: Number(map.get('orderWarnPendingMins')) || DEFAULT_THRESHOLDS.pendingWarn,
+          pendingLate: Number(map.get('orderLatePendingMins')) || DEFAULT_THRESHOLDS.pendingLate,
+          preparingWarn: Number(map.get('orderWarnPreparingMins')) || DEFAULT_THRESHOLDS.preparingWarn,
+          preparingLate: Number(map.get('orderLatePreparingMins')) || DEFAULT_THRESHOLDS.preparingLate,
+          readyWarn: Number(map.get('orderWarnReadyMins')) || DEFAULT_THRESHOLDS.readyWarn,
+          readyLate: Number(map.get('orderLateReadyMins')) || DEFAULT_THRESHOLDS.readyLate,
+        });
+        const rem = Number(map.get('orderReminderSeconds'));
+        if (Number.isFinite(rem) && rem >= 15) {
+          setReminderSeconds(rem);
+        }
+      }
+    } catch {
+      // Keep default thresholds
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchThresholdConfig();
+  }, [fetchThresholdConfig]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), CLOCK_MS);
@@ -309,10 +350,21 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         if (!res.ok) throw new Error('orders fetch failed');
         const data: Order[] = await res.json();
 
-        if (knownIdsRef.current === null) {
-          knownIdsRef.current = new Set(data.map((o) => o.id));
+        // An order is actionable when it is paid or cash, and not closed or awaiting KHQR payment
+        const isActionable = (o: Order) =>
+          !CLOSED_STATUSES.has(o.status) && !isAwaitingPayment(o);
+
+        const currentActionable = data.filter(isActionable);
+
+        if (chimedOrderIdsRef.current === null) {
+          chimedOrderIdsRef.current = new Set(currentActionable.map((o) => o.id));
         } else {
-          const fresh = data.filter((o) => !knownIdsRef.current!.has(o.id));
+          // Actionable tickets that haven't chimed yet:
+          // Newly arrived cash orders OR KHQR orders that just cleared and became paid!
+          const fresh = currentActionable.filter(
+            (o) => !chimedOrderIdsRef.current!.has(o.id),
+          );
+
           if (fresh.length > 0) {
             playNewOrderAlert();
             setNewIds((prev) => {
@@ -325,8 +377,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               `New order${fresh.length > 1 ? 's' : ''} received: ${codes}`,
             );
             setTimeout(() => setAnnouncement(null), 5000);
+
+            fresh.forEach((o) => chimedOrderIdsRef.current!.add(o.id));
           }
-          knownIdsRef.current = new Set(data.map((o) => o.id));
         }
 
         setOrders(data);
@@ -347,7 +400,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   );
 
   useEffect(() => {
-    knownIdsRef.current = null;
+    chimedOrderIdsRef.current = null;
   }, [selectedBranch]);
 
   useEffect(() => {
@@ -446,6 +499,48 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
     () => orders.filter((o) => !CLOSED_STATUSES.has(o.status)),
     [orders],
   );
+
+  const overdueOrders = useMemo(
+    () =>
+      openOrders.filter(
+        (o) =>
+          !isAwaitingPayment(o) &&
+          elapsedTone(o.status, o.createdAt, now, thresholds) === 'late',
+      ),
+    [openOrders, now, thresholds],
+  );
+
+  const untouchedPendingOrders = useMemo(
+    () =>
+      openOrders.filter((o) => {
+        if (isAwaitingPayment(o)) return false;
+        if (o.status !== 'pending' && o.status !== 'paid') return false;
+        const elapsedSecs = (now - new Date(o.createdAt).getTime()) / 1000;
+        return elapsedSecs >= reminderSeconds;
+      }),
+    [openOrders, now, reminderSeconds],
+  );
+
+  // Periodic sound alerts for overdue orders and untouched pending tickets
+  useEffect(() => {
+    // Overdue alert has highest priority (max once per 120s)
+    if (overdueOrders.length > 0) {
+      if (now - lastOverdueSoundRef.current >= 120000) {
+        playOverdueAlert();
+        lastOverdueSoundRef.current = now;
+      }
+      return;
+    }
+
+    // Untouched pending reminder (max once per reminderSeconds * 1000, min 30s)
+    if (untouchedPendingOrders.length > 0) {
+      const minInterval = Math.max(30000, reminderSeconds * 1000);
+      if (now - lastReminderSoundRef.current >= minInterval) {
+        playReminderAlert();
+        lastReminderSoundRef.current = now;
+      }
+    }
+  }, [overdueOrders.length, untouchedPendingOrders.length, now, reminderSeconds]);
 
   const awaitingPaymentOrders = useMemo(
     () => openOrders.filter(isAwaitingPayment).sort((a, b) => boardOrder(a, b, now)),
@@ -931,6 +1026,18 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           </div>
 
           <div className="flex items-center gap-2.5">
+            {overdueOrders.length > 0 ? (
+              <span
+                role="status"
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 rounded-none bg-danger px-2.5 py-1 text-xs font-black text-on-danger shadow-xs motion-safe:animate-pulse"
+                title={`${overdueOrders.length} order(s) have passed target preparation time!`}
+              >
+                <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />
+                <span>{overdueOrders.length} Overdue</span>
+              </span>
+            ) : null}
+
             <ConnectionStatusBadge
               state={connState}
               lastSuccessAt={lastSuccessAt}
@@ -1087,6 +1194,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                               updating={updatingIds.has(order.id)}
                               isNew={newIds.has(order.id)}
                               showBranch={showBranch}
+                              thresholds={thresholds}
                               onAction={advance}
                               onCancel={cancelOrder}
                               onMarkPaid={markPaidAtCounter}
@@ -1417,7 +1525,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                 </section>
               ) : null}
 
-              <BoardLegend />
+              <BoardLegend thresholds={thresholds} />
             </div>
           )}
           </div>

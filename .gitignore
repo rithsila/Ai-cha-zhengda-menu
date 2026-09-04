@@ -37,3 +37,4 @@ apps/api/.env
 .gemini/
 .impeccable/
 .omo/
+.serena/

@@ -72,6 +72,14 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
     { id: 'maps', label: 'Google Maps', url: '', enabled: false },
     { id: 'phone', label: 'Phone', url: '', enabled: false },
   ]),
+  orderWarnPendingMins: 5,
+  orderLatePendingMins: 10,
+  orderWarnPreparingMins: 8,
+  orderLatePreparingMins: 15,
+  orderWarnReadyMins: 10,
+  orderLateReadyMins: 20,
+  orderReminderSeconds: 60,
+  orderAlertSoundEnabled: '1',
 };
 
 /**
@@ -213,15 +221,28 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
     key === 'goldMinOrdersThreshold' ||
     key === 'luckyTicketsPerGoldOrder' ||
     key === 'luckyTicketsPerStandardOrder' ||
-    key === 'luckyTicketsCostPerSpin'
+    key === 'luckyTicketsCostPerSpin' ||
+    key === 'orderWarnPendingMins' ||
+    key === 'orderLatePendingMins' ||
+    key === 'orderWarnPreparingMins' ||
+    key === 'orderLatePreparingMins' ||
+    key === 'orderWarnReadyMins' ||
+    key === 'orderLateReadyMins' ||
+    key === 'orderReminderSeconds'
   ) {
     const num = Number(strVal);
-    const nonNegativeKeys = ['deliveryFee', 'goldMinOrdersThreshold', 'luckyTicketsPerGoldOrder', 'luckyTicketsPerStandardOrder'];
+    const nonNegativeKeys = [
+      'deliveryFee',
+      'goldMinOrdersThreshold',
+      'luckyTicketsPerGoldOrder',
+      'luckyTicketsPerStandardOrder',
+      'orderReminderSeconds',
+    ];
     const min = nonNegativeKeys.includes(key) ? 0 : 1;
     if (!Number.isFinite(num) || num < min) {
       return { valid: false, normalizedValue: '', error: `${key} must be a number of at least ${min}` };
     }
-    return { valid: true, normalizedValue: String(num) };
+    return { valid: true, normalizedValue: String(Math.round(num)) };
   }
 
   // Store status mode
@@ -249,7 +270,8 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
     key === 'enableKhqr' ||
     key === 'allowCashForStandard' ||
     key === 'luckyDrawEnabled' ||
-    key === 'shopSocialsEnabled'
+    key === 'shopSocialsEnabled' ||
+    key === 'orderAlertSoundEnabled'
   ) {
     if (strVal === '1' || strVal === 'true' || value === true) {
       return { valid: true, normalizedValue: '1' };

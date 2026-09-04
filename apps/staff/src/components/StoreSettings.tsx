@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
+  Bell,
   Clock,
   Truck,
   ShoppingBag,
@@ -14,11 +15,13 @@ import {
   Store,
   MapPin,
   Phone,
+  Play,
   Share2,
   Globe,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
+import { testAlertSound } from '../lib/alert';
 
 export interface MenuTabItem {
   id: string;
@@ -53,6 +56,14 @@ export interface StoreConfigState {
   shopDeliveryNote: string;
   shopSocialsEnabled: boolean;
   shopSocialLinks: SocialBadgeItem[];
+  orderWarnPendingMins: number;
+  orderLatePendingMins: number;
+  orderWarnPreparingMins: number;
+  orderLatePreparingMins: number;
+  orderWarnReadyMins: number;
+  orderLateReadyMins: number;
+  orderReminderSeconds: number;
+  orderAlertSoundEnabled: boolean;
 }
 
 const DEFAULT_TABS: MenuTabItem[] = [
@@ -89,6 +100,14 @@ const DEFAULT_CONFIG: StoreConfigState = {
   shopDeliveryNote: 'Delivery inside Arakawa is free',
   shopSocialsEnabled: true,
   shopSocialLinks: DEFAULT_SOCIALS,
+  orderWarnPendingMins: 5,
+  orderLatePendingMins: 10,
+  orderWarnPreparingMins: 8,
+  orderLatePreparingMins: 15,
+  orderWarnReadyMins: 10,
+  orderLateReadyMins: 20,
+  orderReminderSeconds: 60,
+  orderAlertSoundEnabled: true,
 };
 
 function renderSocialIcon(id: string) {
@@ -195,6 +214,14 @@ export function StoreSettings() {
         shopDeliveryNote: statusRes.shopDeliveryNote ?? configMap.get('shopDeliveryNote') ?? 'Delivery inside Arakawa is free',
         shopSocialsEnabled: statusRes.shopSocialsEnabled ?? (configMap.get('shopSocialsEnabled') !== '0'),
         shopSocialLinks: parsedSocials,
+        orderWarnPendingMins: Number(configMap.get('orderWarnPendingMins') ?? 5),
+        orderLatePendingMins: Number(configMap.get('orderLatePendingMins') ?? 10),
+        orderWarnPreparingMins: Number(configMap.get('orderWarnPreparingMins') ?? 8),
+        orderLatePreparingMins: Number(configMap.get('orderLatePreparingMins') ?? 15),
+        orderWarnReadyMins: Number(configMap.get('orderWarnReadyMins') ?? 10),
+        orderLateReadyMins: Number(configMap.get('orderLateReadyMins') ?? 20),
+        orderReminderSeconds: Number(configMap.get('orderReminderSeconds') ?? 60),
+        orderAlertSoundEnabled: (configMap.get('orderAlertSoundEnabled') ?? '1') !== '0',
       });
     } catch {
       toast({
@@ -1120,7 +1147,235 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 5. Delivery Fee */}
+      {/* 5. Kitchen Alert Sounds & Timers */}
+      <Card className="p-5 flex flex-col gap-5">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
+              <Bell className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-ink">Kitchen Alert Sounds &amp; Timers</h3>
+              <p className="text-xs text-ink-soft">
+                Adjust wait-time warning &amp; overdue minutes, repeat reminder interval, and test alert sounds.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Audio Sound Testers */}
+        <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-sunken/40 p-4">
+          <label className="text-xs font-bold uppercase tracking-wider text-ink-faint">
+            Audio Chime Test (Check Tablet Speaker)
+          </label>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => testAlertSound('newOrder')}
+              className="gap-2 text-xs font-bold"
+            >
+              <Play className="size-3.5 text-accent" />
+              <span>Test New Order Chime</span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => testAlertSound('reminder')}
+              className="gap-2 text-xs font-bold"
+            >
+              <Play className="size-3.5 text-status-pending" />
+              <span>Test Reminder Chime</span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => testAlertSound('overdue')}
+              className="gap-2 text-xs font-bold"
+            >
+              <Play className="size-3.5 text-danger" />
+              <span>Test Overdue Alarm</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Lane Thresholds Configuration */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Pending / Paid Lane */}
+          <div className="flex flex-col gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Pending Orders</span>
+              <span className="rounded-none bg-status-pending-soft px-1.5 py-0.5 text-[10px] font-bold text-status-pending">
+                Waiting Start
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Warning (Amber):</span>
+                <span className="font-bold text-ink">{config.orderWarnPendingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={config.orderWarnPendingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderWarnPendingMins: Number(e.target.value) }))
+                }
+                onBlur={(e) =>
+                  updateSetting('orderWarnPendingMins', Number(e.target.value), 'Pending Warn Minutes')
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Overdue (Red):</span>
+                <span className="font-bold text-danger">{config.orderLatePendingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={config.orderLatePendingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderLatePendingMins: Number(e.target.value) }))
+                }
+                onBlur={(e) =>
+                  updateSetting('orderLatePendingMins', Number(e.target.value), 'Pending Overdue Minutes')
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+          </div>
+
+          {/* Preparing Lane */}
+          <div className="flex flex-col gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Preparing Orders</span>
+              <span className="rounded-none bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                Kitchen Cooking
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Warning (Amber):</span>
+                <span className="font-bold text-ink">{config.orderWarnPreparingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={config.orderWarnPreparingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderWarnPreparingMins: Number(e.target.value) }))
+                }
+                onBlur={(e) =>
+                  updateSetting('orderWarnPreparingMins', Number(e.target.value), 'Preparing Warn Minutes')
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Overdue (Red):</span>
+                <span className="font-bold text-danger">{config.orderLatePreparingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={config.orderLatePreparingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderLatePreparingMins: Number(e.target.value) }))
+                }
+                onBlur={(e) =>
+                  updateSetting('orderLatePreparingMins', Number(e.target.value), 'Preparing Overdue Minutes')
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+          </div>
+
+          {/* Ready Lane */}
+          <div className="flex flex-col gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Ready for Pickup</span>
+              <span className="rounded-none bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600">
+                Counter Pickup
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Warning (Amber):</span>
+                <span className="font-bold text-ink">{config.orderWarnReadyMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={config.orderWarnReadyMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderWarnReadyMins: Number(e.target.value) }))
+                }
+                onBlur={(e) =>
+                  updateSetting('orderWarnReadyMins', Number(e.target.value), 'Ready Warn Minutes')
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Overdue (Red):</span>
+                <span className="font-bold text-danger">{config.orderLateReadyMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={config.orderLateReadyMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderLateReadyMins: Number(e.target.value) }))
+                }
+                onBlur={(e) =>
+                  updateSetting('orderLateReadyMins', Number(e.target.value), 'Ready Overdue Minutes')
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Untouched Reminder Interval */}
+        <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4 sm:max-w-md">
+          <label className="text-xs font-bold text-ink flex items-center justify-between">
+            <span>Untouched Order Reminder Interval:</span>
+            <span className="font-mono text-accent">{config.orderReminderSeconds}s</span>
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="15"
+              max="600"
+              step="15"
+              value={config.orderReminderSeconds}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, orderReminderSeconds: Number(e.target.value) }))
+              }
+              onBlur={(e) =>
+                updateSetting('orderReminderSeconds', Number(e.target.value), 'Reminder Interval')
+              }
+              className="h-9 w-28 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+            />
+            <span className="text-xs text-ink-soft">seconds before repeating chime for untouched orders</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* 6. Delivery Fee */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
           <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
