@@ -317,12 +317,6 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
             );
           })}
         </div>
-
-        {!isCashUnlocked && (
-          <p className="text-xs text-tg-hint mt-1">
-            {t('cashLockedForStandard', 'Cash on Delivery is reserved for Gold members. Please pay via KHQR.')}
-          </p>
-        )}
       </div>
 
       {/* Shop info & Social Badges */}
