@@ -11,7 +11,7 @@ import {
 
 /** What the checkout footer can do with the form without re-implementing it. */
 export interface AddressFormHandle {
-  save: () => Promise<boolean>;
+  save: () => Promise<any>;
   canSave: boolean;
 }
 
@@ -83,7 +83,7 @@ export function AddressForm({ profile, onSaved, onCancel, saveRef }: AddressForm
         return false;
       }
       onSaved(data);
-      return true;
+      return data;
     } catch {
       setError(t('addressSaveFailed', 'Could not save. Please try again.'));
       return false;

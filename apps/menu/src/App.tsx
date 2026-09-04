@@ -686,7 +686,10 @@ export default function App() {
           return (
             <button 
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => {
+                setActiveTab(id);
+                window.scrollTo({ top: 0, behavior: 'instant' });
+              }}
               className={`flex-1 flex flex-col items-center py-1 px-1 rounded-xl transition-all active:scale-95 ${
                 isActive 
                   ? 'text-brand-primary font-bold drop-shadow-[0_2px_6px_rgba(229,57,53,0.35)]' 
@@ -724,7 +727,7 @@ export default function App() {
 
       {/* Scroll to Top Button */}
       <AnimatePresence>
-        {showScrollTop && (
+        {activeTab === 'menu' && showScrollTop && (
           <motion.button
             initial={{ opacity: 0, y: 20, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

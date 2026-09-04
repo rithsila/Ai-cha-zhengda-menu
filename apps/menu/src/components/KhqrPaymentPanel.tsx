@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DownloadSimple, Check, CaretRight, CaretLeft } from '@phosphor-icons/react';
+import { DownloadSimple, Check, CaretRight } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
 import { apiFetch } from '../utils/api';
 import { markOnlinePaymentAvailable, markOnlinePaymentUnavailable } from '../utils/onlinePayment';
@@ -86,6 +86,8 @@ interface KhqrPaymentPanelProps {
   onCancel?: () => void;
   /** Way out when online payment fails, so the customer is never stuck. */
   onUseCash?: () => void;
+  isViewingKhqr?: boolean;
+  onViewingKhqrChange?: (viewing: boolean) => void;
 }
 
 /**
@@ -96,7 +98,15 @@ interface KhqrPaymentPanelProps {
  * Customers can pay directly via ABA Mobile or open the official KHQR template
  * card to scan or save to their photo library.
  */
-export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUseCash }: KhqrPaymentPanelProps) {
+export function KhqrPaymentPanel({
+  orderId,
+  totalAmount,
+  onPaid,
+  onCancel,
+  onUseCash,
+  isViewingKhqr: controlledViewingKhqr,
+  onViewingKhqrChange,
+}: KhqrPaymentPanelProps) {
   const { t } = useTranslation();
 
   const [payment, setPayment] = useState<{
@@ -113,7 +123,12 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [isViewingKhqr, setIsViewingKhqr] = useState(false);
+  const [internalViewingKhqr, setInternalViewingKhqr] = useState(false);
+  const isViewingKhqr = controlledViewingKhqr !== undefined ? controlledViewingKhqr : internalViewingKhqr;
+  const setIsViewingKhqr = (val: boolean) => {
+    setInternalViewingKhqr(val);
+    onViewingKhqrChange?.(val);
+  };
   // 'unavailable' means the shop has no online payment set up yet; 'failed' is a normal error.
   const [error, setError] = useState<'unavailable' | 'failed' | null>(null);
   // Bumped by "Try again" to ask for a fresh QR for the same order.
@@ -303,25 +318,10 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
   if (isViewingKhqr) {
     return (
       <div className="flex flex-col gap-3 items-center w-full animate-in fade-in duration-200">
-        {/* Top Header bar with Back button, Title & Timer */}
-        <div className="w-full flex items-center justify-between px-1">
-          <button
-            type="button"
-            onClick={() => setIsViewingKhqr(false)}
-            className="w-8 h-8 rounded-full bg-tg-secondary-bg flex items-center justify-center text-tg-text active:scale-90 transition-transform"
-            aria-label={t('back', 'Back')}
-          >
-            <CaretLeft size={20} weight="bold" />
-          </button>
-
-          <h3 className="font-bold text-base text-tg-text">
-            {t('abaKhqr', 'ABA KHQR')}
-          </h3>
-
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-tg-text tabular-nums bg-tg-secondary-bg px-2.5 py-1 rounded-full border border-tg-hint/15">
-            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-            <span>{formatCountdown(secondsLeft)}</span>
-          </div>
+        {/* Countdown Timer Badge */}
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-tg-text tabular-nums bg-tg-secondary-bg px-3 py-1 rounded-full border border-tg-hint/15 shadow-2xs">
+          <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+          <span>{formatCountdown(secondsLeft)}</span>
         </div>
 
         {/* Authentic KHQR Card Template - Compact Size */}
@@ -411,20 +411,32 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
         </div>
 
         {/* Action Buttons */}
-        <div className="w-full flex flex-col gap-2.5">
-          {/* Button 1: Pay directly with ABA Mobile */}
+        <div className="w-full flex flex-col gap-3">
+          {/* Option 1: Pay directly with ABA Mobile */}
           {payment.abapayDeeplink && (
             <button
               type="button"
               onClick={() => { window.location.href = payment.abapayDeeplink!; }}
-              className="w-full bg-[#005E8E] text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-[#004A70] active:scale-98 transition-all shadow-sm"
+              className="w-full bg-tg-secondary-bg hover:bg-tg-hint/5 border border-tg-hint/15 rounded-2xl p-4 flex items-center justify-between transition-all active:scale-98 shadow-sm text-left"
             >
-              <span className="text-base">📱</span>
-              <span>{t('payWithAba', 'Pay with ABA Mobile')}</span>
+              <div className="flex items-center gap-3 min-w-0">
+                {/* Blue ABA Badge Icon */}
+                <div className="w-12 h-12 rounded-2xl bg-[#005E8E] flex flex-col items-center justify-center shrink-0 shadow-sm text-white">
+                  <span className="font-black text-xs tracking-wider leading-none">ABA</span>
+                  <span className="text-[9px] font-bold opacity-80 mt-0.5">PAY</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-bold text-base text-tg-text">{t('payWithAba', 'ABA Mobile')}</div>
+                  <div className="text-xs text-tg-hint mt-0.5 truncate">
+                    {t('payWithAbaDesc', 'Tap to open & pay instantly in ABA app')}
+                  </div>
+                </div>
+              </div>
+              <CaretRight size={20} className="text-tg-hint shrink-0 ml-2" />
             </button>
           )}
 
-          {/* Button 2: ABA KHQR Card Button */}
+          {/* Option 2: ABA KHQR Card Button */}
           <button
             type="button"
             onClick={() => setIsViewingKhqr(true)}
@@ -432,13 +444,13 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
           >
             <div className="flex items-center gap-3 min-w-0">
               {/* Red KHQR Badge Icon */}
-              <div className="w-13 h-13 rounded-2xl bg-[#E21A1A] flex items-center justify-center shrink-0 shadow-sm p-2">
+              <div className="w-12 h-12 rounded-2xl bg-[#E21A1A] flex items-center justify-center shrink-0 shadow-sm p-2">
                 <KhqrLogo className="w-full h-auto text-white" />
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-base text-tg-text">{t('abaKhqr', 'ABA KHQR')}</div>
                 <div className="text-xs text-tg-hint mt-0.5 truncate">
-                  {t('scanToPayWithBankApp', 'Scan to pay with member bank app')}
+                  {t('scanToPayWithBankApp', 'Scan to pay with any bank app')}
                 </div>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from './ui/Button';
 import type { CartItem } from '../types';
 import { formatCurrency } from '../utils/format';
-import { CaretRight, MapPin, Storefront, CaretLeft, X } from '@phosphor-icons/react';
+import { MapPin, Storefront, CaretLeft, X, CaretDown, CaretUp } from '@phosphor-icons/react';
 import { AddressForm, AddressSummary, type AddressFormHandle } from './AddressForm';
 import { isValidBuilding, isValidRoom, isValidName, isValidPhone } from '../utils/address';
 import { apiFetch, hasIdentity, ME } from '../utils/api';
@@ -35,7 +35,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   // A guest may still order for pickup and pay cash; everything tied to an
   // account (points, saved address, delivery) needs a verified identity.
   const signedIn = hasIdentity();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [isViewingKhqr, setIsViewingKhqr] = useState(false);
   const [method, setMethod] = useState<'khqr' | 'cash'>(initialPaymentMethod);
   const [orderType, setOrderType] = useState<'pickup' | 'delivery'>('pickup');
   const [branchId, setBranchId] = useState<string>('');
@@ -82,6 +84,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setMethod(initialPaymentMethod());
       setOrderType(storeStatus.enablePickup ? 'pickup' : 'delivery');
       setEditingAddress(false);
+      setIsSummaryExpanded(false);
+      setIsViewingKhqr(false);
       setClaimedCount(0);
       setBranchId('');
       setPaymentOrderId(null);
@@ -184,8 +188,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const claimedUnits = claimableCartUnits.slice(0, effectiveClaimCount);
   const discountApplied = claimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
   const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
+  const totalItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleNext = async () => {
+  const handleConfirm = async () => {
     if (!storeStatus.isOpen) {
       setError(t('shopClosedSchedule', 'Shop is currently closed. Opening hours: {{open}} – {{close}}.', { open: storeStatus.openTime, close: storeStatus.closeTime }));
       return;
@@ -202,6 +207,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setError(t('selectBranchFirst', 'Please select a branch.'));
       return;
     }
+    let activeProfile = userProfile;
     if (orderType === 'delivery') {
       if (!signedIn) {
         setError(t('deliveryNeedsTelegram', 'Delivery needs a saved address. Open the shop from Telegram to use it.'));
@@ -219,27 +225,13 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         const saved = await form.save();
         setIsLoading(false);
         if (!saved) return;
+        if (typeof saved === 'object' && saved !== null) {
+          activeProfile = saved;
+        }
       } else if (!hasAddress) {
         setError(t('addressRequired', 'Please add your building, room, name and phone number.'));
         return;
       }
-    }
-    setError(null);
-    setStep(2);
-  };
-
-  const handleConfirm = async () => {
-    if (!storeStatus.isOpen) {
-      setError(t('shopClosedSchedule', 'Shop is currently closed. Opening hours: {{open}} – {{close}}.', { open: storeStatus.openTime, close: storeStatus.closeTime }));
-      return;
-    }
-    if (orderType === 'pickup' && !storeStatus.enablePickup) {
-      setError(t('pickupDisabled', 'Pickup orders are currently turned off.'));
-      return;
-    }
-    if (orderType === 'delivery' && !storeStatus.enableDelivery) {
-      setError(t('deliveryDisabled', 'Delivery orders are currently turned off.'));
-      return;
     }
     if (method === 'cash' && !storeStatus.enableCash) {
       setError(t('cashDisabled', 'Cash payment is currently turned off.'));
@@ -269,10 +261,10 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           // board, which filters by branch and defaults to the first one.
           branchId: branchId || null,
           orderType,
-          building: userProfile?.building || null,
-          roomNumber: userProfile?.roomNumber || null,
-          contactName: userProfile?.contactName || null,
-          contactPhone: userProfile?.phoneNumber || null,
+          building: activeProfile?.building || null,
+          roomNumber: activeProfile?.roomNumber || null,
+          contactName: activeProfile?.contactName || null,
+          contactPhone: activeProfile?.phoneNumber || null,
           pointsToUse: effectiveClaimCount * (pointsPerStamp * 10),
           claimReward: effectiveClaimCount > 0 ? effectiveClaimCount : undefined,
         }),
@@ -293,7 +285,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       if (method === 'khqr') {
         setPaymentOrderId(orderData.id);
         setPaymentOrderCode(orderData.pickupCode ?? null);
-        setStep(3);
+        setStep(2);
         setIsLoading(false);
         return;
       }
@@ -324,9 +316,17 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           className="fixed inset-0 z-50 bg-tg-bg flex flex-col overflow-hidden"
         >
           {/* Sticky top navigation header */}
-          <div className="sticky top-0 bg-tg-bg border-b border-tg-hint/10 px-4 py-3 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-tg-bg/90 backdrop-blur-md border-b border-tg-hint/10 px-4 py-3 flex items-center justify-between z-10">
             <button
-              onClick={step === 2 ? () => setStep(1) : onClose}
+              onClick={() => {
+                if (step === 2 && isViewingKhqr) {
+                  setIsViewingKhqr(false);
+                } else if (step === 2) {
+                  setStep(1);
+                } else {
+                  onClose();
+                }
+              }}
               className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-tg-hint/10 text-tg-text transition-colors"
               aria-label={step === 2 ? t('back', 'Back') : t('close', 'Close')}
             >
@@ -334,55 +334,16 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
             </button>
 
             <h2 className="text-lg font-bold text-tg-text">
-              {t('checkout', 'Checkout')}
+              {step === 2 ? (isViewingKhqr ? t('abaKhqr', 'ABA KHQR') : t('scanToPay', 'Scan to Pay')) : t('checkout', 'Checkout')}
             </h2>
 
             <div className="text-sm font-semibold text-tg-hint min-w-[44px] text-right">
-              {step === 3 ? 'Pay' : `${step}/2`}
+              {step === 2 ? formatCurrency(finalTotal) : ''}
             </div>
           </div>
 
           {/* Content area */}
           <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6 max-w-md mx-auto w-full pb-32">
-            {/* Order Summary */}
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">
-                {t('orderSummary', 'Order Summary')}
-              </h3>
-              <div className="bg-tg-secondary-bg rounded-2xl p-4 flex flex-col gap-3">
-                {cart.map(item => {
-                  const catalogItem = catalogItems.find(i => i.id === item.menuItemId);
-                  const isEligible = catalogItem?.canClaim ?? false;
-                  return (
-                    <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
-                      <div className="flex-1">
-                        <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
-                        {signedIn && userStamps >= 10 && (
-                          <div className="mt-0.5">
-                            {isEligible ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-md">
-                                🎁 {t('eligibleForStamps', 'Stamp reward eligible')}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center text-[10px] font-medium text-tg-hint bg-tg-bg/70 px-1.5 py-0.5 rounded-md border border-tg-hint/10">
-                                {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {Object.keys(item.selectedModifiers).length > 0 && (
-                          <div className="text-xs text-tg-hint mt-1">
-                            {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
-                          </div>
-                        )}
-                      </div>
-                      <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
             {error && (
               <div className="bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium text-center">
                 {error}
@@ -398,15 +359,19 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               </div>
             )}
 
-            {step === 3 && paymentOrderId ? (
+            {step === 2 && paymentOrderId ? (
               <KhqrPaymentPanel
                 orderId={paymentOrderId}
                 totalAmount={finalTotal}
                 onPaid={(code) => onSuccess(code)}
                 onUseCash={handlePayCashInstead}
+                onCancel={() => setStep(1)}
+                isViewingKhqr={isViewingKhqr}
+                onViewingKhqrChange={setIsViewingKhqr}
               />
-            ) : step === 1 ? (
-              <div className="flex flex-col gap-4">
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* 1. Fulfillment: Order Type & Branch / Address */}
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">{t('orderType', 'Order Type')}</h3>
                   {!storeStatus.enablePickup && !storeStatus.enableDelivery ? (
@@ -416,6 +381,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
                       <button 
+                        type="button"
                         onClick={() => storeStatus.enablePickup && setOrderType('pickup')}
                         disabled={!storeStatus.enablePickup}
                         aria-pressed={orderType === 'pickup'}
@@ -431,6 +397,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         {t('pickup', 'Pickup')} {!storeStatus.enablePickup ? `(${t('off', 'Off')})` : ''}
                       </button>
                       <button 
+                        type="button"
                         onClick={() => storeStatus.enableDelivery && setOrderType('delivery')}
                         disabled={!storeStatus.enableDelivery}
                         aria-pressed={orderType === 'delivery'}
@@ -456,6 +423,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       {branches.map(b => (
                         <button 
                           key={b.id}
+                          type="button"
                           onClick={() => setBranchId(b.id)}
                           className={`rounded-2xl border p-4 flex items-center justify-between transition-all text-left ${
                             branchId === b.id 
@@ -504,10 +472,92 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     </p>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-6">
-                {/* Stamp Loyalty Rewards Section */}
+
+                {/* 2. Collapsible Order Items Summary */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-sm">
+                      {t('orderSummary', 'Order Summary')}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                      className="text-xs font-semibold text-brand-primary flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-brand-primary/10 transition-colors"
+                    >
+                      <span>{isSummaryExpanded ? t('hideDetails', 'Hide items') : t('viewDetails', 'Show items')}</span>
+                      {isSummaryExpanded ? <CaretUp size={14} /> : <CaretDown size={14} />}
+                    </button>
+                  </div>
+
+                  <div className="bg-tg-secondary-bg rounded-2xl p-4 border border-tg-hint/15 flex flex-col gap-3">
+                    <div 
+                      className="flex items-center justify-between cursor-pointer"
+                      onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-brand-primary/10 text-brand-primary flex items-center justify-center font-bold text-xs">
+                          {totalItemCount}x
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-tg-text">
+                            {cart[0]?.quantity}x {t(cart[0]?.name)}
+                            {cart.length > 1 && (
+                              <span className="font-normal text-tg-hint ml-1">
+                                +{cart.length - 1} {t('moreItems', 'more')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-tg-hint">
+                            {isSummaryExpanded ? t('tapToCollapse', 'Tap to collapse') : t('tapToReview', 'Tap to review items & modifiers')}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-sm text-tg-text">{formatCurrency(total)}</div>
+                        <div className="text-[11px] text-brand-primary font-medium flex items-center justify-end gap-0.5">
+                          {isSummaryExpanded ? <CaretUp size={12} /> : <CaretDown size={12} />}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isSummaryExpanded && (
+                      <div className="flex flex-col gap-3 pt-3 border-t border-tg-hint/10 mt-1">
+                        {cart.map(item => {
+                          const catalogItem = catalogItems.find(i => i.id === item.menuItemId);
+                          const isEligible = catalogItem?.canClaim ?? false;
+                          return (
+                            <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
+                              <div className="flex-1">
+                                <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
+                                {signedIn && userStamps >= 10 && (
+                                  <div className="mt-0.5">
+                                    {isEligible ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-md">
+                                        🎁 {t('eligibleForStamps', 'Stamp reward eligible')}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center text-[10px] font-medium text-tg-hint bg-tg-bg/70 px-1.5 py-0.5 rounded-md border border-tg-hint/10">
+                                        {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {Object.keys(item.selectedModifiers).length > 0 && (
+                                  <div className="text-xs text-tg-hint mt-1">
+                                    {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="font-bold text-sm">{formatCurrency(item.totalPrice)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Loyalty Stamp Rewards Section */}
                 {signedIn && userProfile && (
                   <>
                     {/* Case 1: Has at least 10 stamps AND has eligible claimable items in cart */}
@@ -764,39 +814,28 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           </div>
 
           {/* Bottom sticky action bar */}
-          <div className="sticky bottom-0 bg-tg-bg border-t border-tg-hint/10 w-full z-10">
-            {step !== 3 && (
-              <div className="max-w-md mx-auto px-4 pt-4 pb-8 flex gap-3">
-                {step === 1 ? (
-                  <Button
-                    fullWidth
-                    onClick={() => { void handleNext(); }}
-                    disabled={isLoading || !storeStatus.isOpen || (!storeStatus.enablePickup && !storeStatus.enableDelivery)}
-                    className="py-4 flex items-center justify-center gap-2"
-                  >
-                    {!storeStatus.isOpen
+          {step === 1 && (
+            <div className="sticky bottom-0 bg-tg-bg/95 backdrop-blur-md border-t border-tg-hint/10 w-full z-10">
+              <div className="max-w-md mx-auto px-4 pt-3 pb-8">
+                <Button
+                  fullWidth
+                  className="py-4 font-bold text-base shadow-md"
+                  onClick={handleConfirm}
+                  disabled={isLoading || !storeStatus.isOpen || (!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered)) || (!storeStatus.enablePickup && !storeStatus.enableDelivery)}
+                >
+                  {isLoading
+                    ? t('processing', 'Processing...')
+                    : !storeStatus.isOpen
                       ? t('shopClosed', 'Shop Closed')
                       : (!storeStatus.enablePickup && !storeStatus.enableDelivery)
                         ? t('orderingDisabled', 'Ordering Disabled')
-                        : <>{t('continueToPayment', 'Continue to Payment')} <CaretRight size={20} /></>}
-                  </Button>
-                ) : (
-                  <Button
-                    fullWidth
-                    className="py-4"
-                    onClick={handleConfirm}
-                    disabled={isLoading || !storeStatus.isOpen || (!storeStatus.enableCash && (!storeStatus.enableKhqr || !khqrOffered))}
-                  >
-                    {isLoading
-                      ? t('processing', 'Processing...')
-                      : !storeStatus.isOpen
-                        ? t('shopClosed', 'Shop Closed')
-                        : `${t('pay', 'Pay')} ${formatCurrency(finalTotal)}`}
-                  </Button>
-                )}
+                        : method === 'khqr'
+                          ? `${t('payWithKhqr', 'Pay with KHQR')} · ${formatCurrency(finalTotal)}`
+                          : `${t('confirmOrder', 'Confirm Order')} · ${formatCurrency(finalTotal)}`}
+                </Button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
