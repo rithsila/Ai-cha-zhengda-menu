@@ -34,6 +34,18 @@ model Branch {
   orders   Order[]
 }
 
+model Category {
+  id        String   @id @default(uuid())
+  brand     String   // "ai-cha" | "zhengda"
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brand, name])
+}
+
 model MenuItem {
   id          String          @id @default(uuid())
   brand       String
