@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { ShoppingCart } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import type { CartItem } from '../types';
@@ -22,6 +22,7 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
   const { t } = useTranslation();
   const storeStatus = useStoreStatus();
   const total = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+  const dragControls = useDragControls();
 
   useEffect(() => {
     if (isOpen) {
@@ -47,15 +48,36 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="bg-tg-bg/75 backdrop-blur-lg backdrop-brightness-200 w-full rounded-t-3xl max-h-[85vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 80 || info.velocity.y > 400) {
+                onClose();
+              }
+            }}
+            className="bg-tg-bg w-full rounded-t-3xl max-h-[85vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-4 border-b border-tg-hint/20 flex justify-between items-center sticky top-0 bg-tg-bg/90 backdrop-blur-md z-10">
-              <h2 className="text-xl font-bold">{t('cartTitle')}</h2>
-              <button onClick={onClose} className="p-2 bg-tg-secondary-bg rounded-full text-tg-hint">
-                ✕
-              </button>
+            <div
+              onPointerDown={(e) => {
+                if ((e.target as HTMLElement).closest('button')) return;
+                dragControls.start(e);
+              }}
+              className="border-b border-tg-hint/20 sticky top-0 bg-tg-bg z-10 touch-none select-none cursor-grab active:cursor-grabbing"
+            >
+              <div className="w-full pt-2.5 pb-1 flex justify-center">
+                <div className="w-10 h-1.5 bg-tg-hint/30 rounded-full" />
+              </div>
+              <div className="px-4 pb-3 pt-1 flex justify-between items-center">
+                <h2 className="text-xl font-bold">{t('cartTitle')}</h2>
+                <button onClick={onClose} className="p-2 bg-tg-secondary-bg rounded-full text-tg-hint cursor-pointer">
+                  ✕
+                </button>
+              </div>
             </div>
 
             <div className="p-4 overflow-y-auto flex-1">
@@ -145,7 +167,7 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
             </div>
 
             {cart.length > 0 && (
-              <div className="p-4 border-t border-tg-hint/20 bg-tg-bg/90 backdrop-blur-md sticky bottom-0 pb-8">
+              <div className="p-4 border-t border-tg-hint/20 bg-tg-bg sticky bottom-0 pb-8">
                 <div className="flex justify-between items-center font-bold text-xl mb-6">
                   <span>{t('total')}</span>
                   <span>{formatCurrency(total)}</span>
