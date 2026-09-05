@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MenuItemEditModal, type MenuItemFull } from './MenuItemEditModal';
 import { ToastProvider } from './ui/Toast';
@@ -82,6 +82,15 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
           ok: true,
           status: 200,
           json: async () => ({ id: 'updated-item-id' }),
+        });
+      }
+
+      // POST /api/upload
+      if (urlStr.includes('/api/upload') && method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ url: 'https://cdn.example.com/pasted-image.png' }),
         });
       }
 
@@ -256,4 +265,110 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     expect(body.category).toBe('Fruit Tea');
     expect(body.name).toBe('Mango Green Tea');
   });
+
+  it('uploads image when pasting image from clipboard (Ctrl+V / Cmd+V screenshot)', async () => {
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Upload Image/i })).toBeDefined();
+    });
+
+    const fakeImageFile = new File(['fake-image-bytes'], 'screenshot.png', { type: 'image/png' });
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        files: [fakeImageFile],
+        items: [
+          {
+            kind: 'file',
+            type: 'image/png',
+            getAsFile: () => fakeImageFile,
+          },
+        ],
+      },
+    });
+
+    window.dispatchEvent(pasteEvent);
+
+    await waitFor(() => {
+      const fetchMock = globalThis.fetch as any;
+      const uploadCall = fetchMock.mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/upload') && call[1]?.method === 'POST'
+      );
+      expect(uploadCall).toBeDefined();
+    });
+
+    // Preview image should be displayed
+    await waitFor(() => {
+      const previewImg = screen.getByAltText('Preview');
+      expect(previewImg).toBeDefined();
+      expect(previewImg.getAttribute('src')).toContain('pasted-image.png');
+    });
+  });
+
+  it('does not trigger upload when clipboard paste contains only text', async () => {
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        files: [],
+        items: [
+          {
+            kind: 'string',
+            type: 'text/plain',
+            getAsFile: () => null,
+          },
+        ],
+      },
+    });
+
+    window.dispatchEvent(pasteEvent);
+
+    const fetchMock = globalThis.fetch as any;
+    const uploadCall = fetchMock.mock.calls.find((call: any[]) =>
+      String(call[0]).includes('/api/upload') && call[1]?.method === 'POST'
+    );
+    expect(uploadCall).toBeUndefined();
+  });
+
+  it('uploads image when dropping an image file onto upload zone', async () => {
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Upload Image/i })).toBeDefined();
+    });
+
+    const dropZone = screen.getByText(/drag & drop here/i).closest('div')!;
+    const fakeDropFile = new File(['dropped-image-bytes'], 'dropped.png', { type: 'image/png' });
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: {
+        files: [fakeDropFile],
+      },
+    });
+
+    await waitFor(() => {
+      const fetchMock = globalThis.fetch as any;
+      const uploadCall = fetchMock.mock.calls.find((call: any[]) =>
+        String(call[0]).includes('/api/upload') && call[1]?.method === 'POST'
+      );
+      expect(uploadCall).toBeDefined();
+    });
+  });
 });
+
+

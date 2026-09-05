@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import {
   X,
@@ -166,6 +166,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const [creatingCategory, setCreatingCategory] = useState(false);
 
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -385,35 +386,109 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     return opts;
   }, [categories, category]);
 
-  if (!isOpen) return null;
-
   const isEditing = Boolean(item?.id);
 
-  const handleImageFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+  const uploadImageFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: 'Invalid file type',
+          description: 'Please select or paste an image file.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image is too large. Maximum size is 5MB.');
+        toast({
+          title: 'Image too large',
+          description: 'Maximum allowed image size is 5MB.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      setUploadingImage(true);
+      setError(null);
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const res = await fetch(`${API_BASE}/api/upload`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData,
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Upload failed');
+        }
+        const data = await res.json();
+        setImage(data.url);
+        toast({ title: 'Image uploaded', variant: 'success' });
+      } catch (err: any) {
+        setError(err?.message || 'Failed to upload image. Ensure it is PNG/JPG under 5MB.');
+        toast({
+          title: 'Upload failed',
+          description: err?.message || 'Could not upload image',
+          variant: 'error',
+        });
+      } finally {
+        setUploadingImage(false);
+      }
+    },
+    [toast]
+  );
+
+  const handleImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setUploadingImage(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const res = await fetch(`${API_BASE}/api/upload`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      setImage(data.url);
-      toast({ title: 'Image uploaded', variant: 'success' });
-    } catch {
-      setError('Failed to upload image. Ensure it is PNG/JPG under 5MB.');
-    } finally {
-      setUploadingImage(false);
-    }
+    uploadImageFile(file);
+    e.target.value = '';
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const clipboardFiles = e.clipboardData?.files;
+      let imageFile: File | null = null;
+
+      if (clipboardFiles && clipboardFiles.length > 0) {
+        for (let i = 0; i < clipboardFiles.length; i++) {
+          if (clipboardFiles[i].type.startsWith('image/')) {
+            imageFile = clipboardFiles[i];
+            break;
+          }
+        }
+      }
+
+      if (!imageFile && e.clipboardData?.items) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.startsWith('image/')) {
+            const blob = items[i].getAsFile();
+            if (blob) {
+              imageFile = blob;
+              break;
+            }
+          }
+        }
+      }
+
+      if (imageFile) {
+        e.preventDefault();
+        uploadImageFile(imageFile);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [isOpen, uploadImageFile]);
+
 
   // Modifier Groups Management
   const loadDrinkPreset = () => {
@@ -600,6 +675,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setDeleting(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -788,8 +865,23 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
               Item Image
             </label>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="relative flex size-20 items-center justify-center rounded-none border border-border bg-surface-sunken overflow-hidden">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) uploadImageFile(file);
+              }}
+              className={`flex flex-wrap items-center gap-4 p-3 border border-dashed transition-colors ${
+                isDragging ? 'border-accent bg-accent/10' : 'border-border bg-surface-sunken/30'
+              }`}
+            >
+              <div className="relative flex size-20 items-center justify-center rounded-none border border-border bg-surface-sunken overflow-hidden shrink-0">
                 {image ? (
                   <img
                     src={resolveImageUrl(image)}
@@ -801,7 +893,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 )}
               </div>
 
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 space-y-2 min-w-[220px]">
                 <div className="flex items-center gap-2">
                   <input
                     type="file"
@@ -833,6 +925,9 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                     </Button>
                   )}
                 </div>
+                <p className="text-[11px] text-ink-soft">
+                  Press <kbd className="px-1 py-0.5 rounded-xs bg-surface border border-border font-mono text-[10px] text-ink">Ctrl+V</kbd> or <kbd className="px-1 py-0.5 rounded-xs bg-surface border border-border font-mono text-[10px] text-ink">⌘V</kbd> to paste screenshot / image, or drag &amp; drop here.
+                </p>
               </div>
             </div>
           </div>
