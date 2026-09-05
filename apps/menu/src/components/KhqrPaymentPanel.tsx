@@ -58,16 +58,19 @@ async function renderKhqrTemplateToBlob(params: {
 
         ctx.scale(scale, scale);
 
-        // Fill background
-        ctx.fillStyle = '#F8FAFC';
-        ctx.fillRect(0, 0, logicalW, logicalH);
+        // Keep the image corners transparent. The live card sits on the
+        // Telegram background, but the saved PNG must carry a real rounded
+        // edge instead of baking that background into square image bounds.
 
         // Card geometry
         const cx = 10;
         const cy = 8;
         const cw = logicalW - 20; // 446
         const ch = logicalH - 16; // 582
-        const cr = 24;
+        // PayWay's hosted KHQR card uses a 14px corner radius at its
+        // reference size. Keeping the same proportion avoids the pale halo
+        // that appears when a bordered card is clipped at the flap.
+        const cr = 18;
 
         const drawCardRoundedRect = () => {
           ctx.beginPath();
@@ -87,13 +90,16 @@ async function renderKhqrTemplateToBlob(params: {
           }
         };
 
-        // Draw white card background
+        // Draw the white card surface and soft elevation before the card
+        // contents so the shadow never covers the merchant details or QR.
         drawCardRoundedRect();
+        ctx.save();
+        ctx.shadowColor = 'rgba(15, 23, 42, 0.16)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 4;
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#E5E7EB';
-        ctx.stroke();
+        ctx.restore();
 
         // Top Red Header (clipped to card rounded corners)
         ctx.save();
@@ -165,18 +171,26 @@ async function renderKhqrTemplateToBlob(params: {
         const dividerY = 216;
         const notchR = 14;
 
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
         ctx.beginPath();
         ctx.arc(cx, dividerY, notchR, -Math.PI / 2, Math.PI / 2);
-        ctx.fillStyle = '#F8FAFC';
         ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + cw, dividerY, notchR, Math.PI / 2, -Math.PI / 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Keep a subtle outline around the cutouts without reintroducing a
+        // hardcoded background color.
+        ctx.beginPath();
+        ctx.arc(cx, dividerY, notchR, -Math.PI / 2, Math.PI / 2);
         ctx.lineWidth = 1;
         ctx.strokeStyle = '#E5E7EB';
         ctx.stroke();
 
         ctx.beginPath();
         ctx.arc(cx + cw, dividerY, notchR, Math.PI / 2, -Math.PI / 2);
-        ctx.fillStyle = '#F8FAFC';
-        ctx.fill();
         ctx.lineWidth = 1;
         ctx.strokeStyle = '#E5E7EB';
         ctx.stroke();
@@ -520,7 +534,7 @@ export function KhqrPaymentPanel({
         </div>
 
         {/* Authentic KHQR Card Template - Compact Size */}
-        <div className="w-full max-w-[220px] bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden relative text-gray-900 mt-1">
+        <div className="w-full max-w-[220px] bg-white rounded-[14px] shadow-md overflow-hidden relative text-gray-900 mt-1">
           {/* Top Red Header with Exact Wikimedia KHQR Logo and Signature Downward Flap */}
           <div
             className="w-full bg-[#E21A1A] text-white pt-2.5 pb-4 px-3 flex items-center justify-center relative"
