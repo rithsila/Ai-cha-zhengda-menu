@@ -12,6 +12,7 @@ import {
   getStoreStatus,
   validateConfig,
   CONFIG_DEFAULTS,
+  calculateNextPickupCode,
 } from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
 import {
@@ -1214,6 +1215,20 @@ export function createApp() {
             });
           }
 
+          const latestOrder = await tx.order.findFirst({
+            where: {
+              pickupCode: { startsWith: 'AI-' },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { pickupCode: true, createdAt: true },
+          });
+
+          const pickupCode = calculateNextPickupCode(
+            latestOrder?.pickupCode,
+            latestOrder?.createdAt,
+            new Date()
+          );
+
           return tx.order.create({
             data: {
               id: orderId,
@@ -1221,7 +1236,7 @@ export function createApp() {
               paymentMethod,
               telegramUserId,
               status: 'pending',
-              pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
+              pickupCode,
               orderType: orderType || 'pickup',
               deliveryAddress: delivery ? formatAddress(delivery.building, delivery.room) : null,
               deliveryBuilding: orderBuilding,

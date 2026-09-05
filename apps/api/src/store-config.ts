@@ -100,6 +100,48 @@ export function getCambodiaTime(date: Date = new Date()): { hour: number; minute
 }
 
 /**
+ * Returns current calendar date formatted as "YYYY-MM-DD" in Cambodia timezone (UTC+7).
+ */
+export function getCambodiaDateKey(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Phnom_Penh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/**
+ * Generates sequential pickup code from AI-01 to AI-99.
+ * Resets back to AI-01 on a new calendar day (Cambodia time) or after reaching AI-99.
+ */
+export function calculateNextPickupCode(
+  lastPickupCode: string | null | undefined,
+  lastCreatedAt: Date | null | undefined,
+  now: Date = new Date()
+): string {
+  if (!lastPickupCode) {
+    return 'AI-01';
+  }
+
+  const match = lastPickupCode.match(/^AI-(\d+)$/);
+  if (!match) {
+    return 'AI-01';
+  }
+
+  if (lastCreatedAt) {
+    const isSameDay = getCambodiaDateKey(lastCreatedAt) === getCambodiaDateKey(now);
+    if (!isSameDay) {
+      return 'AI-01';
+    }
+  }
+
+  const prevNum = parseInt(match[1], 10);
+  const nextNum = (prevNum % 99) + 1;
+  return `AI-${String(nextNum).padStart(2, '0')}`;
+}
+
+/**
  * Checks whether current HH:mm falls between openTime and closeTime.
  * Handles normal daytime hours (e.g. 08:00 to 21:00) and overnight hours (e.g. 20:00 to 04:00).
  */

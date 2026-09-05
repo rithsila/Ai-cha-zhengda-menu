@@ -89,6 +89,8 @@ export {
   getConfigValue,
   getStoreStatus,
   getCambodiaTime,
+  getCambodiaDateKey,
+  calculateNextPickupCode,
   isTimeInRange,
   validateConfig,
 } from './store-config';

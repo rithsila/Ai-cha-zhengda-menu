@@ -185,7 +185,7 @@ describe('End-to-End System & Workflow Validation', () => {
     expect(order.pointsRedeemed).toBe(100);
     expect(order.pointsEarned).toBe(20); // 2 items = 2 stamps = 20 points
     expect(order.status).toBe('pending');
-    expect(order.pickupCode).toMatch(/^A-\d{3}$/);
+    expect(order.pickupCode).toMatch(/^AI-\d{2}$/);
     expect(order.pointsSettled).toBe(false);
 
     // Redeemed points are reserved (deducted) at order creation so they cannot be
