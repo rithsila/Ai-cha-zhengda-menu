@@ -15,6 +15,7 @@ import { loginAsDevCustomer } from './utils/telegramUser';
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
 
+import { BrandTabs } from './components/ui/BrandTabs';
 import { CategoryScroller } from './components/ui/CategoryScroller';
 import { MenuGridSkeleton, EmptyMenuState } from './components/ui/Skeleton';
 import { MenuItemCard } from './components/MenuItemCard';
@@ -324,16 +325,31 @@ export default function App() {
     };
   }, [fetchCatalog]);
 
-  // All items across the catalog
-  const brandItems = dynamicCatalog;
+  // Derived state for current brand's items
+  const brandItems = useMemo(() => {
+    if (menuTabs.length === 0) {
+      return dynamicCatalog;
+    }
+    const isPrimaryTab = menuTabs[0]?.id?.toLowerCase() === activeBrand.toLowerCase();
+    const filtered = dynamicCatalog.filter((i) => {
+      const b = (i.brand || '').toLowerCase();
+      if (b === activeBrand.toLowerCase()) return true;
+      if (isPrimaryTab && (!b || b === 'default')) return true;
+      return false;
+    });
+    return filtered.length > 0 ? filtered : dynamicCatalog;
+  }, [activeBrand, dynamicCatalog, menuTabs]);
 
   const categories = useMemo(() => {
+    const brandCategories = categoriesList.filter(
+      (c) => !c.brand || c.brand.toLowerCase() === activeBrand.toLowerCase()
+    );
     const orderMap = new Map<string, number>();
-    categoriesList.forEach((c) => {
+    brandCategories.forEach((c) => {
       orderMap.set(c.name.trim().toLowerCase(), c.sortOrder);
     });
 
-    const unique = Array.from(new Set(dynamicCatalog.map((i) => i.category)));
+    const unique = Array.from(new Set(brandItems.map((i) => i.category)));
     unique.sort((a, b) => {
       const orderA = orderMap.get(a.trim().toLowerCase()) ?? 999;
       const orderB = orderMap.get(b.trim().toLowerCase()) ?? 999;
@@ -344,7 +360,7 @@ export default function App() {
     });
 
     return ['All', ...unique];
-  }, [dynamicCatalog, categoriesList]);
+  }, [brandItems, categoriesList, activeBrand]);
 
   // Filtered items
   const visibleItems = useMemo(() => {
@@ -394,6 +410,11 @@ export default function App() {
 
 
   // Actions
+  const handleBrandChange = (brand: Brand) => {
+    setActiveBrand(brand);
+    setActiveCategory('All');
+  };
+
   const handleAddItem = (item: MenuItem) => {
     if (WebApp?.HapticFeedback) WebApp.HapticFeedback.impactOccurred?.('light');
     if (item.modifiers && item.modifiers.length > 0) {
@@ -592,6 +613,13 @@ export default function App() {
               )}
             </AnimatePresence>
 
+            {!searchQuery && (
+              <div className="mt-2">
+                {/* Brand / Menu Tabs */}
+                <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} tabs={menuTabs} />
+              </div>
+            )}
+
             {/* Store Closed Banner */}
             {!storeStatus.isOpen && (
               <div className="mt-3 px-3.5 py-2.5 rounded-2xl bg-black/45 backdrop-blur-md border border-white/20 text-white flex items-center justify-between text-xs shadow-lg animate-fade-in">
@@ -627,35 +655,45 @@ export default function App() {
           <>
             {!searchQuery && (
               <>
-                {/* Categories */}
-                <CategoryScroller 
-                  brand={activeBrand}
-                  categories={categories}
-                  activeCategory={activeCategory}
-                  onChange={setActiveCategory}
-                />
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeBrand}
+                    initial={{ opacity: 0, x: activeBrand === 'ai-cha' ? -10 : 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: activeBrand === 'ai-cha' ? 10 : -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {/* Categories */}
+                    <CategoryScroller 
+                      brand={activeBrand}
+                      categories={categories}
+                      activeCategory={activeCategory}
+                      onChange={setActiveCategory}
+                    />
 
-                {/* Menu Grid */}
-                {isLoading ? (
-                  <MenuGridSkeleton count={6} />
-                ) : visibleItems.length === 0 ? (
-                  <EmptyMenuState 
-                    type="category" 
-                    onAction={activeCategory !== 'All' ? () => setActiveCategory('All') : undefined} 
-                  />
-                ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {visibleItems.map(item => (
-                      <MenuItemCard 
-                        key={item.id} 
-                        item={item} 
-                        onAdd={handleAddItem} 
-                        isFavorite={isFavorite(item.id)}
-                        onToggleFavorite={toggleFavorite}
+                    {/* Menu Grid */}
+                    {isLoading ? (
+                      <MenuGridSkeleton count={6} />
+                    ) : visibleItems.length === 0 ? (
+                      <EmptyMenuState 
+                        type="category" 
+                        onAction={activeCategory !== 'All' ? () => setActiveCategory('All') : undefined} 
                       />
-                    ))}
-                  </div>
-                )}
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {visibleItems.map(item => (
+                          <MenuItemCard 
+                            key={item.id} 
+                            item={item} 
+                            onAdd={handleAddItem} 
+                            isFavorite={isFavorite(item.id)}
+                            onToggleFavorite={toggleFavorite}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
               </>
             )}
 

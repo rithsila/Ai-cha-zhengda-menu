@@ -15,7 +15,7 @@ import { Button } from './ui/Button';
 import { CustomSelect } from './ui/CustomSelect';
 import { Switch } from './ui/Switch';
 import { useToast } from './ui/Toast';
-import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
+import { API_BASE, apiFetch, authHeaders, resolveImageUrl } from '../lib/api';
 
 import type { Category } from './CategoryManagementModal';
 
@@ -180,9 +180,48 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     }
   }, [isOpen]);
 
+  const [availableTabs, setAvailableTabs] = useState<Array<{ id: string; label: string }>>([
+    { id: 'ai-cha', label: 'Ai-Cha' },
+    { id: 'zhengda', label: 'Zhengda' },
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    apiFetch<any>('/api/store/status')
+      .then((data) => {
+        if (data?.menuTabsConfig) {
+          try {
+            const parsed = typeof data.menuTabsConfig === 'string'
+              ? JSON.parse(data.menuTabsConfig)
+              : data.menuTabsConfig;
+            if (Array.isArray(parsed)) {
+              const enabled = parsed
+                .filter((t: any) => t.enabled !== false && t.id)
+                .map((t: any) => ({
+                  id: String(t.id).trim().toLowerCase(),
+                  label: String(t.label || t.id).trim(),
+                }));
+              if (enabled.length > 0) {
+                setAvailableTabs(enabled);
+              }
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
+  const tabOptions = useMemo(() => {
+    const options = availableTabs.map((t) => ({ value: t.id, label: t.label }));
+    if (brand && !options.some((o) => o.value.toLowerCase() === brand.toLowerCase())) {
+      options.push({ value: brand, label: brand === 'default' ? 'Default / Both' : brand });
+    }
+    return options;
+  }, [availableTabs, brand]);
+
   useEffect(() => {
     if (item) {
-      setBrand(item.brand || 'default');
+      setBrand(item.brand ? item.brand.toLowerCase() : 'ai-cha');
       setCategory(item.category || '');
       setName(item.name || '');
       setDescription(item.description || '');
@@ -206,7 +245,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         })) || []
       );
     } else {
-      setBrand('default');
+      setBrand('ai-cha');
       setCategory('');
       setName('');
       setDescription('');
@@ -602,11 +641,27 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
           )}
 
-          {/* Category */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-              Category
-            </label>
+          {/* Menu Tab & Category */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Menu Tab / Brand */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                Menu Tab / Brand
+              </label>
+              <CustomSelect
+                value={brand}
+                onChange={(val) => setBrand(val)}
+                options={tabOptions}
+                placeholder="Select Menu Tab"
+                aria-label="Menu Tab / Brand"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
+                Category
+              </label>
               {isAddingCategory ? (
                 <div className="flex items-center gap-2">
                   <input
@@ -679,6 +734,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 </div>
               )}
             </div>
+          </div>
 
           {/* Name & Base Price */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
