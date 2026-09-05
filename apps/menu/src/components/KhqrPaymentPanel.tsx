@@ -203,7 +203,31 @@ async function renderKhqrTemplateToBlob(params: {
         const qrY = dividerY + 18;
         ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-        canvas.toBlob((blob) => {
+        // Export only the card bounds. Leaving the 10px/8px canvas padding in
+        // the saved file lets phone photo apps composite the surrounding
+        // transparent pixels with arbitrary colors, making the card appear
+        // square or surrounded by a changed background.
+        const outputCanvas = document.createElement('canvas');
+        outputCanvas.width = cw * scale;
+        outputCanvas.height = ch * scale;
+        const outputCtx = outputCanvas.getContext('2d');
+        if (!outputCtx) {
+          resolve(null);
+          return;
+        }
+        outputCtx.drawImage(
+          canvas,
+          cx * scale,
+          cy * scale,
+          cw * scale,
+          ch * scale,
+          0,
+          0,
+          cw * scale,
+          ch * scale,
+        );
+
+        outputCanvas.toBlob((blob) => {
           resolve(blob);
         }, 'image/png');
       };
