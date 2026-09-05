@@ -174,8 +174,9 @@ export function MenuManagement() {
 
         <Button
           variant="secondary"
+          size="sm"
           onClick={() => setCategoryModalOpen(true)}
-          className="font-medium text-xs h-10"
+          className="font-medium text-xs rounded-none"
         >
           <Layers className="size-4" />
           Manage Categories
@@ -183,18 +184,24 @@ export function MenuManagement() {
 
         <Button
           variant="primary"
+          size="sm"
           onClick={() => {
             setEditingItem(null);
             setModalOpen(true);
           }}
-          className="font-medium text-xs h-10"
+          className="font-medium text-xs rounded-none"
         >
           <Plus className="size-4" />
           Add Item
         </Button>
 
         {isFiltered ? (
-          <Button variant="ghost" onClick={clearFilters} className="h-10 text-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="text-xs rounded-none"
+          >
             <X className="size-4" aria-hidden="true" />
             Clear
           </Button>

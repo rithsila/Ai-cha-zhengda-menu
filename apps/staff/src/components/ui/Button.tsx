@@ -8,7 +8,7 @@ export type ButtonVariant =
   | 'danger'
   | 'success';
 
-export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
 
 interface ButtonBaseProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
@@ -22,8 +22,8 @@ interface ButtonBaseProps
 
 export type ButtonProps = ButtonBaseProps &
   (
-    | { size: 'icon'; 'aria-label': string }
-    | { size?: Exclude<ButtonSize, 'icon'>; 'aria-label'?: string }
+    | { size: 'icon' | 'icon-sm'; 'aria-label': string }
+    | { size?: Exclude<ButtonSize, 'icon' | 'icon-sm'>; 'aria-label'?: string }
   );
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -36,17 +36,21 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
+  xs: 'h-8 px-2 text-xs',
   sm: 'h-10 px-3 text-xs',
   md: 'h-11 px-4 text-sm',
   lg: 'h-13 px-6 text-base',
   icon: 'size-11 justify-center p-0',
+  'icon-sm': 'size-8 justify-center p-0',
 };
 
 const contentGapClasses: Record<ButtonSize, string> = {
+  xs: 'gap-1',
   sm: 'gap-1.5',
   md: 'gap-2',
   lg: 'gap-2.5',
   icon: '',
+  'icon-sm': '',
 };
 
 export function Button({

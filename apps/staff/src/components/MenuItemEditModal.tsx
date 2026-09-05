@@ -762,23 +762,23 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                   <Button
                     type="button"
                     variant="primary"
-                    size="md"
+                    size="sm"
                     loading={creatingCategory}
                     onClick={handleQuickAddCategory}
-                    className="h-10 px-3 text-xs font-bold shrink-0"
+                    className="font-bold shrink-0 rounded-none"
                   >
                     Save
                   </Button>
                   <Button
                     type="button"
                     variant="secondary"
-                    size="md"
+                    size="sm"
                     disabled={creatingCategory}
                     onClick={() => {
                       setIsAddingCategory(false);
                       setNewCategoryName('');
                     }}
-                    className="h-10 px-3 text-xs font-bold shrink-0"
+                    className="font-bold shrink-0 rounded-none"
                   >
                     Cancel
                   </Button>
@@ -798,12 +798,12 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                   <Button
                     type="button"
                     variant="secondary"
-                    size="md"
+                    size="sm"
                     onClick={() => {
                       setIsAddingCategory(true);
                       setNewCategoryName('');
                     }}
-                    className="h-10 px-3 text-xs font-bold shrink-0"
+                    className="font-bold shrink-0 rounded-none"
                   >
                     <Plus className="size-3.5" />
                     New
@@ -1138,7 +1138,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                       <Button
                         type="button"
                         variant="ghost"
-                        size="md"
+                        size="xs"
                         onClick={() => addOptionToGroup(gIdx)}
                         className="text-xs text-accent mt-1"
                       >

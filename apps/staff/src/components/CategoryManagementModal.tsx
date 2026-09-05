@@ -398,11 +398,11 @@ export function CategoryManagementModal({
                           <Button
                             type="button"
                             variant="primary"
-                            size="md"
+                            size="xs"
                             aria-label="Save"
                             loading={savingEdit}
                             onClick={() => handleSaveEdit(cat)}
-                            className="h-8 px-2 text-xs"
+                            className="rounded-none font-medium text-xs"
                           >
                             <Check className="size-3.5 mr-1" />
                             Save
@@ -410,11 +410,11 @@ export function CategoryManagementModal({
                           <Button
                             type="button"
                             variant="ghost"
-                            size="md"
+                            size="xs"
                             aria-label="Cancel"
                             disabled={savingEdit}
                             onClick={() => setEditingId(null)}
-                            className="h-8 px-2 text-xs"
+                            className="rounded-none text-xs"
                           >
                             <X className="size-3.5" />
                           </Button>
@@ -437,11 +437,11 @@ export function CategoryManagementModal({
                             <Button
                               type="button"
                               variant="ghost"
-                              size="icon"
+                              size="icon-sm"
                               aria-label="Move Up"
                               disabled={index === 0 || reordering}
                               onClick={() => handleMove(index, 'up')}
-                              className="size-8 p-0"
+                              className="rounded-none"
                             >
                               <ArrowUp className="size-4" />
                             </Button>
@@ -449,11 +449,11 @@ export function CategoryManagementModal({
                             <Button
                               type="button"
                               variant="ghost"
-                              size="icon"
+                              size="icon-sm"
                               aria-label="Move Down"
                               disabled={index === categories.length - 1 || reordering}
                               onClick={() => handleMove(index, 'down')}
-                              className="size-8 p-0"
+                              className="rounded-none"
                             >
                               <ArrowDown className="size-4" />
                             </Button>
@@ -461,10 +461,10 @@ export function CategoryManagementModal({
                             <Button
                               type="button"
                               variant="ghost"
-                              size="icon"
+                              size="icon-sm"
                               aria-label="Edit"
                               onClick={() => handleStartEdit(cat)}
-                              className="size-8 p-0"
+                              className="rounded-none"
                             >
                               <Edit2 className="size-3.5" />
                             </Button>
@@ -472,10 +472,10 @@ export function CategoryManagementModal({
                             <Button
                               type="button"
                               variant="ghost"
-                              size="icon"
+                              size="icon-sm"
                               aria-label="Delete"
                               onClick={() => handleDelete(cat)}
-                              className="size-8 p-0 text-danger hover:bg-danger-soft hover:text-danger"
+                              className="rounded-none text-danger hover:bg-danger-soft hover:text-danger"
                             >
                               <Trash2 className="size-3.5" />
                             </Button>
