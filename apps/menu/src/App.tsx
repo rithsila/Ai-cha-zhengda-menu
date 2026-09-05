@@ -61,8 +61,8 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
   const botName = import.meta.env.VITE_BOT_NAME || 'aicha_zhengda_arakawa_bot';
 
   return (
-    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-[#0A0D14]">
-      {/* Dynamic Brand Ambient Glow Orbs */}
+    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-[#0F0406]">
+      {/* Dynamic Brand Ambient Glow Orbs: Ai-Cha Red + Zhengda Golden Amber */}
       <motion.div
         animate={{
           scale: [1, 1.25, 1],
@@ -71,7 +71,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           y: [0, -40, 0],
         }}
         transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#10b981]/30 via-[#059669]/20 to-transparent blur-3xl pointer-events-none"
+        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#e53935]/35 via-[#dc2626]/20 to-transparent blur-3xl pointer-events-none"
       />
       <motion.div
         animate={{
@@ -81,7 +81,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           y: [0, 35, 0],
         }}
         transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#e53935]/30 via-[#ef4444]/20 to-transparent blur-3xl pointer-events-none"
+        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#f59e0b]/35 via-[#d97706]/20 to-transparent blur-3xl pointer-events-none"
       />
       <motion.div
         animate={{
@@ -89,13 +89,13 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           opacity: [0.15, 0.3, 0.15],
         }}
         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#38bdf8]/15 via-transparent to-transparent blur-2xl pointer-events-none"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#e53935]/15 via-transparent to-transparent blur-2xl pointer-events-none"
       />
 
-      {/* Subtle Pattern Grid */}
+      {/* Subtle Warm Pattern Grid */}
       <div 
-        className="absolute inset-0 opacity-[0.04] pointer-events-none" 
-        style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+        className="absolute inset-0 opacity-[0.06] pointer-events-none" 
+        style={{ backgroundImage: 'radial-gradient(rgba(245, 158, 11, 0.4) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
       />
 
       {/* Double-Bezel Hardware Card Container */}
@@ -103,9 +103,9 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-sm p-2 rounded-[2.5rem] bg-gradient-to-b from-white/15 to-white/5 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-2xl"
+        className="relative z-10 w-full max-w-sm p-2 rounded-[2.5rem] bg-gradient-to-b from-white/15 via-white/5 to-[#e53935]/15 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_40px_rgba(229,57,53,0.15)] backdrop-blur-2xl"
       >
-        <div className="p-7 sm:p-8 rounded-[2rem] bg-[#111827]/85 border border-white/10 shadow-inner flex flex-col items-center">
+        <div className="p-7 sm:p-8 rounded-[2rem] bg-[#18080B]/90 border border-white/10 shadow-inner flex flex-col items-center">
           
           {/* Dual Brand Header Floating Badges */}
           <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md shadow-sm">
@@ -123,7 +123,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
             Fresh Tea & Crispy
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300/80 mb-8 max-w-[260px] leading-relaxed">
+          <p className="text-xs sm:text-sm text-rose-100/80 mb-8 max-w-[260px] leading-relaxed">
             Order your favorite boba, smoothies & crispy chicken on Telegram.
           </p>
 
@@ -150,7 +150,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           <button
             type="button"
             onClick={onContinueAsGuest}
-            className="mt-4 text-xs font-semibold text-slate-400 hover:text-white transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-white/5"
+            className="mt-4 text-xs font-semibold text-rose-200/70 hover:text-white transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-white/5"
           >
             Or browse as guest →
           </button>
@@ -162,7 +162,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
                 await loginAsDevCustomer('dev_test_customer');
                 onContinueAsGuest();
               }}
-              className="mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-emerald-500/10 flex items-center gap-1.5"
+              className="mt-2 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-amber-500/10 flex items-center gap-1.5"
             >
               <span>🧪</span> Sign in with Test Account (Dev)
             </button>
@@ -171,7 +171,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
       </motion.div>
 
       {/* Subtle Footer Identity */}
-      <p className="relative z-10 text-[11px] font-medium text-slate-500 mt-8 tracking-wider uppercase">
+      <p className="relative z-10 text-[11px] font-medium text-rose-200/40 mt-8 tracking-wider uppercase">
         Arakawa Branch • Official Menu
       </p>
     </div>
