@@ -19,6 +19,9 @@ Re-run `$impeccable critique` after fixes to see your score improve.
 &nbsp;
 
 plan to build the   
-  
+
 discount feature  
 birthday free drink feature , require gold member and require update date of birth in telegram or method that feasible.   
+Profit magin calculator require sync with kotstock. 
+
+  

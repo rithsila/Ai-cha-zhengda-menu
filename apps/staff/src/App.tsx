@@ -1038,7 +1038,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               </span>
             ) : null}
 
-            {activeTab !== 'menu' ? (
+            {activeTab === 'orders' ? (
               <ConnectionStatusBadge
                 state={connState}
                 lastSuccessAt={lastSuccessAt}
