@@ -534,7 +534,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-tg-bg text-tg-text pb-44">
+    <div className="min-h-screen bg-tg-bg text-tg-text pb-44 overflow-x-hidden">
       <DevPersonaBar />
       {/* Top Banner Section */}
       <div 
@@ -658,10 +658,10 @@ export default function App() {
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeBrand}
-                    initial={{ opacity: 0, x: activeBrand === 'ai-cha' ? -10 : 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: activeBrand === 'ai-cha' ? 10 : -10 }}
-                    transition={{ duration: 0.2 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
                   >
                     {/* Categories */}
                     <CategoryScroller 
