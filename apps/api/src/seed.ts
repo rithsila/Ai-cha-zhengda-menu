@@ -22,7 +22,7 @@ export async function seedCategoriesIfEmpty(db: PrismaClient = prisma) {
     console.log('Category table empty. Seeding initial categories...');
     for (const cat of INITIAL_CATEGORIES) {
       await db.category.upsert({
-        where: { brand_name: { brand: cat.brand, name: cat.name } },
+        where: { name: cat.name },
         update: {},
         create: {
           brand: cat.brand,

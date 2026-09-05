@@ -20,7 +20,6 @@ import {
   formatCountdown,
   formatElapsed,
   isAwaitingPayment,
-  isZhengda,
   parseModifiers,
   paymentExpiryAt,
 } from '../lib/orders';
@@ -374,7 +373,6 @@ function OrderCardImpl({
 
       <ul className="mt-3 space-y-2.5 px-4">
         {order.items.map((item) => {
-          const zhengda = isZhengda(item.menuItem.brand);
           const mods = item.modifiers ? parseModifiers(item.modifiers) : [];
           return (
             <li key={item.id} className="flex items-start gap-2.5">
@@ -385,16 +383,11 @@ function OrderCardImpl({
                */}
               <span
                 aria-hidden="true"
-                className={`mt-2 size-2.5 shrink-0 rounded-none ${
-                  zhengda ? 'bg-zhengda' : 'bg-accent'
-                }`}
+                className="mt-2 size-2.5 shrink-0 rounded-none bg-accent"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-base leading-snug font-semibold text-ink">
-                    <span className="sr-only">
-                      {zhengda ? 'Zhengda' : 'Ai-Cha'}:{' '}
-                    </span>
                     {item.quantity}× {item.menuItem.name}
                   </span>
                   <span className="shrink-0 text-sm tabular-nums text-ink-faint">

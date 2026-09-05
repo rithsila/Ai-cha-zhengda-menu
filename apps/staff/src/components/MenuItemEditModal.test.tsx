@@ -93,7 +93,7 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     }));
   });
 
-  it('loads categories based on selected brand (ai-cha default)', async () => {
+  it('loads categories into category dropdown', async () => {
     const user = userEvent.setup();
     render(
       <ToastProvider>
@@ -135,35 +135,6 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     expect(combobox.textContent).toContain('Fruit Tea');
   });
 
-  it('loads categories for new brand and adjusts default category when switching brand toggle', async () => {
-    const user = userEvent.setup();
-    render(
-      <ToastProvider>
-        <MenuItemEditModal isOpen={true} item={null} onClose={() => {}} onSaved={() => {}} />
-      </ToastProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: /category/i }).textContent).toContain('Milk Tea');
-    });
-
-    // Switch brand to Zhengda
-    const zhengdaRadio = screen.getByRole('radio', { name: /zhengda/i });
-    await user.click(zhengdaRadio);
-
-    // Should load Zhengda categories and select first category
-    await waitFor(() => {
-      const combobox = screen.getByRole('combobox', { name: /category/i });
-      expect(combobox.textContent).toContain('Fried Chicken');
-    });
-
-    // Verify options in Zhengda
-    const combobox = screen.getByRole('combobox', { name: /category/i });
-    await user.click(combobox);
-    expect(screen.getByRole('option', { name: 'Fried Chicken' })).toBeDefined();
-    expect(screen.getByRole('option', { name: 'Snacks' })).toBeDefined();
-  });
-
   it('preserves existing item category, including custom categories', async () => {
     const existingItem: MenuItemFull = {
       id: 'item-1',
@@ -182,41 +153,6 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     await waitFor(() => {
       const combobox = screen.getByRole('combobox', { name: /category/i });
       expect(combobox.textContent).toContain('Special Seasonal');
-    });
-  });
-
-  it('restores original item category when switching back to item brand', async () => {
-    const user = userEvent.setup();
-    const existingItem: MenuItemFull = {
-      id: 'item-2',
-      brand: 'ai-cha',
-      name: 'Oolong Special',
-      category: 'Fruit Tea',
-      basePrice: 3.0,
-    };
-
-    render(
-      <ToastProvider>
-        <MenuItemEditModal isOpen={true} item={existingItem} onClose={() => {}} onSaved={() => {}} />
-      </ToastProvider>
-    );
-
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: /category/i }).textContent).toContain('Fruit Tea');
-    });
-
-    // Switch to Zhengda
-    await user.click(screen.getByRole('radio', { name: /zhengda/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: /category/i }).textContent).toContain('Fried Chicken');
-    });
-
-    // Switch back to Ai-Cha -> restores original Fruit Tea category
-    await user.click(screen.getByRole('radio', { name: /ai-cha/i }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: /category/i }).textContent).toContain('Fruit Tea');
     });
   });
 

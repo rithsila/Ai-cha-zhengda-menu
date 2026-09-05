@@ -13,18 +13,11 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { CustomSelect } from './ui/CustomSelect';
-import { Segmented } from './ui/Segmented';
 import { Switch } from './ui/Switch';
 import { useToast } from './ui/Toast';
-import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
+import { API_BASE, apiFetch, authHeaders, resolveImageUrl } from '../lib/api';
 
-export interface Category {
-  id: string;
-  brand: string;
-  name: string;
-  sortOrder: number;
-  isActive: boolean;
-}
+import type { Category } from './CategoryManagementModal';
 
 export type ModifierOptionInput = {
   id?: string;
@@ -44,7 +37,7 @@ export type ModifierGroupInput = {
 
 export type MenuItemFull = {
   id?: string;
-  brand: string;
+  brand?: string;
   category: string;
   name: string;
   description?: string | null;
@@ -156,7 +149,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [brand, setBrand] = useState<'ai-cha' | 'zhengda'>('ai-cha');
+  const [brand, setBrand] = useState<string>('default');
   const [category, setCategory] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -187,9 +180,48 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     }
   }, [isOpen]);
 
+  const [availableTabs, setAvailableTabs] = useState<Array<{ id: string; label: string }>>([
+    { id: 'ai-cha', label: 'Ai-Cha' },
+    { id: 'zhengda', label: 'Zhengda' },
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    apiFetch<any>('/api/store/status')
+      .then((data) => {
+        if (data?.menuTabsConfig) {
+          try {
+            const parsed = typeof data.menuTabsConfig === 'string'
+              ? JSON.parse(data.menuTabsConfig)
+              : data.menuTabsConfig;
+            if (Array.isArray(parsed)) {
+              const enabled = parsed
+                .filter((t: any) => t.enabled !== false && t.id)
+                .map((t: any) => ({
+                  id: String(t.id).trim().toLowerCase(),
+                  label: String(t.label || t.id).trim(),
+                }));
+              if (enabled.length > 0) {
+                setAvailableTabs(enabled);
+              }
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
+  const tabOptions = useMemo(() => {
+    const options = availableTabs.map((t) => ({ value: t.id, label: t.label }));
+    if (brand && !options.some((o) => o.value.toLowerCase() === brand.toLowerCase())) {
+      options.push({ value: brand, label: brand === 'default' ? 'Default / Both' : brand });
+    }
+    return options;
+  }, [availableTabs, brand]);
+
   useEffect(() => {
     if (item) {
-      setBrand(item.brand.toLowerCase() === 'zhengda' ? 'zhengda' : 'ai-cha');
+      setBrand(item.brand ? item.brand.toLowerCase() : 'ai-cha');
       setCategory(item.category || '');
       setName(item.name || '');
       setDescription(item.description || '');
@@ -228,8 +260,6 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     setError(null);
   }, [item, isOpen]);
 
-  const itemId = item?.id;
-  const itemBrand = item?.brand?.toLowerCase();
   const itemCategory = item?.category;
 
   useEffect(() => {
@@ -238,7 +268,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     let isMounted = true;
     setLoadingCategories(true);
 
-    fetch(`${API_BASE}/api/categories?brand=${encodeURIComponent(brand)}`, {
+    fetch(`${API_BASE}/api/categories`, {
       headers: authHeaders(),
     })
       .then(async (res) => {
@@ -252,11 +282,9 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         if (!isMounted) return;
         setCategories(data);
 
-        if (itemId && itemBrand === brand) {
-          if (itemCategory) {
-            setCategory(itemCategory);
-            return;
-          }
+        if (itemCategory) {
+          setCategory(itemCategory);
+          return;
         }
 
         if (data.length > 0) {
@@ -280,14 +308,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [isOpen, brand, itemId, itemBrand, itemCategory]);
-
-  const handleBrandChange = (newBrand: 'ai-cha' | 'zhengda') => {
-    if (newBrand === brand) return;
-    setBrand(newBrand);
-    setIsAddingCategory(false);
-    setNewCategoryName('');
-  };
+  }, [isOpen, itemCategory]);
 
   const handleQuickAddCategory = async () => {
     const trimmed = newCategoryName.trim();
@@ -620,23 +641,23 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
           )}
 
-          {/* Brand & Category */}
+          {/* Menu Tab & Category */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Menu Tab / Brand */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-                Brand
+                Menu Tab / Brand
               </label>
-              <Segmented
-                options={[
-                  { id: 'ai-cha', label: 'Ai-Cha' },
-                  { id: 'zhengda', label: 'Zhengda' },
-                ]}
+              <CustomSelect
                 value={brand}
-                onChange={(val) => handleBrandChange(val as 'ai-cha' | 'zhengda')}
-                ariaLabel="Select Brand"
+                onChange={(val) => setBrand(val)}
+                options={tabOptions}
+                placeholder="Select Menu Tab"
+                aria-label="Menu Tab / Brand"
               />
             </div>
 
+            {/* Category */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
                 Category

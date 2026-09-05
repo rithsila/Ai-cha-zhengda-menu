@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
-import { Segmented } from './ui/Segmented';
 import { useToast } from './ui/Toast';
 import { Skeleton } from './ui/Skeleton';
 import { API_BASE, authHeaders } from '../lib/api';
@@ -21,7 +20,7 @@ import type { MenuItemFull } from './MenuItemEditModal';
 
 export interface Category {
   id: string;
-  brand: string;
+  brand?: string;
   name: string;
   sortOrder: number;
   isActive: boolean;
@@ -41,7 +40,6 @@ export function CategoryManagementModal({
   onUpdated,
 }: CategoryManagementModalProps) {
   const { toast } = useToast();
-  const [brand, setBrand] = useState<'ai-cha' | 'zhengda'>('ai-cha');
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,11 +84,11 @@ export function CategoryManagementModal({
   }, [isOpen, editingId, onClose]);
 
   // Fetch categories
-  const fetchCategories = useCallback(async (currentBrand: string) => {
+  const fetchCategories = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/categories?brand=${encodeURIComponent(currentBrand)}`, {
+      const res = await fetch(`${API_BASE}/api/categories`, {
         headers: authHeaders(),
       });
       if (!res.ok) {
@@ -108,23 +106,23 @@ export function CategoryManagementModal({
 
   useEffect(() => {
     if (isOpen) {
-      fetchCategories(brand);
+      fetchCategories();
       setEditingId(null);
       setNewCategoryName('');
     }
-  }, [isOpen, brand, fetchCategories]);
+  }, [isOpen, fetchCategories]);
 
   // Count items per category
   const categoryItemCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
-      if (item.brand.toLowerCase() === brand.toLowerCase() && item.category) {
+      if (item.category) {
         const key = item.category.trim().toLowerCase();
         counts.set(key, (counts.get(key) || 0) + 1);
       }
     }
     return counts;
-  }, [items, brand]);
+  }, [items]);
 
   // Add category
   const handleAddCategory = async (e: FormEvent) => {
@@ -138,7 +136,7 @@ export function CategoryManagementModal({
       const res = await fetch(`${API_BASE}/api/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ brand, name: cleanName }),
+        body: JSON.stringify({ name: cleanName }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -151,7 +149,7 @@ export function CategoryManagementModal({
         variant: 'success',
       });
       setNewCategoryName('');
-      await fetchCategories(brand);
+      await fetchCategories();
       onUpdated?.();
     } catch (err: any) {
       toast({
@@ -204,7 +202,7 @@ export function CategoryManagementModal({
         description: err.message || 'Failed to update order',
         variant: 'error',
       });
-      await fetchCategories(brand);
+      await fetchCategories();
     } finally {
       setReordering(false);
     }
@@ -242,7 +240,7 @@ export function CategoryManagementModal({
         variant: 'success',
       });
       setEditingId(null);
-      await fetchCategories(brand);
+      await fetchCategories();
       onUpdated?.();
     } catch (err: any) {
       toast({
@@ -276,7 +274,7 @@ export function CategoryManagementModal({
         description: `"${cat.name}" was removed.`,
         variant: 'success',
       });
-      await fetchCategories(brand);
+      await fetchCategories();
       onUpdated?.();
     } catch (err: any) {
       toast({
@@ -320,19 +318,6 @@ export function CategoryManagementModal({
           >
             <X className="size-5" />
           </button>
-        </div>
-
-        {/* Brand Selector Tab */}
-        <div className="border-b border-border bg-surface-sunken/40 px-6 py-3 flex items-center justify-between">
-          <Segmented
-            options={[
-              { id: 'ai-cha', label: 'Ai-Cha' },
-              { id: 'zhengda', label: 'Zhengda' },
-            ]}
-            value={brand}
-            onChange={(val) => setBrand(val as 'ai-cha' | 'zhengda')}
-            ariaLabel="Select Brand"
-          />
         </div>
 
         {/* Body Content */}
@@ -380,7 +365,7 @@ export function CategoryManagementModal({
               </div>
             ) : categories.length === 0 ? (
               <div className="p-8 text-center text-xs text-ink-soft border border-dashed border-border">
-                No categories found for this brand. Add your first category above.
+                No categories found. Add your first category above.
               </div>
             ) : (
               <div className="divide-y divide-border border border-border bg-surface">

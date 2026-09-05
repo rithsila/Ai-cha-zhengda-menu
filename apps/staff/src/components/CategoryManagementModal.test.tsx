@@ -12,14 +12,10 @@ const mockItems: MenuItemFull[] = [
   { id: '4', name: 'Crispy Chicken', brand: 'zhengda', category: 'Fried Chicken', basePrice: 4.5 },
 ];
 
-const mockAiChaCategories = [
-  { id: 'c1', brand: 'ai-cha', name: 'Milk Tea', sortOrder: 0, isActive: true },
-  { id: 'c2', brand: 'ai-cha', name: 'Fruit Tea', sortOrder: 1, isActive: true },
-  { id: 'c3', brand: 'ai-cha', name: 'Smoothies', sortOrder: 2, isActive: true },
-];
-
-const mockZhengdaCategories = [
-  { id: 'c4', brand: 'zhengda', name: 'Fried Chicken', sortOrder: 0, isActive: true },
+const mockCategories = [
+  { id: 'c1', name: 'Milk Tea', sortOrder: 0, isActive: true },
+  { id: 'c2', name: 'Fruit Tea', sortOrder: 1, isActive: true },
+  { id: 'c3', name: 'Smoothies', sortOrder: 2, isActive: true },
 ];
 
 describe('CategoryManagementModal', () => {
@@ -29,19 +25,12 @@ describe('CategoryManagementModal', () => {
       const urlStr = String(url);
       const method = init?.method || 'GET';
 
-      // GET /api/categories?brand=
+      // GET /api/categories
       if (urlStr.includes('/api/categories') && method === 'GET') {
-        if (urlStr.includes('brand=zhengda')) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: async () => mockZhengdaCategories,
-          });
-        }
         return Promise.resolve({
           ok: true,
           status: 200,
-          json: async () => mockAiChaCategories,
+          json: async () => mockCategories,
         });
       }
 
@@ -53,7 +42,6 @@ describe('CategoryManagementModal', () => {
           status: 201,
           json: async () => ({
             id: 'c-new',
-            brand: body.brand,
             name: body.name,
             sortOrder: 3,
             isActive: true,
@@ -149,22 +137,6 @@ describe('CategoryManagementModal', () => {
     expect(screen.getByText('0 items')).toBeDefined();
   });
 
-  it('switches brand tab and fetches categories for the new brand', async () => {
-    const user = userEvent.setup();
-    renderModal();
-
-    await waitFor(() => {
-      expect(screen.getByText('Milk Tea')).toBeDefined();
-    });
-
-    const zhengdaTab = screen.getByRole('radio', { name: /Zhengda/i });
-    await user.click(zhengdaTab);
-
-    await waitFor(() => {
-      expect(screen.getByText('Fried Chicken')).toBeDefined();
-    });
-  });
-
   it('adds a new category with POST /api/categories', async () => {
     const user = userEvent.setup();
     renderModal();
@@ -184,7 +156,7 @@ describe('CategoryManagementModal', () => {
         expect.stringContaining('/api/categories'),
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ brand: 'ai-cha', name: 'Coffee Series' }),
+          body: JSON.stringify({ name: 'Coffee Series' }),
         })
       );
     });

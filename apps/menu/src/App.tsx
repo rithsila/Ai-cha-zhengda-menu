@@ -330,12 +330,19 @@ export default function App() {
     if (menuTabs.length === 0) {
       return dynamicCatalog;
     }
-    return dynamicCatalog.filter((i) => i.brand === activeBrand);
+    const isPrimaryTab = menuTabs[0]?.id?.toLowerCase() === activeBrand.toLowerCase();
+    const filtered = dynamicCatalog.filter((i) => {
+      const b = (i.brand || '').toLowerCase();
+      if (b === activeBrand.toLowerCase()) return true;
+      if (isPrimaryTab && (!b || b === 'default')) return true;
+      return false;
+    });
+    return filtered.length > 0 ? filtered : dynamicCatalog;
   }, [activeBrand, dynamicCatalog, menuTabs]);
 
   const categories = useMemo(() => {
     const brandCategories = categoriesList.filter(
-      (c) => c.brand?.toLowerCase() === activeBrand.toLowerCase()
+      (c) => !c.brand || c.brand.toLowerCase() === activeBrand.toLowerCase()
     );
     const orderMap = new Map<string, number>();
     brandCategories.forEach((c) => {
@@ -608,7 +615,7 @@ export default function App() {
 
             {!searchQuery && (
               <div className="mt-2">
-                {/* Brand Tabs */}
+                {/* Brand / Menu Tabs */}
                 <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} tabs={menuTabs} />
               </div>
             )}
@@ -651,44 +658,44 @@ export default function App() {
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeBrand}
-              initial={{ opacity: 0, x: activeBrand === 'ai-cha' ? -10 : 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: activeBrand === 'ai-cha' ? 10 : -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {/* Categories */}
-              <CategoryScroller 
-                brand={activeBrand}
-                categories={categories}
-                activeCategory={activeCategory}
-                onChange={setActiveCategory}
-              />
-
-              {/* Menu Grid */}
-              {isLoading ? (
-                <MenuGridSkeleton count={6} />
-              ) : visibleItems.length === 0 ? (
-                <EmptyMenuState 
-                  type="category" 
-                  onAction={activeCategory !== 'All' ? () => setActiveCategory('All') : undefined} 
-                />
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {visibleItems.map(item => (
-                    <MenuItemCard 
-                      key={item.id} 
-                      item={item} 
-                      onAdd={handleAddItem} 
-                      isFavorite={isFavorite(item.id)}
-                      onToggleFavorite={toggleFavorite}
+                    initial={{ opacity: 0, x: activeBrand === 'ai-cha' ? -10 : 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: activeBrand === 'ai-cha' ? 10 : -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {/* Categories */}
+                    <CategoryScroller 
+                      brand={activeBrand}
+                      categories={categories}
+                      activeCategory={activeCategory}
+                      onChange={setActiveCategory}
                     />
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </>
-      )}
+
+                    {/* Menu Grid */}
+                    {isLoading ? (
+                      <MenuGridSkeleton count={6} />
+                    ) : visibleItems.length === 0 ? (
+                      <EmptyMenuState 
+                        type="category" 
+                        onAction={activeCategory !== 'All' ? () => setActiveCategory('All') : undefined} 
+                      />
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {visibleItems.map(item => (
+                          <MenuItemCard 
+                            key={item.id} 
+                            item={item} 
+                            onAdd={handleAddItem} 
+                            isFavorite={isFavorite(item.id)}
+                            onToggleFavorite={toggleFavorite}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </>
+            )}
 
       {/* Search Results */}
       {searchQuery && (
