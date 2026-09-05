@@ -120,11 +120,11 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
             </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
-            Fresh Tea & Crispy
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2 leading-tight">
+            Welcome to<br />Ai-Cha & Zhengda Arakawa
           </h1>
-          <p className="text-xs sm:text-sm text-rose-100/80 mb-8 max-w-[260px] leading-relaxed">
-            Order your favorite boba, smoothies & crispy chicken on Telegram.
+          <p className="text-xs sm:text-sm text-rose-100/80 mb-8 max-w-[280px] leading-relaxed">
+            Order fresh boba, ice cream & crispy chicken on Telegram.
           </p>
 
           {/* Primary CTA - Open in Telegram App */}
