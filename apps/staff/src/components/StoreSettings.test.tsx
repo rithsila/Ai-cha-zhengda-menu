@@ -100,7 +100,7 @@ describe('StoreSettings strict layer', () => {
     );
   });
 
-  it('renders Cancel and Save buttons (disabled when clean), without Refresh button', async () => {
+  it('renders without Refresh button and hides action buttons when clean', async () => {
     render(
       <ToastProvider>
         <StoreSettings />
@@ -114,13 +114,9 @@ describe('StoreSettings strict layer', () => {
     // Refresh button should be gone
     expect(screen.queryByRole('button', { name: /Refresh/i })).toBeNull();
 
-    // Cancel and Save buttons are present and disabled initially
-    const cancelBtn = screen.getByRole('button', { name: /^Cancel$/i }) as HTMLButtonElement;
-    const saveBtn = screen.getByRole('button', { name: /^Save$/i }) as HTMLButtonElement;
-    expect(cancelBtn).toBeDefined();
-    expect(saveBtn).toBeDefined();
-    expect(cancelBtn.disabled).toBe(true);
-    expect(saveBtn.disabled).toBe(true);
+    // Cancel and Save buttons are not shown initially when clean
+    expect(screen.queryByRole('button', { name: /^Cancel$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Save$/i })).toBeNull();
     expect(screen.queryByText(/UNSAVED DRAFT/i)).toBeNull();
   });
 
@@ -138,18 +134,18 @@ describe('StoreSettings strict layer', () => {
     const openTimeInput = screen.getByDisplayValue('08:00');
     fireEvent.change(openTimeInput, { target: { value: '09:30' } });
 
-    // Should show dirty badge and enabled Cancel/Save buttons
+    // Should show dirty badge and enabled Cancel/Save buttons in sticky bar
     expect(screen.getByText(/UNSAVED DRAFT/i)).toBeDefined();
-    const cancelButtons = screen.getAllByRole('button', { name: /^Cancel$/i }) as HTMLButtonElement[];
-    const saveButtons = screen.getAllByRole('button', { name: /^Save$/i }) as HTMLButtonElement[];
-    expect(cancelButtons[0].disabled).toBe(false);
-    expect(saveButtons[0].disabled).toBe(false);
+    const cancelBtn = screen.getByRole('button', { name: /^Cancel$/i }) as HTMLButtonElement;
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i }) as HTMLButtonElement;
+    expect(cancelBtn.disabled).toBe(false);
+    expect(saveBtn.disabled).toBe(false);
 
     // No PUT request sent yet!
     expect(putRequests.length).toBe(0);
   });
 
-  it('clicking Cancel reverts input back to saved state and disables buttons', async () => {
+  it('clicking Cancel reverts input back to saved state and hides action bar', async () => {
     render(
       <ToastProvider>
         <StoreSettings />
@@ -164,15 +160,15 @@ describe('StoreSettings strict layer', () => {
     fireEvent.change(openTimeInput, { target: { value: '09:30' } });
     expect(screen.getByDisplayValue('09:30')).toBeDefined();
 
-    const cancelButtons = screen.getAllByRole('button', { name: /^Cancel$/i });
-    fireEvent.click(cancelButtons[0]);
+    const cancelBtn = screen.getByRole('button', { name: /^Cancel$/i });
+    fireEvent.click(cancelBtn);
 
     // Reverts back to 08:00
     expect(screen.getByDisplayValue('08:00')).toBeDefined();
     expect(screen.queryByText(/UNSAVED DRAFT/i)).toBeNull();
 
-    const topCancel = screen.getByRole('button', { name: /^Cancel$/i }) as HTMLButtonElement;
-    expect(topCancel.disabled).toBe(true);
+    // Action bar dismissed
+    expect(screen.queryByRole('button', { name: /^Cancel$/i })).toBeNull();
   });
 
   it('clicking Save opens confirmation modal with immediate customer impact warning', async () => {
@@ -189,8 +185,8 @@ describe('StoreSettings strict layer', () => {
     const openTimeInput = screen.getByDisplayValue('08:00');
     fireEvent.change(openTimeInput, { target: { value: '09:30' } });
 
-    const saveButtons = screen.getAllByRole('button', { name: /^Save$/i });
-    fireEvent.click(saveButtons[0]);
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
 
     // Confirmation modal should appear
     expect(screen.getByText('Apply Changes to Live Menu?')).toBeDefined();
@@ -216,8 +212,8 @@ describe('StoreSettings strict layer', () => {
     const openTimeInput = screen.getByDisplayValue('08:00');
     fireEvent.change(openTimeInput, { target: { value: '09:30' } });
 
-    const saveButtons = screen.getAllByRole('button', { name: /^Save$/i });
-    fireEvent.click(saveButtons[0]);
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
 
     const confirmBtn = screen.getByRole('button', { name: /Confirm & Apply to Menu/i });
     fireEvent.click(confirmBtn);

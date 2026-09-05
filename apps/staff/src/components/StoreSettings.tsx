@@ -700,31 +700,6 @@ export function StoreSettings() {
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              disabled={!isDirty || saving}
-              onClick={handleCancelChanges}
-              className="shrink-0 gap-1.5 text-xs font-bold"
-            >
-              <X className="size-3.5" />
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              disabled={!isDirty || saving}
-              onClick={() => setShowConfirmModal(true)}
-              className="shrink-0 gap-1.5 text-xs font-bold"
-            >
-              <Save className="size-3.5" />
-              Save
-            </Button>
-          </div>
         </div>
 
         {/* Mode Selector */}
