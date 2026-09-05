@@ -7,7 +7,6 @@ import {
   Coins,
   QrCode,
   Sliders,
-  RotateCcw,
   Image as ImageIcon,
   Upload,
   Link,
@@ -18,6 +17,10 @@ import {
   Play,
   Share2,
   Globe,
+  AlertTriangle,
+  Check,
+  Save,
+  X,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
@@ -145,11 +148,253 @@ function renderSocialIcon(id: string) {
   }
 }
 
+export interface ConfigChange {
+  key: string;
+  label: string;
+  oldDisplay: string;
+  newDisplay: string;
+  rawNewValue: string;
+}
+
+export function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState): ConfigChange[] {
+  const changes: ConfigChange[] = [];
+
+  if (draft.storeStatus !== saved.storeStatus) {
+    const formatMode = (m: string) =>
+      m === 'auto' ? 'Automatic (Schedule)' : m === 'open' ? 'Force Open' : 'Force Closed';
+    changes.push({
+      key: 'storeStatus',
+      label: 'Store Operating Mode',
+      oldDisplay: formatMode(saved.storeStatus),
+      newDisplay: formatMode(draft.storeStatus),
+      rawNewValue: draft.storeStatus,
+    });
+  }
+
+  if (draft.openTime !== saved.openTime) {
+    changes.push({
+      key: 'openTime',
+      label: 'Opening Time',
+      oldDisplay: saved.openTime,
+      newDisplay: draft.openTime,
+      rawNewValue: draft.openTime,
+    });
+  }
+
+  if (draft.closeTime !== saved.closeTime) {
+    changes.push({
+      key: 'closeTime',
+      label: 'Closing Time',
+      oldDisplay: saved.closeTime,
+      newDisplay: draft.closeTime,
+      rawNewValue: draft.closeTime,
+    });
+  }
+
+  if (draft.enablePickup !== saved.enablePickup) {
+    changes.push({
+      key: 'enablePickup',
+      label: 'Pickup Orders',
+      oldDisplay: saved.enablePickup ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enablePickup ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enablePickup ? '1' : '0',
+    });
+  }
+
+  if (draft.enableDelivery !== saved.enableDelivery) {
+    changes.push({
+      key: 'enableDelivery',
+      label: 'Delivery Orders',
+      oldDisplay: saved.enableDelivery ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enableDelivery ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enableDelivery ? '1' : '0',
+    });
+  }
+
+  if (draft.enableCash !== saved.enableCash) {
+    changes.push({
+      key: 'enableCash',
+      label: 'Cash Payment',
+      oldDisplay: saved.enableCash ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enableCash ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enableCash ? '1' : '0',
+    });
+  }
+
+  if (draft.enableKhqr !== saved.enableKhqr) {
+    changes.push({
+      key: 'enableKhqr',
+      label: 'KHQR Payment',
+      oldDisplay: saved.enableKhqr ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enableKhqr ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enableKhqr ? '1' : '0',
+    });
+  }
+
+  if (draft.deliveryFee !== saved.deliveryFee) {
+    changes.push({
+      key: 'deliveryFee',
+      label: 'Delivery Fee',
+      oldDisplay: `$${saved.deliveryFee}`,
+      newDisplay: `$${draft.deliveryFee}`,
+      rawNewValue: String(draft.deliveryFee),
+    });
+  }
+
+  if (draft.menuBannerUrl !== saved.menuBannerUrl) {
+    changes.push({
+      key: 'menuBannerUrl',
+      label: 'Top Banner Photo',
+      oldDisplay: saved.menuBannerUrl.length > 25 ? `...${saved.menuBannerUrl.slice(-22)}` : saved.menuBannerUrl,
+      newDisplay: draft.menuBannerUrl.length > 25 ? `...${draft.menuBannerUrl.slice(-22)}` : draft.menuBannerUrl,
+      rawNewValue: draft.menuBannerUrl,
+    });
+  }
+
+  if (JSON.stringify(draft.menuTabsConfig) !== JSON.stringify(saved.menuTabsConfig)) {
+    const activeDraftCount = draft.menuTabsConfig.filter((t) => t.enabled).length;
+    const activeSavedCount = saved.menuTabsConfig.filter((t) => t.enabled).length;
+    changes.push({
+      key: 'menuTabsConfig',
+      label: 'Brand Tabs Configuration',
+      oldDisplay: `${activeSavedCount} active tab${activeSavedCount > 1 ? 's' : ''}`,
+      newDisplay: `${activeDraftCount} active tab${activeDraftCount > 1 ? 's' : ''}`,
+      rawNewValue: JSON.stringify(draft.menuTabsConfig),
+    });
+  }
+
+  if (draft.shopName !== saved.shopName) {
+    changes.push({
+      key: 'shopName',
+      label: 'Shop Title',
+      oldDisplay: saved.shopName,
+      newDisplay: draft.shopName,
+      rawNewValue: draft.shopName,
+    });
+  }
+
+  if (draft.shopAddress !== saved.shopAddress) {
+    changes.push({
+      key: 'shopAddress',
+      label: 'Shop Address',
+      oldDisplay: saved.shopAddress,
+      newDisplay: draft.shopAddress,
+      rawNewValue: draft.shopAddress,
+    });
+  }
+
+  if (draft.shopDeliveryNote !== saved.shopDeliveryNote) {
+    changes.push({
+      key: 'shopDeliveryNote',
+      label: 'Delivery Note',
+      oldDisplay: saved.shopDeliveryNote || '(none)',
+      newDisplay: draft.shopDeliveryNote || '(none)',
+      rawNewValue: draft.shopDeliveryNote,
+    });
+  }
+
+  if (draft.shopSocialsEnabled !== saved.shopSocialsEnabled) {
+    changes.push({
+      key: 'shopSocialsEnabled',
+      label: 'Social Badges Section',
+      oldDisplay: saved.shopSocialsEnabled ? 'Enabled' : 'Disabled',
+      newDisplay: draft.shopSocialsEnabled ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.shopSocialsEnabled ? '1' : '0',
+    });
+  }
+
+  if (JSON.stringify(draft.shopSocialLinks) !== JSON.stringify(saved.shopSocialLinks)) {
+    const activeDraft = draft.shopSocialLinks.filter((s) => s.enabled).length;
+    const activeSaved = saved.shopSocialLinks.filter((s) => s.enabled).length;
+    changes.push({
+      key: 'shopSocialLinks',
+      label: 'Social Media Links',
+      oldDisplay: `${activeSaved} active link${activeSaved > 1 ? 's' : ''}`,
+      newDisplay: `${activeDraft} active link${activeDraft > 1 ? 's' : ''}`,
+      rawNewValue: JSON.stringify(draft.shopSocialLinks),
+    });
+  }
+
+  if (draft.orderWarnPendingMins !== saved.orderWarnPendingMins) {
+    changes.push({
+      key: 'orderWarnPendingMins',
+      label: 'Pending Warn Time',
+      oldDisplay: `${saved.orderWarnPendingMins}m`,
+      newDisplay: `${draft.orderWarnPendingMins}m`,
+      rawNewValue: String(draft.orderWarnPendingMins),
+    });
+  }
+
+  if (draft.orderLatePendingMins !== saved.orderLatePendingMins) {
+    changes.push({
+      key: 'orderLatePendingMins',
+      label: 'Pending Overdue Time',
+      oldDisplay: `${saved.orderLatePendingMins}m`,
+      newDisplay: `${draft.orderLatePendingMins}m`,
+      rawNewValue: String(draft.orderLatePendingMins),
+    });
+  }
+
+  if (draft.orderWarnPreparingMins !== saved.orderWarnPreparingMins) {
+    changes.push({
+      key: 'orderWarnPreparingMins',
+      label: 'Preparing Warn Time',
+      oldDisplay: `${saved.orderWarnPreparingMins}m`,
+      newDisplay: `${draft.orderWarnPreparingMins}m`,
+      rawNewValue: String(draft.orderWarnPreparingMins),
+    });
+  }
+
+  if (draft.orderLatePreparingMins !== saved.orderLatePreparingMins) {
+    changes.push({
+      key: 'orderLatePreparingMins',
+      label: 'Preparing Overdue Time',
+      oldDisplay: `${saved.orderLatePreparingMins}m`,
+      newDisplay: `${draft.orderLatePreparingMins}m`,
+      rawNewValue: String(draft.orderLatePreparingMins),
+    });
+  }
+
+  if (draft.orderWarnReadyMins !== saved.orderWarnReadyMins) {
+    changes.push({
+      key: 'orderWarnReadyMins',
+      label: 'Ready Warn Time',
+      oldDisplay: `${saved.orderWarnReadyMins}m`,
+      newDisplay: `${draft.orderWarnReadyMins}m`,
+      rawNewValue: String(draft.orderWarnReadyMins),
+    });
+  }
+
+  if (draft.orderLateReadyMins !== saved.orderLateReadyMins) {
+    changes.push({
+      key: 'orderLateReadyMins',
+      label: 'Ready Overdue Time',
+      oldDisplay: `${saved.orderLateReadyMins}m`,
+      newDisplay: `${draft.orderLateReadyMins}m`,
+      rawNewValue: String(draft.orderLateReadyMins),
+    });
+  }
+
+  if (draft.orderReminderSeconds !== saved.orderReminderSeconds) {
+    changes.push({
+      key: 'orderReminderSeconds',
+      label: 'Reminder Interval',
+      oldDisplay: `${saved.orderReminderSeconds}s`,
+      newDisplay: `${draft.orderReminderSeconds}s`,
+      rawNewValue: String(draft.orderReminderSeconds),
+    });
+  }
+
+  return changes;
+}
+
 export function StoreSettings() {
   const { toast } = useToast();
+  const [savedConfig, setSavedConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [config, setConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
-  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingTabIdx, setUploadingTabIdx] = useState<number | null>(null);
   const [showManualUrls, setShowManualUrls] = useState(false);
@@ -159,6 +404,9 @@ export function StoreSettings() {
   const tabLogoInput1Ref = useRef<HTMLInputElement>(null);
   const tabLogoInput2Ref = useRef<HTMLInputElement>(null);
   const tabLogoInputRefs = [tabLogoInput0Ref, tabLogoInput1Ref, tabLogoInput2Ref];
+
+  const changes = getStoreConfigChanges(savedConfig, config);
+  const isDirty = changes.length > 0;
 
   const fetchConfig = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -195,7 +443,7 @@ export function StoreSettings() {
         } catch {}
       }
 
-      setConfig({
+      const loadedConfig: StoreConfigState = {
         storeStatus: (statusRes.storeStatus || 'auto') as 'auto' | 'open' | 'closed',
         openTime: statusRes.openTime || configMap.get('openTime') || '08:00',
         closeTime: statusRes.closeTime || configMap.get('closeTime') || '21:00',
@@ -222,7 +470,10 @@ export function StoreSettings() {
         orderLateReadyMins: Number(configMap.get('orderLateReadyMins') ?? 20),
         orderReminderSeconds: Number(configMap.get('orderReminderSeconds') ?? 60),
         orderAlertSoundEnabled: (configMap.get('orderAlertSoundEnabled') ?? '1') !== '0',
-      });
+      };
+
+      setSavedConfig(loadedConfig);
+      setConfig(loadedConfig);
     } catch {
       toast({
         title: "Couldn't load store settings",
@@ -238,34 +489,51 @@ export function StoreSettings() {
     fetchConfig();
   }, [fetchConfig]);
 
-  const updateSetting = async (key: string, value: string | number | boolean, label: string) => {
-    setUpdatingKey(key);
-    try {
-      let strVal = String(value);
-      if (typeof value === 'boolean') {
-        strVal = value ? '1' : '0';
-      }
-      await apiFetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value: strVal }),
-      });
+  const handleCancelChanges = () => {
+    setConfig({ ...savedConfig });
+    toast({
+      title: 'Changes discarded',
+      description: 'Reverted back to current live settings.',
+      variant: 'info',
+    });
+  };
 
+  const handleConfirmSave = async () => {
+    setSaving(true);
+    try {
+      const changesToApply = getStoreConfigChanges(savedConfig, config);
+      if (changesToApply.length === 0) {
+        setShowConfirmModal(false);
+        return;
+      }
+
+      await Promise.all(
+        changesToApply.map(async (c) => {
+          await apiFetch('/api/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: c.key, value: c.rawNewValue }),
+          });
+        })
+      );
+
+      setSavedConfig({ ...config });
+      setShowConfirmModal(false);
       toast({
-        title: `${label} updated`,
+        title: 'Settings applied to live menu',
+        description: `${changesToApply.length} change${changesToApply.length > 1 ? 's' : ''} now live for customers.`,
         variant: 'success',
       });
 
-      // Refresh store status silently without flashing skeletons
       await fetchConfig(true);
     } catch (err: any) {
       toast({
-        title: `Failed to update ${label}`,
+        title: 'Failed to apply settings',
         description: err?.message || 'Please check value and try again.',
         variant: 'error',
       });
     } finally {
-      setUpdatingKey(null);
+      setSaving(false);
     }
   };
 
@@ -308,7 +576,11 @@ export function StoreSettings() {
       const data = await res.json();
       if (data.url) {
         setConfig((prev) => ({ ...prev, menuBannerUrl: data.url }));
-        await updateSetting('menuBannerUrl', data.url, 'Top Banner Photo');
+        toast({
+          title: 'Banner uploaded to draft',
+          description: 'Click Save Changes to apply it to live menu.',
+          variant: 'info',
+        });
       }
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message, variant: 'error' });
@@ -318,10 +590,11 @@ export function StoreSettings() {
     }
   };
 
-  const handleTabUpdate = async (index: number, partial: Partial<MenuTabItem>) => {
-    const nextTabs = config.menuTabsConfig.map((t, i) => (i === index ? { ...t, ...partial } : t));
-    setConfig((prev) => ({ ...prev, menuTabsConfig: nextTabs }));
-    await updateSetting('menuTabsConfig', JSON.stringify(nextTabs), `Menu Tab ${index + 1}`);
+  const handleTabUpdate = (index: number, partial: Partial<MenuTabItem>) => {
+    setConfig((prev) => ({
+      ...prev,
+      menuTabsConfig: prev.menuTabsConfig.map((t, i) => (i === index ? { ...t, ...partial } : t)),
+    }));
   };
 
   const handleTabLogoUpload = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -346,8 +619,12 @@ export function StoreSettings() {
       }
       const data = await res.json();
       if (data.url) {
-        await handleTabUpdate(idx, { icon: data.url });
-        toast({ title: `Tab ${idx + 1} Logo uploaded`, variant: 'success' });
+        handleTabUpdate(idx, { icon: data.url });
+        toast({
+          title: `Tab ${idx + 1} logo uploaded to draft`,
+          description: 'Click Save Changes to apply it to live menu.',
+          variant: 'info',
+        });
       }
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message, variant: 'error' });
@@ -358,19 +635,21 @@ export function StoreSettings() {
     }
   };
 
-  const handleSocialUpdate = async (index: number, partial: Partial<SocialBadgeItem>) => {
-    const nextSocials = config.shopSocialLinks.map((s, i) => (i === index ? { ...s, ...partial } : s));
-    setConfig((prev) => ({ ...prev, shopSocialLinks: nextSocials }));
-    await updateSetting('shopSocialLinks', JSON.stringify(nextSocials), `${nextSocials[index].label} Link`);
+  const handleSocialUpdate = (index: number, partial: Partial<SocialBadgeItem>) => {
+    setConfig((prev) => ({
+      ...prev,
+      shopSocialLinks: prev.shopSocialLinks.map((s, i) => (i === index ? { ...s, ...partial } : s)),
+    }));
   };
 
-  const handleTabCountPreset = async (count: 1 | 2 | 3) => {
-    const nextTabs = config.menuTabsConfig.map((t, i) => ({
-      ...t,
-      enabled: i < count,
+  const handleTabCountPreset = (count: 1 | 2 | 3) => {
+    setConfig((prev) => ({
+      ...prev,
+      menuTabsConfig: prev.menuTabsConfig.map((t, i) => ({
+        ...t,
+        enabled: i < count,
+      })),
     }));
-    setConfig((prev) => ({ ...prev, menuTabsConfig: nextTabs }));
-    await updateSetting('menuTabsConfig', JSON.stringify(nextTabs), `${count} Menu Tabs`);
   };
 
   const activeTabsCount = config.menuTabsConfig.filter((t) => t.enabled).length;
@@ -391,6 +670,11 @@ export function StoreSettings() {
                   <span className="inline-block size-2 rounded-none bg-current mr-1.5 animate-pulse" />
                   {config.isOpen ? 'OPEN FOR ORDERS' : 'CURRENTLY CLOSED'}
                 </Badge>
+                {isDirty && (
+                  <Badge variant="pending" className="border border-status-pending">
+                    UNSAVED DRAFT ({changes.length})
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-ink-soft mt-0.5">
                 {config.storeStatus === 'auto' && (
@@ -417,15 +701,30 @@ export function StoreSettings() {
             </div>
           </div>
 
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => fetchConfig()}
-            className="shrink-0 gap-2 text-xs"
-          >
-            <RotateCcw className="size-3.5" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              disabled={!isDirty || saving}
+              onClick={handleCancelChanges}
+              className="shrink-0 gap-1.5 text-xs font-bold"
+            >
+              <X className="size-3.5" />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={!isDirty || saving}
+              onClick={() => setShowConfirmModal(true)}
+              className="shrink-0 gap-1.5 text-xs font-bold"
+            >
+              <Save className="size-3.5" />
+              Save
+            </Button>
+          </div>
         </div>
 
         {/* Mode Selector */}
@@ -436,7 +735,7 @@ export function StoreSettings() {
           <Segmented
             ariaLabel="Store Operating Mode"
             value={config.storeStatus}
-            onChange={(val) => updateSetting('storeStatus', val as any, 'Store Mode')}
+            onChange={(val) => setConfig((prev) => ({ ...prev, storeStatus: val as any }))}
             options={modeOptions}
           />
         </div>
@@ -453,7 +752,6 @@ export function StoreSettings() {
                 type="time"
                 value={config.openTime}
                 onChange={(e) => setConfig((prev) => ({ ...prev, openTime: e.target.value }))}
-                onBlur={(e) => updateSetting('openTime', e.target.value, 'Opening Time')}
                 className="h-11 flex-1 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
               />
             </div>
@@ -470,7 +768,6 @@ export function StoreSettings() {
                 type="time"
                 value={config.closeTime}
                 onChange={(e) => setConfig((prev) => ({ ...prev, closeTime: e.target.value }))}
-                onBlur={(e) => updateSetting('closeTime', e.target.value, 'Closing Time')}
                 className="h-11 flex-1 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
               />
             </div>
@@ -483,30 +780,21 @@ export function StoreSettings() {
           <span className="text-xs text-ink-faint mr-1 font-medium">Quick Hours:</span>
           <button
             type="button"
-            onClick={async () => {
-              await updateSetting('openTime', '08:00', 'Opening Time');
-              await updateSetting('closeTime', '21:00', 'Closing Time');
-            }}
+            onClick={() => setConfig((prev) => ({ ...prev, openTime: '08:00', closeTime: '21:00' }))}
             className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             08:00 – 21:00 (Standard)
           </button>
           <button
             type="button"
-            onClick={async () => {
-              await updateSetting('openTime', '07:30', 'Opening Time');
-              await updateSetting('closeTime', '22:00', 'Closing Time');
-            }}
+            onClick={() => setConfig((prev) => ({ ...prev, openTime: '07:30', closeTime: '22:00' }))}
             className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             07:30 – 22:00 (Extended)
           </button>
           <button
             type="button"
-            onClick={async () => {
-              await updateSetting('openTime', '09:00', 'Opening Time');
-              await updateSetting('closeTime', '23:00', 'Closing Time');
-            }}
+            onClick={() => setConfig((prev) => ({ ...prev, openTime: '09:00', closeTime: '23:00' }))}
             className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             09:00 – 23:00 (Late Night)
@@ -596,7 +884,7 @@ export function StoreSettings() {
               <span className="text-xs text-ink-faint font-medium">Quick Presets:</span>
               <button
                 type="button"
-                onClick={() => updateSetting('menuBannerUrl', '/banner.webp', 'Menu Banner Photo')}
+                onClick={() => setConfig((prev) => ({ ...prev, menuBannerUrl: '/banner.webp' }))}
                 className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
                   config.menuBannerUrl === '/banner.webp'
                     ? 'border-accent bg-accent/10 text-accent font-bold'
@@ -608,11 +896,10 @@ export function StoreSettings() {
               <button
                 type="button"
                 onClick={() =>
-                  updateSetting(
-                    'menuBannerUrl',
-                    '/images/zhengda_downloads/web-banner-zhengda_1_.webp',
-                    'Menu Banner Photo'
-                  )
+                  setConfig((prev) => ({
+                    ...prev,
+                    menuBannerUrl: '/images/zhengda_downloads/web-banner-zhengda_1_.webp',
+                  }))
                 }
                 className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
                   config.menuBannerUrl === '/images/zhengda_downloads/web-banner-zhengda_1_.webp'
@@ -641,7 +928,6 @@ export function StoreSettings() {
                 placeholder="e.g. /banner.webp or https://..."
                 value={config.menuBannerUrl}
                 onChange={(e) => setConfig((prev) => ({ ...prev, menuBannerUrl: e.target.value }))}
-                onBlur={(e) => updateSetting('menuBannerUrl', e.target.value, 'Menu Banner Photo')}
                 className="h-10 flex-1 rounded-none border border-border bg-surface px-3 text-xs font-mono text-ink focus:border-accent focus:outline-none"
               />
             </div>
@@ -734,7 +1020,6 @@ export function StoreSettings() {
                       );
                       setConfig((prev) => ({ ...prev, menuTabsConfig: next }));
                     }}
-                    onBlur={(e) => handleTabUpdate(idx, { label: e.target.value })}
                     placeholder={`e.g. Tab ${idx + 1}`}
                     className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent focus:outline-none"
                   />
@@ -751,7 +1036,6 @@ export function StoreSettings() {
                       );
                       setConfig((prev) => ({ ...prev, menuTabsConfig: next }));
                     }}
-                    onBlur={(e) => handleTabUpdate(idx, { id: e.target.value })}
                     placeholder="e.g. ai-cha, zhengda"
                     className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-mono text-ink focus:border-accent focus:outline-none"
                   />
@@ -849,7 +1133,6 @@ export function StoreSettings() {
                         );
                         setConfig((prev) => ({ ...prev, menuTabsConfig: next }));
                       }}
-                      onBlur={(e) => handleTabUpdate(idx, { icon: e.target.value })}
                       placeholder="Custom image URL"
                       className="h-8 w-full rounded-none border border-border bg-surface px-2 text-[11px] font-mono text-ink mt-1"
                     />
@@ -885,7 +1168,6 @@ export function StoreSettings() {
               type="text"
               value={config.shopName}
               onChange={(e) => setConfig((prev) => ({ ...prev, shopName: e.target.value }))}
-              onBlur={(e) => updateSetting('shopName', e.target.value, 'Shop Title')}
               placeholder="e.g. Our shop"
               className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
@@ -900,7 +1182,6 @@ export function StoreSettings() {
               type="text"
               value={config.shopAddress}
               onChange={(e) => setConfig((prev) => ({ ...prev, shopAddress: e.target.value }))}
-              onBlur={(e) => updateSetting('shopAddress', e.target.value, 'Shop Address')}
               placeholder="e.g. J03, Ground Floor, Arakawa"
               className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
@@ -915,7 +1196,6 @@ export function StoreSettings() {
               type="text"
               value={config.shopDeliveryNote}
               onChange={(e) => setConfig((prev) => ({ ...prev, shopDeliveryNote: e.target.value }))}
-              onBlur={(e) => updateSetting('shopDeliveryNote', e.target.value, 'Delivery Note')}
               placeholder="e.g. Delivery inside Arakawa is free"
               className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
@@ -939,7 +1219,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.shopSocialsEnabled}
-              onChange={(checked) => updateSetting('shopSocialsEnabled', checked, 'Social Badges Section')}
+              onChange={(checked) => setConfig((prev) => ({ ...prev, shopSocialsEnabled: checked }))}
               srLabel="Enable social media badges"
             />
           </div>
@@ -976,7 +1256,6 @@ export function StoreSettings() {
                       );
                       setConfig((prev) => ({ ...prev, shopSocialLinks: next }));
                     }}
-                    onBlur={(e) => handleSocialUpdate(idx, { url: e.target.value })}
                     placeholder={
                       social.id === 'telegram'
                         ? 'https://t.me/iLoveAiChaZhengDaArakawa'
@@ -1065,8 +1344,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enablePickup}
-              onChange={(next) => updateSetting('enablePickup', next, 'Pickup Orders')}
-              disabled={updatingKey === 'enablePickup'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enablePickup: next }))}
               srLabel="Enable or disable pickup orders"
             />
           </div>
@@ -1084,8 +1362,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enableDelivery}
-              onChange={(next) => updateSetting('enableDelivery', next, 'Delivery Orders')}
-              disabled={updatingKey === 'enableDelivery'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableDelivery: next }))}
               srLabel="Enable or disable delivery orders"
             />
           </div>
@@ -1120,8 +1397,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enableCash}
-              onChange={(next) => updateSetting('enableCash', next, 'Cash Payment')}
-              disabled={updatingKey === 'enableCash'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableCash: next }))}
               srLabel="Enable or disable cash payment"
             />
           </div>
@@ -1139,8 +1415,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enableKhqr}
-              onChange={(next) => updateSetting('enableKhqr', next, 'KHQR Payment')}
-              disabled={updatingKey === 'enableKhqr'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableKhqr: next }))}
               srLabel="Enable or disable KHQR payment"
             />
           </div>
@@ -1225,9 +1500,6 @@ export function StoreSettings() {
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, orderWarnPendingMins: Number(e.target.value) }))
                 }
-                onBlur={(e) =>
-                  updateSetting('orderWarnPendingMins', Number(e.target.value), 'Pending Warn Minutes')
-                }
                 className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
               />
             </div>
@@ -1243,9 +1515,6 @@ export function StoreSettings() {
                 value={config.orderLatePendingMins}
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, orderLatePendingMins: Number(e.target.value) }))
-                }
-                onBlur={(e) =>
-                  updateSetting('orderLatePendingMins', Number(e.target.value), 'Pending Overdue Minutes')
                 }
                 className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
               />
@@ -1273,9 +1542,6 @@ export function StoreSettings() {
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, orderWarnPreparingMins: Number(e.target.value) }))
                 }
-                onBlur={(e) =>
-                  updateSetting('orderWarnPreparingMins', Number(e.target.value), 'Preparing Warn Minutes')
-                }
                 className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
               />
             </div>
@@ -1291,9 +1557,6 @@ export function StoreSettings() {
                 value={config.orderLatePreparingMins}
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, orderLatePreparingMins: Number(e.target.value) }))
-                }
-                onBlur={(e) =>
-                  updateSetting('orderLatePreparingMins', Number(e.target.value), 'Preparing Overdue Minutes')
                 }
                 className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
               />
@@ -1321,9 +1584,6 @@ export function StoreSettings() {
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, orderWarnReadyMins: Number(e.target.value) }))
                 }
-                onBlur={(e) =>
-                  updateSetting('orderWarnReadyMins', Number(e.target.value), 'Ready Warn Minutes')
-                }
                 className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
               />
             </div>
@@ -1339,9 +1599,6 @@ export function StoreSettings() {
                 value={config.orderLateReadyMins}
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, orderLateReadyMins: Number(e.target.value) }))
-                }
-                onBlur={(e) =>
-                  updateSetting('orderLateReadyMins', Number(e.target.value), 'Ready Overdue Minutes')
                 }
                 className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
               />
@@ -1364,9 +1621,6 @@ export function StoreSettings() {
               value={config.orderReminderSeconds}
               onChange={(e) =>
                 setConfig((prev) => ({ ...prev, orderReminderSeconds: Number(e.target.value) }))
-              }
-              onBlur={(e) =>
-                updateSetting('orderReminderSeconds', Number(e.target.value), 'Reminder Interval')
               }
               className="h-9 w-28 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
             />
@@ -1397,12 +1651,136 @@ export function StoreSettings() {
             min="0"
             value={config.deliveryFee}
             onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
-            onBlur={(e) => updateSetting('deliveryFee', Number(e.target.value), 'Delivery Fee')}
             className="h-11 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
           />
           <span className="text-[11px] text-ink-faint">0 = Free delivery for customers</span>
         </div>
       </Card>
+
+      {/* Sticky Bottom Action Bar for Unsaved Changes */}
+      {isDirty && (
+        <div className="sticky bottom-4 z-40 flex flex-wrap items-center justify-between gap-3 rounded-none border-2 border-accent bg-surface p-4 shadow-2xl animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="size-3 rounded-none bg-accent animate-pulse" />
+            <div>
+              <div className="text-sm font-bold text-ink">
+                You have {changes.length} unsaved change{changes.length > 1 ? 's' : ''}
+              </div>
+              <div className="text-xs text-ink-soft">
+                Not yet applied to customer menu. Save will ask confirmation first.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={handleCancelChanges}
+              disabled={saving}
+              className="gap-1.5 text-xs font-bold"
+            >
+              <X className="size-4" />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => setShowConfirmModal(true)}
+              disabled={saving}
+              className="gap-1.5 text-xs font-bold"
+            >
+              <Save className="size-4" />
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Strict Confirmation Modal before Applying to Live Menu */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={saving ? undefined : () => setShowConfirmModal(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-none border-2 border-accent bg-surface p-5 shadow-2xl z-10 space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2.5 text-accent">
+                <AlertTriangle className="size-5 shrink-0 text-status-pending" />
+                <h3 className="text-base font-extrabold text-ink">
+                  Apply Changes to Live Menu?
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setShowConfirmModal(false)}
+                className="rounded-none p-1 text-ink-faint hover:bg-surface-sunken hover:text-ink disabled:opacity-50"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="rounded-none border border-status-pending/40 bg-status-pending-soft/40 p-3 text-xs text-ink space-y-1">
+              <div className="font-bold text-status-pending flex items-center gap-1.5">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>Immediate Customer Impact</span>
+              </div>
+              <p className="text-ink-soft">
+                These settings will apply to the Telegram customer menu immediately for all active users.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-bold uppercase tracking-wider text-ink-faint">
+                Review Modified Settings ({changes.length})
+              </div>
+              <div className="max-h-60 overflow-y-auto divide-y divide-border border border-border bg-surface-sunken/30">
+                {changes.slice(0, 5).map((c) => (
+                  <div key={c.key} className="p-2.5 text-xs flex flex-col gap-1">
+                    <div className="font-bold text-ink">{c.label}</div>
+                    <div className="flex items-center gap-2 text-ink-soft">
+                      <span className="line-through opacity-70">{c.oldDisplay}</span>
+                      <span className="text-ink-faint">&rarr;</span>
+                      <span className="font-semibold text-accent">{c.newDisplay}</span>
+                    </div>
+                  </div>
+                ))}
+                {changes.length > 5 && (
+                  <div className="p-2.5 text-xs font-semibold text-ink-soft bg-surface-sunken/60 text-center">
+                    +{changes.length - 5} more setting{changes.length - 5 > 1 ? 's' : ''} modified
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                disabled={saving}
+                onClick={() => setShowConfirmModal(false)}
+              >
+                Keep Editing
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                disabled={saving}
+                onClick={handleConfirmSave}
+                className="gap-2 font-bold"
+              >
+                <Check className="size-4" />
+                {saving ? 'Applying...' : 'Confirm & Apply to Menu'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
