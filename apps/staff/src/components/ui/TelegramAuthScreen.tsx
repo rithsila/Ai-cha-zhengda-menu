@@ -204,9 +204,11 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
     <div className="flex min-h-dvh items-center justify-center bg-surface-page p-4">
       <Card padding="lg" className="w-full max-w-sm border-border bg-surface text-center shadow-2xl">
         <div className="mb-6">
-          <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-none bg-accent text-on-accent shadow-md">
-            <Sparkles className="size-7" />
-          </div>
+          <img
+            src="/images/zhengda_logo_cropped.png"
+            alt="Zhengda"
+            className="mx-auto mb-3 h-16 w-auto object-contain drop-shadow-sm"
+          />
           <h1 className="text-2xl font-black tracking-tight text-ink">Staff Portal</h1>
           <p className="mt-1 text-xs font-semibold text-ink-soft">
             Ai-Cha &amp; Zhengda Store Management
