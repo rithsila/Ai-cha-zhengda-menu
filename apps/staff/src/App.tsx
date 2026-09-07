@@ -20,7 +20,6 @@ import {
   ShieldAlert,
   ShoppingBag,
   Sliders,
-  Sparkles,
   Store,
   TriangleAlert,
   Truck,
@@ -242,11 +241,37 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabId>('orders');
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('store');
-  const [settingsExpanded, setSettingsExpanded] = useState(true);
+  const [settingsExpanded, setSettingsExpanded] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('staff_settings_expanded');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
   const [usersCount, setUsersCount] = useState(0);
   const [rewardsSubTab, setRewardsSubTab] = useState<RewardSubTab>('catalog');
-  const [rewardsExpanded, setRewardsExpanded] = useState(true);
+  const [rewardsExpanded, setRewardsExpanded] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('staff_rewards_expanded');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
   const [rewardsCount, setRewardsCount] = useState(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('staff_rewards_expanded', String(rewardsExpanded));
+    } catch {}
+  }, [rewardsExpanded]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('staff_settings_expanded', String(settingsExpanded));
+    } catch {}
+  }, [settingsExpanded]);
   const sessionRole = loadSession()?.role;
   const isManager = sessionRole === 'manager';
 
@@ -648,14 +673,8 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       else if (key === '3') setActiveTab('analytics');
       else if (key === '4') setActiveTab('customers');
       else if (key === '5') setActiveTab('feedback');
-      else if (key === '6') {
-        setActiveTab('rewards');
-        setRewardsExpanded(true);
-      }
-      else if (key === '7') {
-        setActiveTab('settings');
-        setSettingsExpanded(true);
-      }
+      else if (key === '6') setActiveTab('rewards');
+      else if (key === '7') setActiveTab('settings');
       else if (key === 'r') fetchOrders(true);
       else if (key === 'm') toggleMute();
       else return;
@@ -721,9 +740,11 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         {/* Sidebar Brand Header */}
         <div className="flex h-18 items-center justify-between border-b border-border px-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-none bg-accent text-on-accent shadow-sm">
-              <Sparkles className="size-5" />
-            </div>
+            <img
+              src="/images/zhengda_logo_cropped.webp"
+              alt="Zhengda Mascot"
+              className="size-9 shrink-0 object-contain drop-shadow-xs"
+            />
             <div>
               <h1 className="text-sm font-black tracking-tight text-ink">
                 Ai-Cha <span className="text-zhengda">&amp;</span> Zhengda
@@ -815,37 +836,45 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               })}
 
               {/* Rewards Expandable Item */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTab !== 'rewards') {
-                    setActiveTab('rewards');
-                    setRewardsExpanded(true);
-                  } else {
-                    setRewardsExpanded((prev) => !prev);
-                  }
-                }}
+              <div
                 className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
                   activeTab === 'rewards'
                     ? 'bg-surface-sunken text-ink'
                     : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeTab !== 'rewards') {
+                      setActiveTab('rewards');
+                    } else {
+                      setRewardsExpanded((prev) => !prev);
+                    }
+                  }}
+                  className="flex flex-1 items-center gap-3 text-left cursor-pointer"
+                >
                   <Award className="size-5" />
                   <span>Rewards</span>
-                </div>
+                </button>
                 <div className="flex items-center gap-1.5">
                   <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
                     6
                   </kbd>
-                  <ChevronDown
-                    className={`size-4 text-ink-soft transition-transform duration-200 ${
-                      rewardsExpanded ? 'rotate-180' : ''
-                    }`}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setRewardsExpanded((prev) => !prev)}
+                    className="p-1 text-ink-soft hover:text-ink cursor-pointer"
+                    aria-label={rewardsExpanded ? 'Collapse rewards' : 'Expand rewards'}
+                  >
+                    <ChevronDown
+                      className={`size-4 text-ink-soft transition-transform duration-200 ${
+                        rewardsExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
                 </div>
-              </button>
+              </div>
 
               {rewardsExpanded && (
                 <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
@@ -907,37 +936,46 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               System &amp; Settings
             </p>
             <div className="space-y-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (activeTab !== 'settings') {
-                    setActiveTab('settings');
-                    setSettingsExpanded(true);
-                  } else {
-                    setSettingsExpanded((prev) => !prev);
-                  }
-                }}
+              {/* Settings Expandable Item */}
+              <div
                 className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
                   activeTab === 'settings'
                     ? 'bg-surface-sunken text-ink'
                     : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeTab !== 'settings') {
+                      setActiveTab('settings');
+                    } else {
+                      setSettingsExpanded((prev) => !prev);
+                    }
+                  }}
+                  className="flex flex-1 items-center gap-3 text-left cursor-pointer"
+                >
                   <Sliders className="size-5" />
                   <span>Settings</span>
-                </div>
+                </button>
                 <div className="flex items-center gap-1.5">
                   <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
                     7
                   </kbd>
-                  <ChevronDown
-                    className={`size-4 text-ink-soft transition-transform duration-200 ${
-                      settingsExpanded ? 'rotate-180' : ''
-                    }`}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setSettingsExpanded((prev) => !prev)}
+                    className="p-1 text-ink-soft hover:text-ink cursor-pointer"
+                    aria-label={settingsExpanded ? 'Collapse settings' : 'Expand settings'}
+                  >
+                    <ChevronDown
+                      className={`size-4 text-ink-soft transition-transform duration-200 ${
+                        settingsExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
                 </div>
-              </button>
+              </div>
 
               {settingsExpanded && (
                 <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
