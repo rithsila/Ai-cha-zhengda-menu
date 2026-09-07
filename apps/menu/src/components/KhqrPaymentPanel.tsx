@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { DownloadSimple, Check, CaretRight } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
 import { apiFetch } from '../utils/api';
+import { launchAbaPayment } from '../utils/abaPaymentLaunch';
 import { markOnlinePaymentAvailable, markOnlinePaymentUnavailable } from '../utils/onlinePayment';
 
 /** Seconds -> "m:ss" for the KHQR countdown. */
@@ -333,6 +334,7 @@ export function KhqrPaymentPanel({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [abaLaunchHint, setAbaLaunchHint] = useState<string | null>(null);
   const [internalViewingKhqr, setInternalViewingKhqr] = useState(false);
   const isViewingKhqr = controlledViewingKhqr !== undefined ? controlledViewingKhqr : internalViewingKhqr;
   const setIsViewingKhqr = (val: boolean) => {
@@ -449,6 +451,21 @@ export function KhqrPaymentPanel({
 
   const displayAmount = payment?.amount ?? totalAmount ?? 0;
   const handleRetry = () => setAttempt(a => a + 1);
+  const handleOpenAbaPayment = () => {
+    if (!payment?.abapayDeeplink) return;
+    const result = launchAbaPayment(payment.abapayDeeplink);
+    if (!result.ok) {
+      setAbaLaunchHint(t('abaLaunchInvalid', 'This ABA payment link is invalid. Please use KHQR or try again.'));
+      return;
+    }
+
+    setAbaLaunchHint(null);
+    window.setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        setAbaLaunchHint(t('abaLaunchFallback', 'If ABA Mobile did not open, use ABA KHQR below or make sure ABA Mobile is installed.'));
+      }
+    }, result.mode === 'telegram-external-browser' ? 1800 : 1400);
+  };
 
   const handleSaveKhqr = async () => {
     if (!payment?.qrImage || isSaving) return;
@@ -641,7 +658,7 @@ export function KhqrPaymentPanel({
           {payment.abapayDeeplink && (
             <button
               type="button"
-              onClick={() => { window.location.href = payment.abapayDeeplink!; }}
+              onClick={handleOpenAbaPayment}
               className="w-full bg-tg-secondary-bg hover:bg-tg-hint/5 border border-tg-hint/15 rounded-2xl p-4 flex items-center justify-between transition-all active:scale-98 shadow-sm text-left"
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -660,6 +677,11 @@ export function KhqrPaymentPanel({
               </div>
               <CaretRight size={20} className="text-tg-hint shrink-0 ml-2" />
             </button>
+          )}
+          {abaLaunchHint && (
+            <p className="text-xs leading-5 text-tg-hint px-1 -mt-1">
+              {abaLaunchHint}
+            </p>
           )}
 
           {/* Option 2: ABA KHQR Card Button */}

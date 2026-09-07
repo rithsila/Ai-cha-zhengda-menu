@@ -6,16 +6,12 @@ import { apiFetch } from '../utils/api';
  * (on mount) and RewardsView (on tab switch).
  */
 
+import type { LuckyPrize } from '../components/CustomerLuckyWheelModal';
+
 export interface LuckyDrawConfig {
   enabled: boolean;
   costPerSpin?: number;
-  prizes?: Array<{
-    id: string;
-    name: string;
-    emoji?: string;
-    weight: number;
-    type: string;
-  }>;
+  prizes?: LuckyPrize[];
 }
 
 async function fetchLuckyDrawConfig(): Promise<LuckyDrawConfig> {

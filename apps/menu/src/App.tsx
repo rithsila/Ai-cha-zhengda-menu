@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
-import { apiFetch, hasIdentity } from './utils/api';
+import { hasIdentity } from './utils/api';
 import { refreshOnlinePaymentState } from './utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
 import { loginAsDevCustomer } from './utils/telegramUser';

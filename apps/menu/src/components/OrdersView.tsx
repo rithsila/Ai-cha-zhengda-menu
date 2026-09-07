@@ -295,7 +295,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
 
               {/* Items List */}
               <ul className="space-y-1.5 mb-3 text-sm">
-                {order.items.map(item => (
+                {order.items.map((item: any) => (
                   <li key={item.id} className="flex justify-between text-tg-text">
                     <span className="font-medium">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
                     <span className="text-tg-hint text-xs">{formatCurrency(item.price)}</span>
@@ -308,7 +308,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 <div className="mb-3 flex items-center gap-2 flex-wrap">
                   {(order.pointsEarned ?? 0) > 0 && (() => {
                     const eligibleCount = order.items?.reduce(
-                      (sum, i) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
+                      (sum: number, i: any) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
                       0
                     ) ?? 0;
                     const freeClaimed = Math.floor((order.pointsRedeemed ?? 0) / 100);

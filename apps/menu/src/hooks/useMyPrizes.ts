@@ -6,14 +6,9 @@ import { apiFetch, hasIdentity } from '../utils/api';
  * Replaces separate fetches in RewardsView and CheckoutModal.
  */
 
-export interface PrizeClaim {
-  id: string;
-  code: string;
-  prizeName: string;
-  prizeIcon?: string;
-  status: 'pending' | 'claimed' | 'expired';
-  createdAt: string;
-}
+import type { CustomerPrizeClaim } from '../components/CustomerPrizeModal';
+
+export type PrizeClaim = CustomerPrizeClaim;
 
 async function fetchPrizes(): Promise<PrizeClaim[]> {
   const res = await apiFetch('/api/me/prizes');

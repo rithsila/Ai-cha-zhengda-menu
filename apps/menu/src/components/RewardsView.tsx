@@ -4,7 +4,7 @@ import { Gift, ClockCounterClockwise, Sparkle, Check } from '@phosphor-icons/rea
 import { formatCurrency } from '../utils/format';
 import { SignInPrompt } from './SignInPrompt';
 import { RewardCard } from './RewardCard';
-import { CustomerLuckyWheelModal, type LuckyPrize } from './CustomerLuckyWheelModal';
+import { CustomerLuckyWheelModal } from './CustomerLuckyWheelModal';
 import { CustomerPrizeModal, type CustomerPrizeClaim } from './CustomerPrizeModal';
 import { LuckyWheelIcon } from './ui/LuckyWheelIcon';
 import { useProfile } from '../hooks/useProfile';
@@ -36,7 +36,7 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
   const { t } = useTranslation();
 
   // Shared SWR hooks — these deduplicate across all components
-  const { profile: userProfile, signedIn, profileLoading } = useProfile();
+  const { profile: userProfile, signedIn, profileLoading, mutateProfile } = useProfile();
   const { orders: allOrders, ordersLoading } = useMyOrders();
   const { configRows, configLoading } = useConfig();
   const { luckyDrawEnabled, luckyCostPerSpin, luckyPrizes, luckyDrawLoading } = useLuckyDrawConfig();
@@ -403,12 +403,11 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
         costPerSpin={luckyCostPerSpin}
         prizes={luckyPrizes}
         onSpinSuccess={({ remainingTickets, loyaltyPoints: newPoints, prize: _prize }) => {
-          setUserProfile((prev: any) => ({
+          mutateProfile((prev: any) => ({
             ...prev,
             luckyTickets: remainingTickets,
             loyaltyPoints: newPoints,
-          }));
-          setPoints(newPoints);
+          }), false);
           mutatePrizes();
         }}
       />

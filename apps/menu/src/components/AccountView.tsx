@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, House, Storefront, CreditCard, Money } from '@phosphor-icons/react';
-import { hasIdentity } from '../utils/api';
 import { useProfile } from '../hooks/useProfile';
 import { useConfig } from '../hooks/useConfig';
 import { SignInPrompt } from './SignInPrompt';

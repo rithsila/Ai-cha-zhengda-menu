@@ -18,6 +18,8 @@ export interface RawCatalogItem {
   basePrice: number;
   image?: string;
   isSoldOut?: boolean;
+  canClaim?: boolean;
+  earnsStamp?: boolean;
   modifiers?: any[];
 }
 

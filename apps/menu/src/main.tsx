@@ -6,6 +6,8 @@ import './i18n/config';
 import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { AbaMobileOpenPage } from './components/AbaMobileOpenPage.tsx'
+import { ABA_MOBILE_OPEN_PATH } from './utils/abaPaymentLaunch.ts'
 import { captureWebLoginFromHash } from './utils/telegramUser'
 
 // Initialize Telegram Web App SDK safely
@@ -17,13 +19,16 @@ try {
   console.warn('Telegram init error:', e);
 }
 
-captureWebLoginFromHash();
+const isAbaMobileOpenPage = window.location.pathname === ABA_MOBILE_OPEN_PATH;
+
+if (!isAbaMobileOpenPage) {
+  captureWebLoginFromHash();
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      {isAbaMobileOpenPage ? <AbaMobileOpenPage /> : <App />}
     </ErrorBoundary>
   </StrictMode>,
 )
-
