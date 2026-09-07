@@ -4,7 +4,6 @@ import {
   Award,
   CircleAlert,
   Coins,
-  Dices,
   Plus,
   Search,
   Sparkles,
@@ -25,11 +24,18 @@ export type Reward = {
   isActive: boolean;
 };
 
-type RewardSubTab = 'catalog' | 'luckydraw';
+export type RewardSubTab = 'catalog' | 'luckydraw';
 
-export function RewardManagement() {
+export interface RewardManagementProps {
+  subTab?: RewardSubTab;
+  onRewardsCountChange?: (count: number) => void;
+}
+
+export function RewardManagement({
+  subTab = 'catalog',
+  onRewardsCountChange,
+}: RewardManagementProps = {}) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<RewardSubTab>('catalog');
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [rewardsError, setRewardsError] = useState(false);
@@ -73,6 +79,10 @@ export function RewardManagement() {
   useEffect(() => {
     fetchRewards();
   }, [fetchRewards]);
+
+  useEffect(() => {
+    onRewardsCountChange?.(rewards.length);
+  }, [rewards.length, onRewardsCountChange]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -213,49 +223,7 @@ export function RewardManagement() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Sub navigation bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('catalog')}
-            className={`inline-flex items-center gap-2 rounded-none px-4 py-2 text-sm font-bold transition-all ${
-              activeTab === 'catalog'
-                ? 'bg-accent text-on-accent shadow-sm'
-                : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-            }`}
-          >
-            <Award className="size-4" />
-            <span>Reward Catalog</span>
-            {rewards.length > 0 && (
-              <span
-                className={`ml-1 rounded-none px-2 py-0.5 text-xs font-bold ${
-                  activeTab === 'catalog'
-                    ? 'bg-white/20 text-on-accent'
-                    : 'bg-surface-sunken text-ink-soft'
-                }`}
-              >
-                {rewards.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('luckydraw')}
-            className={`inline-flex items-center gap-2 rounded-none px-4 py-2 text-sm font-bold transition-all ${
-              activeTab === 'luckydraw'
-                ? 'bg-accent text-on-accent shadow-sm'
-                : 'bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-            }`}
-          >
-            <Dices className="size-4" />
-            <span>Lucky Draw Wheel</span>
-          </button>
-        </div>
-      </div>
-
-      {activeTab === 'luckydraw' ? (
+      {subTab === 'luckydraw' ? (
         <LuckyDrawManagement />
       ) : (
         <div className="space-y-6">

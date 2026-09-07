@@ -7,6 +7,7 @@ import {
   Building2,
   ChevronDown,
   Clock,
+  Dices,
   LayoutDashboard,
   ListPlus,
   LogOut,
@@ -33,6 +34,7 @@ import { SalesAnalytics } from './components/SalesAnalytics';
 import { CustomerCrm } from './components/crm/CustomerCrm';
 import { CustomerFeedback } from './components/CustomerFeedback';
 import { RewardManagement } from './components/RewardManagement';
+import type { RewardSubTab } from './components/RewardManagement';
 import { SettingsManagement } from './components/SettingsManagement';
 import type { SettingsSubTab } from './components/SettingsManagement';
 import { OrderCard } from './components/OrderCard';
@@ -242,8 +244,17 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [settingsSubTab, setSettingsSubTab] = useState<SettingsSubTab>('store');
   const [settingsExpanded, setSettingsExpanded] = useState(true);
   const [usersCount, setUsersCount] = useState(0);
+  const [rewardsSubTab, setRewardsSubTab] = useState<RewardSubTab>('catalog');
+  const [rewardsExpanded, setRewardsExpanded] = useState(true);
+  const [rewardsCount, setRewardsCount] = useState(0);
   const sessionRole = loadSession()?.role;
   const isManager = sessionRole === 'manager';
+
+  useEffect(() => {
+    apiFetch<any[]>('/api/rewards?includeInactive=1')
+      .then((data) => setRewardsCount(data.length))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isManager) return;
@@ -637,7 +648,10 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       else if (key === '3') setActiveTab('analytics');
       else if (key === '4') setActiveTab('customers');
       else if (key === '5') setActiveTab('feedback');
-      else if (key === '6') setActiveTab('rewards');
+      else if (key === '6') {
+        setActiveTab('rewards');
+        setRewardsExpanded(true);
+      }
       else if (key === '7') {
         setActiveTab('settings');
         setSettingsExpanded(true);
@@ -685,12 +699,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       label: 'Feedback',
       icon: <MessageSquare className="size-5" />,
       shortcut: '5',
-    },
-    {
-      id: 'rewards' as TabId,
-      label: 'Rewards',
-      icon: <Award className="size-5" />,
-      shortcut: '6',
     },
   ];
 
@@ -805,6 +813,92 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                   </button>
                 );
               })}
+
+              {/* Rewards Expandable Item */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'rewards') {
+                    setActiveTab('rewards');
+                    setRewardsExpanded(true);
+                  } else {
+                    setRewardsExpanded((prev) => !prev);
+                  }
+                }}
+                className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                  activeTab === 'rewards'
+                    ? 'bg-surface-sunken text-ink'
+                    : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Award className="size-5" />
+                  <span>Rewards</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
+                    6
+                  </kbd>
+                  <ChevronDown
+                    className={`size-4 text-ink-soft transition-transform duration-200 ${
+                      rewardsExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {rewardsExpanded && (
+                <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('rewards');
+                      setRewardsSubTab('catalog');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'rewards' && rewardsSubTab === 'catalog'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Award className="size-4" />
+                      <span>Reward Catalog</span>
+                    </div>
+                    {rewardsCount > 0 && (
+                      <span
+                        className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                          activeTab === 'rewards' && rewardsSubTab === 'catalog'
+                            ? 'bg-white/25 text-on-accent'
+                            : 'bg-accent/15 text-accent'
+                        }`}
+                      >
+                        {rewardsCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('rewards');
+                      setRewardsSubTab('luckydraw');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'rewards' && rewardsSubTab === 'luckydraw'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Dices className="size-4" />
+                      <span>Lucky Draw Wheel</span>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -989,7 +1083,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                           : activeTab === 'feedback'
                             ? 'Feedback'
                             : activeTab === 'rewards'
-                              ? 'Rewards'
+                              ? rewardsSubTab === 'luckydraw'
+                                ? 'Lucky Draw Wheel'
+                                : 'Rewards Catalog'
                               : settingsSubTab === 'users'
                                 ? 'Users'
                                 : 'Store Settings'}
@@ -1007,7 +1103,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                         : activeTab === 'feedback'
                           ? 'Issues and customer support reports'
                           : activeTab === 'rewards'
-                            ? 'Redemption catalog and lucky draw wheel'
+                            ? rewardsSubTab === 'luckydraw'
+                              ? 'Lucky draw prizes, probabilities, and ticket rules'
+                              : 'Manage loyalty prizes customer can redeem'
                             : settingsSubTab === 'users'
                               ? 'Authorized staff and manager accounts'
                               : 'Store profile, ordering options, and branch details'}
@@ -1098,7 +1196,10 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           ) : activeTab === 'feedback' ? (
             <CustomerFeedback />
           ) : activeTab === 'rewards' ? (
-            <RewardManagement />
+            <RewardManagement
+              subTab={rewardsSubTab}
+              onRewardsCountChange={setRewardsCount}
+            />
           ) : activeTab === 'settings' ? (
             <SettingsManagement
               subTab={settingsSubTab}
