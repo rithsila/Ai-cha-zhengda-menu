@@ -7,11 +7,14 @@ import { formatCurrency } from '../utils/format';
 import { MapPin, Storefront, CaretLeft, X, CaretDown, CaretUp } from '@phosphor-icons/react';
 import { AddressForm, AddressSummary, type AddressFormHandle } from './AddressForm';
 import { isValidBuilding, isValidRoom, isValidName, isValidPhone } from '../utils/address';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { apiFetch, hasIdentity } from '../utils/api';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
 import { getDefaultPaymentMethod } from '../utils/paymentPrefs';
 import { isOnlinePaymentOffered, refreshOnlinePaymentState, useOnlinePaymentState } from '../utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from '../utils/storeStatus';
+import { useProfile } from '../hooks/useProfile';
+import { useConfig, configNumber } from '../hooks/useConfig';
+import { useMyPrizes } from '../hooks/useMyPrizes';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -35,6 +38,19 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   // A guest may still order for pickup and pay cash; everything tied to an
   // account (points, saved address, delivery) needs a verified identity.
   const signedIn = hasIdentity();
+
+  // Shared SWR hooks — deduplicated with other components
+  const { profile: userProfile, mutateProfile } = useProfile();
+  const { configRows } = useConfig();
+  const { prizes: allPrizes } = useMyPrizes();
+
+  // Derive config values
+  const pointsPerDollar = configNumber(configRows, 'pointsPerDollar', 100);
+  // Free inside Arakawa today; the shop can change it with PUT /api/config.
+  const deliveryFeeRate = configNumber(configRows, 'deliveryFee', 0);
+  const allowCashForStandard = configRows.find(r => r.key === 'allowCashForStandard')?.value === '1';
+  const userVouchers = allPrizes.filter((p: any) => p.status === 'pending');
+
   const [step, setStep] = useState<1 | 2>(1);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
   const [isViewingKhqr, setIsViewingKhqr] = useState(false);
@@ -43,11 +59,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [branchId, setBranchId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
   const [claimedCount, setClaimedCount] = useState(0);
-  const [pointsPerDollar, setPointsPerDollar] = useState(100);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
-  // Free inside Arakawa today; the shop can change it with PUT /api/config.
-  const [deliveryFeeRate, setDeliveryFeeRate] = useState(0);
-  const [allowCashForStandard, setAllowCashForStandard] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
@@ -58,8 +70,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [error, setError] = useState<string | null>(null);
 
   const [branches, setBranches] = useState<any[]>([]);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [userVouchers, setUserVouchers] = useState<any[]>([]);
   const [selectedVoucherCode, setSelectedVoucherCode] = useState<string | null>(null);
   // Lets "Continue to Payment" save the typed address first — the form's own
   // save button sits under the sticky footer where nobody sees it.
@@ -76,7 +86,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     }
   }, [isOpen]);
 
-  // Fetch branches, config and user profile dynamically when open, reset on close
+  // Fetch branches and catalog when open (checkout-specific), reset on close
   useEffect(() => {
     if (!isOpen) {
       // Reset state on close
@@ -101,39 +111,17 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
     const fetchData = async () => {
       try {
-        const [branchRes, userRes, cfgRes, catRes, prizesRes] = await Promise.all([
+        const [branchRes, catRes] = await Promise.all([
           apiFetch('/api/branches'),
-          signedIn ? apiFetch(ME.profile()) : Promise.resolve(null),
-          apiFetch('/api/config'),
           apiFetch('/api/catalog'),
-          signedIn ? apiFetch('/api/me/prizes') : Promise.resolve(null),
         ]);
         if (branchRes.ok) {
           const data = await branchRes.json();
           setBranches(data);
           if (data.length > 0) setBranchId(data[0].id);
         }
-        if (userRes?.ok) {
-          const user = await userRes.json();
-          setUserProfile(user);
-        }
-        if (prizesRes?.ok) {
-          const prizeList = await prizesRes.json();
-          if (Array.isArray(prizeList)) {
-            setUserVouchers(prizeList.filter((p: any) => p.status === 'pending'));
-          }
-        }
         if (catRes.ok) {
           setCatalogItems(await catRes.json());
-        }
-        if (cfgRes.ok) {
-          const rows: { key: string; value: string }[] = await cfgRes.json();
-          const rate = Number(rows.find(r => r.key === 'pointsPerDollar')?.value);
-          if (Number.isFinite(rate) && rate > 0) setPointsPerDollar(rate);
-          const fee = Number(rows.find(r => r.key === 'deliveryFee')?.value);
-          if (Number.isFinite(fee) && fee >= 0) setDeliveryFeeRate(fee);
-          const allowCashRow = rows.find(r => r.key === 'allowCashForStandard');
-          if (allowCashRow) setAllowCashForStandard(allowCashRow.value === '1');
         }
       } catch (err) {
         console.error('Failed to fetch checkout data', err);
@@ -142,7 +130,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       }
     };
     fetchData();
-  }, [isOpen, signedIn, storeStatus.enablePickup]);
+  }, [isOpen, storeStatus.enablePickup]);
 
   const userTier = userProfile?.tier || 'standard';
   const isCashUnlocked = userTier === 'gold' || allowCashForStandard;
@@ -474,7 +462,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         <AddressForm
                           profile={userProfile}
                           saveRef={addressFormRef}
-                          onSaved={(user) => { setUserProfile(user); setEditingAddress(false); setError(null); }}
+                          onSaved={(user) => { mutateProfile(user, false); setEditingAddress(false); setError(null); }}
                           onCancel={hasAddress ? () => setEditingAddress(false) : undefined}
                         />
                       )}

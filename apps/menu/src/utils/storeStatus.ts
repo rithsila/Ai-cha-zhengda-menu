@@ -56,18 +56,29 @@ export function getStoreStatusSnapshot(): StoreStatusData {
   return currentStatus;
 }
 
-export async function refreshStoreStatus(): Promise<StoreStatusData> {
-  try {
-    const res = await fetch(`${API_BASE}/api/store/status`);
-    if (res.ok) {
-      const data = await res.json();
-      setStatus(data);
-      return data;
+let inflightRefresh: Promise<StoreStatusData> | null = null;
+
+export function refreshStoreStatus(): Promise<StoreStatusData> {
+  // If a refresh is already in-flight, join it instead of firing a duplicate.
+  if (inflightRefresh) return inflightRefresh;
+
+  inflightRefresh = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/store/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+        return data;
+      }
+    } catch {
+      // Network offline or server down - retain last known status
     }
-  } catch {
-    // Network offline or server down - retain last known status
-  }
-  return currentStatus;
+    return currentStatus;
+  })().finally(() => {
+    inflightRefresh = null;
+  });
+
+  return inflightRefresh;
 }
 
 function subscribe(listener: () => void): () => void {

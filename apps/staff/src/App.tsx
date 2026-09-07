@@ -314,9 +314,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
 
   const fetchBranches = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/branches`);
-      if (!res.ok) throw new Error('branch fetch failed');
-      const data = await res.json();
+      const data = await apiFetch<any[]>('/api/branches');
       setBranches(data);
       if (data.length > 0) setSelectedBranch(data[0].id);
     } catch {
@@ -340,15 +338,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           since: new Date(Date.now() - BOARD_WINDOW_MS).toISOString(),
         });
         if (selectedBranch) params.set('branchId', selectedBranch);
-        const res = await fetch(`${API_BASE}/api/orders?${params}`, {
-          headers: authHeaders(),
-        });
-        if (res.status === 401) {
-          handleUnauthorized();
-          return;
-        }
-        if (!res.ok) throw new Error('orders fetch failed');
-        const data: Order[] = await res.json();
+        const data = await apiFetch<Order[]>(`/api/orders?${params}`);
 
         // An order is actionable when it is paid or cash, and not closed or awaiting KHQR payment
         const isActionable = (o: Order) =>

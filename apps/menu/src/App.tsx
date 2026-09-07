@@ -11,6 +11,7 @@ import { apiFetch, hasIdentity } from './utils/api';
 import { refreshOnlinePaymentState } from './utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
 import { loginAsDevCustomer } from './utils/telegramUser';
+import { useLuckyDrawConfig } from './hooks/useLuckyDrawConfig';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -200,18 +201,7 @@ export default function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
-  const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
-
-  useEffect(() => {
-    apiFetch('/api/lucky-draw/config')
-      .then(async (res) => {
-        if (res.ok) {
-          const cfg = await res.json();
-          setLuckyDrawEnabled(cfg.enabled !== false);
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const { luckyDrawEnabled } = useLuckyDrawConfig();
 
   useEffect(() => {
     const handleScroll = () => {

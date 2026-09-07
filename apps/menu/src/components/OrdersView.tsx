@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,7 +14,8 @@ import {
 } from '@phosphor-icons/react';
 import { formatCurrency } from '../utils/format';
 import type { CartItem, MenuItem } from '../types';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { hasIdentity } from '../utils/api';
+import { useMyOrders } from '../hooks/useMyOrders';
 import { SignInPrompt } from './SignInPrompt';
 import { useOnlinePaymentState } from '../utils/onlinePayment';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
@@ -76,47 +77,20 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   const signedIn = hasIdentity();
   const khqrOffered = useOnlinePaymentState() === 'available';
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, ordersLoading: loading, mutateOrders } = useMyOrders({ poll: true });
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [paidCode, setPaidCode] = useState<string | null>(null);
 
   const panelOpenRef = useRef(false);
   panelOpenRef.current = selectedOrderId !== null;
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await apiFetch(ME.orders());
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setLoading(false);
-      return;
-    }
-    fetchOrders();
-    const interval = setInterval(() => {
-      if (!panelOpenRef.current) fetchOrders();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchOrders, signedIn]);
-
   const handlePaid = useCallback(
     (pickupCode: string) => {
       setSelectedOrderId(null);
       setPaidCode(pickupCode);
-      fetchOrders();
+      mutateOrders();
     },
-    [fetchOrders]
+    [mutateOrders]
   );
 
   const handleReorder = (order: Order) => {

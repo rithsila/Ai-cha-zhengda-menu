@@ -77,18 +77,29 @@ export function markOnlinePaymentUnavailable(): void {
  * are set. Call it before showing payment options. It also means KHQR switches
  * itself back on the moment credentials are added, with no new build.
  */
-export async function refreshOnlinePaymentState(): Promise<OnlinePaymentState> {
-  try {
-    const res = await fetch(`${API_BASE}/api/payment/methods`);
-    if (!res.ok) return state;
-    const data = await res.json();
-    if (data?.online) markOnlinePaymentAvailable();
-    else markOnlinePaymentUnavailable();
-  } catch {
-    // Offline or the server is down. Leave the last known answer in place;
-    // the checkout call itself will still fail loudly if KHQR is picked.
-  }
-  return state;
+let inflightRefresh: Promise<OnlinePaymentState> | null = null;
+
+export function refreshOnlinePaymentState(): Promise<OnlinePaymentState> {
+  // If a refresh is already in-flight, join it instead of firing a duplicate.
+  if (inflightRefresh) return inflightRefresh;
+
+  inflightRefresh = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/payment/methods`);
+      if (!res.ok) return state;
+      const data = await res.json();
+      if (data?.online) markOnlinePaymentAvailable();
+      else markOnlinePaymentUnavailable();
+    } catch {
+      // Offline or the server is down. Leave the last known answer in place;
+      // the checkout call itself will still fail loudly if KHQR is picked.
+    }
+    return state;
+  })().finally(() => {
+    inflightRefresh = null;
+  });
+
+  return inflightRefresh;
 }
 
 function subscribe(listener: () => void): () => void {

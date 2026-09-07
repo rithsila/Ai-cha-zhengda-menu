@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, House, Storefront, CreditCard, Money } from '@phosphor-icons/react';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { hasIdentity } from '../utils/api';
+import { useProfile } from '../hooks/useProfile';
+import { useConfig } from '../hooks/useConfig';
 import { SignInPrompt } from './SignInPrompt';
 import { AddressForm, AddressSummary } from './AddressForm';
 import { isValidBuilding, isValidRoom, formatPhone, SHOP_UNIT, RESIDENCE_NAME } from '../utils/address';
@@ -107,42 +109,13 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const storeStatus = useStoreStatus();
   const khqrOffered = useOnlinePaymentState() === 'available';
   const [defaultMethod, setMethod] = useState<PaymentMethod>(() => getDefaultPaymentMethod());
-  const [profile, setProfile] = useState<any>(null);
-  const [allowCashForStandard, setAllowCashForStandard] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { profile, profileLoading, mutateProfile, signedIn } = useProfile();
+  const { configRows, configLoading } = useConfig();
+  const allowCashForStandard = configRows.find(r => r.key === 'allowCashForStandard')?.value === '1';
+  const loading = profileLoading || configLoading;
   const [editing, setEditing] = useState(false);
   const [imgError, setImgError] = useState(false);
   const tgUser = getTelegramDisplayUser();
-  // A profile, address and phone number belong to one person. Without a
-  // verified identity every guest would share the same row.
-  const signedIn = hasIdentity();
-
-  useEffect(() => {
-    if (!signedIn) {
-      setLoading(false);
-      return;
-    }
-    const fetchData = async () => {
-      try {
-        const [userRes, cfgRes] = await Promise.all([
-          apiFetch(ME.profile()),
-          apiFetch('/api/config'),
-        ]);
-
-        if (userRes.ok) setProfile(await userRes.json());
-        if (cfgRes.ok) {
-          const rows: { key: string; value: string }[] = await cfgRes.json();
-          const allowCashRow = rows.find(r => r.key === 'allowCashForStandard');
-          if (allowCashRow) setAllowCashForStandard(allowCashRow.value === '1');
-        }
-      } catch (err) {
-        console.error('Failed to fetch account data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [signedIn]);
 
   const userTier = profile?.tier || 'standard';
   const isCashUnlocked = userTier === 'gold' || allowCashForStandard;
@@ -257,7 +230,7 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           {editing ? (
             <AddressForm
               profile={profile}
-              onSaved={(user) => { setProfile(user); setEditing(false); }}
+              onSaved={(user) => { mutateProfile(user, false); setEditing(false); }}
               onCancel={hasAddress ? () => setEditing(false) : undefined}
             />
           ) : hasAddress ? (
