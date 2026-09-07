@@ -12,6 +12,7 @@ import { refreshOnlinePaymentState } from './utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
 import { loginAsDevCustomer } from './utils/telegramUser';
 import { useLuckyDrawConfig } from './hooks/useLuckyDrawConfig';
+import { useCatalog } from './hooks/useCatalog';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -246,74 +247,33 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
-  const [categoriesList, setCategoriesList] = useState<
-    Array<{ brand: string; name: string; sortOrder: number }>
-  >([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Shared SWR hook — deduplicates with CheckoutModal, polls every 60s
+  const { catalogItems: rawCatalog, categoriesList, catalogLoading: isLoading } = useCatalog();
 
-  const fetchCatalog = useCallback(async () => {
-    try {
-      const [res, catRes] = await Promise.all([
-        apiFetch('/api/catalog'),
-        apiFetch('/api/categories').catch(() => null),
-      ]);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: MenuItem[] = data.map((item: any) => ({
-            id: item.id,
-            brand: item.brand,
-            category: item.category,
-            name: item.name,
-            description: item.description,
-            basePrice: item.basePrice,
-            imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
-            isSoldOut: Boolean(item.isSoldOut),
-            modifiers: item.modifiers?.map((g: any) => ({
-              id: g.key || g.id,
-              name: g.name,
-              type: g.type,
-              required: g.required,
-              options: g.options?.map((o: any) => ({
-                id: o.key || o.id,
-                name: o.name,
-                priceDelta: o.priceDelta,
-              })) || [],
-            })),
-          }));
-          setDynamicCatalog(mapped);
-        }
-      }
-      if (catRes && catRes.ok) {
-        const catData = await catRes.json();
-        if (Array.isArray(catData)) {
-          setCategoriesList(
-            catData.map((c: any) => ({
-              brand: c.brand,
-              name: c.name,
-              sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 999,
-            }))
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch dynamic catalog', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCatalog();
-    const handleFocus = () => fetchCatalog();
-    window.addEventListener('focus', handleFocus);
-    const interval = setInterval(fetchCatalog, 60000); // Poll catalog updates every 60s
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
-    };
-  }, [fetchCatalog]);
+  const dynamicCatalog = useMemo<MenuItem[]>(() => {
+    if (rawCatalog.length === 0) return CATALOG;
+    return rawCatalog.map((item: any) => ({
+      id: item.id,
+      brand: item.brand,
+      category: item.category,
+      name: item.name,
+      description: item.description,
+      basePrice: item.basePrice,
+      imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
+      isSoldOut: Boolean(item.isSoldOut),
+      modifiers: item.modifiers?.map((g: any) => ({
+        id: g.key || g.id,
+        name: g.name,
+        type: g.type,
+        required: g.required,
+        options: g.options?.map((o: any) => ({
+          id: o.key || o.id,
+          name: o.name,
+          priceDelta: o.priceDelta,
+        })) || [],
+      })),
+    }));
+  }, [rawCatalog]);
 
   // Derived state for current brand's items
   const brandItems = useMemo(() => {

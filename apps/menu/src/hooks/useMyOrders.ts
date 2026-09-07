@@ -26,7 +26,7 @@ export function useMyOrders(opts?: { poll?: boolean }) {
     {
       refreshInterval: poll ? 5_000 : 0,
       dedupingInterval: 3_000,
-      revalidateOnFocus: true,
+      revalidateOnFocus: false,
     },
   );
 

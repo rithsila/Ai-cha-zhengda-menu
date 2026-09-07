@@ -30,7 +30,7 @@ export function useMyPrizes() {
     fetchPrizes,
     {
       dedupingInterval: 10_000,
-      revalidateOnFocus: true,
+      revalidateOnFocus: false,
     },
   );
 

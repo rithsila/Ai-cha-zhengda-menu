@@ -27,10 +27,7 @@ export function useProfile() {
     signedIn ? 'user:profile' : null,
     fetchProfile,
     {
-      // Keep showing stale data while revalidating in the background.
-      revalidateOnFocus: true,
-      // If two components mount within 10s, the second one reuses the first's
-      // in-flight request instead of opening a new one.
+      revalidateOnFocus: false,
       dedupingInterval: 10_000,
     },
   );
