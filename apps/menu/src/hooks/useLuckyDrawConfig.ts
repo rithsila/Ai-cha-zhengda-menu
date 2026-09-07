@@ -31,6 +31,7 @@ export function useLuckyDrawConfig() {
     {
       dedupingInterval: 30_000,
       revalidateOnFocus: false,
+      revalidateIfStale: false,
     },
   );
 

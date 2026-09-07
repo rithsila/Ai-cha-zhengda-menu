@@ -28,6 +28,7 @@ export function useProfile() {
     fetchProfile,
     {
       revalidateOnFocus: false,
+      revalidateIfStale: false,
       dedupingInterval: 10_000,
     },
   );

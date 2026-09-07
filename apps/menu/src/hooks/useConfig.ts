@@ -33,9 +33,9 @@ export function configString(rows: ConfigRow[], key: string, fallback: string): 
 
 export function useConfig() {
   const { data, error, isLoading, mutate } = useSWR('store:config', fetchConfig, {
-    // Config rarely changes — 60s dedup is safe.
     dedupingInterval: 60_000,
     revalidateOnFocus: false,
+    revalidateIfStale: false,
   });
 
   return {

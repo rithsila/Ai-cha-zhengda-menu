@@ -57,8 +57,14 @@ export function getStoreStatusSnapshot(): StoreStatusData {
 }
 
 let inflightRefresh: Promise<StoreStatusData> | null = null;
+let lastRefreshTime = 0;
 
-export function refreshStoreStatus(): Promise<StoreStatusData> {
+export function refreshStoreStatus(force = false): Promise<StoreStatusData> {
+  // If recently refreshed (within 15s) and not forced, return cached status immediately
+  if (!force && Date.now() - lastRefreshTime < 15_000) {
+    return Promise.resolve(currentStatus);
+  }
+
   // If a refresh is already in-flight, join it instead of firing a duplicate.
   if (inflightRefresh) return inflightRefresh;
 
@@ -68,6 +74,7 @@ export function refreshStoreStatus(): Promise<StoreStatusData> {
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
+        lastRefreshTime = Date.now();
         return data;
       }
     } catch {

@@ -31,6 +31,7 @@ export function useMyPrizes() {
     {
       dedupingInterval: 10_000,
       revalidateOnFocus: false,
+      revalidateIfStale: false,
     },
   );
 

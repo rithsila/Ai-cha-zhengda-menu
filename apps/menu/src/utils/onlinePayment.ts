@@ -78,8 +78,14 @@ export function markOnlinePaymentUnavailable(): void {
  * itself back on the moment credentials are added, with no new build.
  */
 let inflightRefresh: Promise<OnlinePaymentState> | null = null;
+let lastRefreshTime = 0;
 
-export function refreshOnlinePaymentState(): Promise<OnlinePaymentState> {
+export function refreshOnlinePaymentState(force = false): Promise<OnlinePaymentState> {
+  // If recently refreshed (within 15s) and not forced, return cached status immediately
+  if (!force && Date.now() - lastRefreshTime < 15_000) {
+    return Promise.resolve(state);
+  }
+
   // If a refresh is already in-flight, join it instead of firing a duplicate.
   if (inflightRefresh) return inflightRefresh;
 
@@ -90,6 +96,7 @@ export function refreshOnlinePaymentState(): Promise<OnlinePaymentState> {
       const data = await res.json();
       if (data?.online) markOnlinePaymentAvailable();
       else markOnlinePaymentUnavailable();
+      lastRefreshTime = Date.now();
     } catch {
       // Offline or the server is down. Leave the last known answer in place;
       // the checkout call itself will still fail loudly if KHQR is picked.

@@ -15,6 +15,8 @@ import { useStoreStatus, refreshStoreStatus } from '../utils/storeStatus';
 import { useProfile } from '../hooks/useProfile';
 import { useConfig, configNumber } from '../hooks/useConfig';
 import { useMyPrizes } from '../hooks/useMyPrizes';
+import { useBranches } from '../hooks/useBranches';
+import { useCatalog } from '../hooks/useCatalog';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -43,6 +45,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const { profile: userProfile, mutateProfile } = useProfile();
   const { configRows } = useConfig();
   const { prizes: allPrizes } = useMyPrizes();
+  const { branches, branchesLoading } = useBranches();
+  const { catalogItems, catalogLoading } = useCatalog();
 
   // Derive config values
   const pointsPerDollar = configNumber(configRows, 'pointsPerDollar', 100);
@@ -50,6 +54,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const deliveryFeeRate = configNumber(configRows, 'deliveryFee', 0);
   const allowCashForStandard = configRows.find(r => r.key === 'allowCashForStandard')?.value === '1';
   const userVouchers = allPrizes.filter((p: any) => p.status === 'pending');
+  const dataLoaded = !branchesLoading && !catalogLoading;
 
   const [step, setStep] = useState<1 | 2>(1);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
@@ -59,8 +64,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const [branchId, setBranchId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
   const [claimedCount, setClaimedCount] = useState(0);
-  const [catalogItems, setCatalogItems] = useState<any[]>([]);
-  const [dataLoaded, setDataLoaded] = useState(false);
   
   // The order waiting for KHQR payment. KhqrPaymentPanel owns everything else
   // about the payment (creating it, polling, expiry, retry).
@@ -68,12 +71,17 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [branches, setBranches] = useState<any[]>([]);
   const [selectedVoucherCode, setSelectedVoucherCode] = useState<string | null>(null);
   // Lets "Continue to Payment" save the typed address first — the form's own
   // save button sits under the sticky footer where nobody sees it.
   const addressFormRef = useRef<AddressFormHandle | null>(null);
+
+  // Auto-select initial branch once loaded
+  useEffect(() => {
+    if (!branchId && branches.length > 0) {
+      setBranchId(branches[0].id);
+    }
+  }, [branchId, branches]);
 
   // Lock background scroll when open
   useEffect(() => {
@@ -86,13 +94,12 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
     }
   }, [isOpen]);
 
-  // Fetch branches and catalog when open (checkout-specific), reset on close
+  // Reset UI state on modal close; refresh live payment/store state when opened
   useEffect(() => {
     if (!isOpen) {
       // Reset state on close
       setStep(1);
       setError(null);
-      setDataLoaded(false);
       setMethod(initialPaymentMethod());
       setOrderType(storeStatus.enablePickup ? 'pickup' : 'delivery');
       setEditingAddress(false);
@@ -100,37 +107,15 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setIsViewingKhqr(false);
       setClaimedCount(0);
       setSelectedVoucherCode(null);
-      setBranchId('');
+      setBranchId(branches[0]?.id ?? '');
       setPaymentOrderId(null);
       return;
     }
 
-    // Refresh payment and live store status
+    // Refresh payment and live store status (safely throttled)
     refreshStoreStatus();
     refreshOnlinePaymentState();
-
-    const fetchData = async () => {
-      try {
-        const [branchRes, catRes] = await Promise.all([
-          apiFetch('/api/branches'),
-          apiFetch('/api/catalog'),
-        ]);
-        if (branchRes.ok) {
-          const data = await branchRes.json();
-          setBranches(data);
-          if (data.length > 0) setBranchId(data[0].id);
-        }
-        if (catRes.ok) {
-          setCatalogItems(await catRes.json());
-        }
-      } catch (err) {
-        console.error('Failed to fetch checkout data', err);
-      } finally {
-        setDataLoaded(true);
-      }
-    };
-    fetchData();
-  }, [isOpen, storeStatus.enablePickup]);
+  }, [isOpen, storeStatus.enablePickup, branches]);
 
   const userTier = userProfile?.tier || 'standard';
   const isCashUnlocked = userTier === 'gold' || allowCashForStandard;

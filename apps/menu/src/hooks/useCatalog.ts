@@ -66,6 +66,7 @@ export function useCatalog() {
       refreshInterval: 60_000,
       // Don't re-fetch on every window focus — was causing repeated calls.
       revalidateOnFocus: false,
+      revalidateIfStale: false,
       dedupingInterval: 10_000,
     },
   );
