@@ -52,6 +52,7 @@ export function CustomerLuckyWheelModal({
   const [copiedCode, setCopiedCode] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Use dynamic prizes loaded from admin settings (supports any slice count >= 2)
   const activePrizes = Array.isArray(prizes) && prizes.length >= 2 ? prizes : DEFAULT_PRIZES;
@@ -59,6 +60,109 @@ export function CustomerLuckyWheelModal({
   const segmentAngle = 360 / numSegments;
   const canSpin = userTickets >= costPerSpin && !spinning;
   const ticketsNeeded = Math.max(0, costPerSpin - userTickets);
+
+  // Sound Synthesizers using Web Audio API (0 assets needed)
+  const playTickSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.035);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.04);
+    } catch {}
+  };
+
+  const playWinSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 chord
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startTime = ctx.currentTime + idx * 0.09;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+        gain.gain.setValueAtTime(0.12, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.36);
+      });
+    } catch {}
+  };
+
+  // Canvas Confetti Burst on Win
+  const triggerConfetti = () => {
+    const canvas = confettiCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = canvas.parentElement?.clientWidth || 340;
+    canvas.height = canvas.parentElement?.clientHeight || 500;
+
+    const particles: { x: number; y: number; vx: number; vy: number; color: string; size: number; rot: number; vrot: number; alpha: number }[] = [];
+    const colors = ['#F59E0B', '#EF4444', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#FBBF24'];
+
+    for (let i = 0; i < 50; i++) {
+      particles.push({
+        x: canvas.width / 2,
+        y: canvas.height * 0.45,
+        vx: (Math.random() - 0.5) * 8,
+        vy: (Math.random() - 0.85) * 9,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: Math.random() * 6 + 4,
+        rot: Math.random() * Math.PI,
+        vrot: (Math.random() - 0.5) * 0.2,
+        alpha: 1,
+      });
+    }
+
+    let frame = 0;
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let active = false;
+
+      particles.forEach((p) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.22; // gravity
+        p.rot += p.vrot;
+        p.alpha = Math.max(0, p.alpha - 0.015);
+
+        if (p.alpha > 0) {
+          active = true;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot);
+          ctx.globalAlpha = p.alpha;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          ctx.restore();
+        }
+      });
+
+      frame++;
+      if (active && frame < 100) {
+        requestAnimationFrame(animate);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    };
+    requestAnimationFrame(animate);
+  };
 
   // Draw the spinning wheel canvas
   useEffect(() => {
@@ -181,11 +285,26 @@ export function CustomerLuckyWheelModal({
 
       setCurrentRotation(nextRotation);
 
+      // Audio ticker deceleration simulation
+      const intervals = [60, 75, 90, 110, 135, 165, 200, 240, 290, 350, 420, 500, 600, 720];
+      let delayAcc = 0;
+      intervals.forEach((interval) => {
+        delayAcc += interval;
+        if (delayAcc < 4000) {
+          setTimeout(() => {
+            playTickSound();
+            triggerHaptic();
+          }, delayAcc);
+        }
+      });
+
       // Wait for spin animation (4.2 seconds)
       setTimeout(() => {
         setSpinning(false);
         setWonPrize(prize);
+        playWinSound();
         triggerSuccessHaptic();
+        triggerConfetti();
         if (onSpinSuccess) {
           onSpinSuccess({
             remainingTickets: result.user?.luckyTickets ?? Math.max(0, userTickets - costPerSpin),
@@ -215,6 +334,9 @@ export function CustomerLuckyWheelModal({
 
       {/* Modal Card */}
       <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-3xl bg-tg-bg border border-tg-hint/15 shadow-2xl p-5 flex flex-col items-center text-center">
+        {/* Confetti Canvas Overlay */}
+        <canvas ref={confettiCanvasRef} className="pointer-events-none absolute inset-0 z-40 w-full h-full" />
+
         {/* Header */}
         <div className="w-full flex items-center justify-between pb-3 border-b border-tg-hint/10">
           <div className="flex items-center gap-2.5">

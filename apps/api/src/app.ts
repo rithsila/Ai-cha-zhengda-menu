@@ -979,7 +979,7 @@ export function createApp() {
 
   app.post('/api/orders', resolveCustomer, async (req, res) => {
     try {
-      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward } = req.body;
+      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward, prizeClaimCode } = req.body;
 
       // The owner of an order is the verified caller, never a body field —
       // a body field let anyone attach an order to a stranger and spend their
@@ -1122,11 +1122,43 @@ export function createApp() {
       }
       const maxByTotal = Math.floor(serverTotal * POINTS_PER_DOLLAR);
 
-      // Make sure the customer row exists *before* the transaction. Creating it
-      // is not something that has to be atomic with the order, and SQLite has a
-      // single writer, so every statement kept out of the transaction is lock
-      // time given back to the next checkout. Everything above (menu lookup,
-      // pricing, address validation, config reads) is outside for the same reason.
+      // Validate prize voucher if provided
+      let validatedClaim: any = null;
+      if (prizeClaimCode && typeof prizeClaimCode === 'string' && prizeClaimCode.trim()) {
+        let normalizedCode = prizeClaimCode.trim().toUpperCase();
+        if (!normalizedCode.startsWith('LUCKY-') && normalizedCode.length <= 8) {
+          normalizedCode = `LUCKY-${normalizedCode}`;
+        }
+
+        const claim = await prisma.prizeClaim.findUnique({
+          where: { code: normalizedCode },
+        });
+
+        if (!claim) {
+          return res.status(400).json({ error: 'Invalid prize voucher code.' });
+        }
+
+        if (claim.status !== 'pending') {
+          return res.status(400).json({ error: `This prize voucher has already been ${claim.status}.` });
+        }
+
+        if (claim.telegramUserId !== telegramUserId) {
+          return res.status(400).json({ error: 'This prize voucher does not belong to your account.' });
+        }
+
+        const now = new Date();
+        if (claim.expiresAt && claim.expiresAt < now) {
+          await prisma.prizeClaim.update({
+            where: { id: claim.id },
+            data: { status: 'expired' },
+          });
+          return res.status(400).json({ error: 'This prize voucher has expired.' });
+        }
+
+        validatedClaim = claim;
+      }
+
+      // Make sure the customer row exists *before* the transaction.
       if (telegramUserId) {
         await withWriteRetry(() => prisma.user.upsert({
           where: { telegramUserId },
@@ -1135,17 +1167,9 @@ export function createApp() {
         }));
       }
 
-      // The id is minted here, before the first attempt, so that every attempt
-      // writes the same row. That is what makes the retry below safe: a lock
-      // timeout can in principle fire on a transaction that did commit, and if
-      // it does, the next attempt finds the order already there and returns it
-      // instead of creating a second one and spending the points twice. When
-      // the transaction really was rolled back nothing exists under this id, so
-      // the balance is re-read and the points are reserved exactly once.
       const orderId = randomUUID();
 
-      // Points are reserved (deducted) the moment the order is created, inside one
-      // transaction. Otherwise two pending orders could each redeem the same balance.
+      // Points and prize claims are reserved the moment the order is created, inside one transaction.
       const order = await withWriteRetry(async (attempt) => {
         if (attempt > 0) {
           const existing = await prisma.order.findUnique({ where: { id: orderId } });
@@ -1196,7 +1220,25 @@ export function createApp() {
             discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
           }
 
-          const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
+          // Apply prize voucher discount if valid
+          if (validatedClaim) {
+            const freshClaim = await tx.prizeClaim.findUnique({
+              where: { id: validatedClaim.id },
+            });
+            if (!freshClaim || freshClaim.status !== 'pending') {
+              throw new Error('This prize voucher has already been claimed');
+            }
+
+            const highestPricedUnit = pricedItems.reduce((max, p) => {
+              const unitPrice = Math.round((p.price / p.quantity) * 100) / 100;
+              return Math.max(max, unitPrice);
+            }, 0);
+
+            const voucherDiscount = Math.min(highestPricedUnit, Math.max(0, serverTotal - discountApplied));
+            discountApplied += voucherDiscount;
+          }
+
+          const finalAmount = Math.round(Math.max(0, serverTotal - discountApplied) * 100) / 100;
 
           // Stamps earned: 1 stamp (10 points) per paid eligible item (earnsStamp !== false)
           const eligibleItemsCount = pricedItems.reduce((sum, p) => {
@@ -1229,6 +1271,19 @@ export function createApp() {
             new Date()
           );
 
+          // Mark prize claim as redeemed online
+          if (validatedClaim) {
+            await tx.prizeClaim.update({
+              where: { id: validatedClaim.id },
+              data: {
+                status: 'claimed',
+                claimedAt: new Date(),
+                claimedByStaffName: 'Online Order',
+                notes: `Redeemed online on order #${pickupCode || orderId}`,
+              },
+            });
+          }
+
           return tx.order.create({
             data: {
               id: orderId,
@@ -1255,8 +1310,11 @@ export function createApp() {
       });
 
       res.json(order);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      if (error?.message && (error.message.includes('voucher') || error.message.includes('claimed'))) {
+        return res.status(400).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Failed to create order' });
     }
   });

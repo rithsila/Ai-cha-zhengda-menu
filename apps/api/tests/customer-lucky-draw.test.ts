@@ -17,7 +17,9 @@ describe('Customer Lucky Draw Spin Wheel Feature', () => {
   });
 
   beforeEach(async () => {
-    await prisma.systemConfig.deleteMany({});
+    await prisma.systemConfig.deleteMany({
+      where: { key: { in: ['luckyWheelPrizes', 'luckyTicketsCostPerSpin', 'luckyDrawEnabled'] } },
+    });
     await prisma.prizeClaim.deleteMany({});
   });
 
@@ -353,6 +355,107 @@ describe('Customer Lucky Draw Spin Wheel Feature', () => {
       expect(res.body.length).toBeGreaterThanOrEqual(1);
       expect(res.body[0].code).toBe(claimCode);
       expect(res.body[0].user.firstName).toBe('Dara');
+    });
+  });
+
+  describe('Online Prize Voucher Redemption in Checkout (POST /api/orders)', () => {
+    const testItemId = `item-voucher-${randomUUID()}`;
+
+    beforeAll(async () => {
+      await prisma.menuItem.create({
+        data: {
+          id: testItemId,
+          brand: 'ai-cha',
+          category: 'Drinks',
+          name: 'Signature Milk Tea',
+          basePrice: 2.5,
+          earnsStamp: true,
+          canClaim: true,
+        },
+      });
+    });
+
+    it('rejects order if prizeClaimCode is invalid or belongs to another user', async () => {
+      const cust1 = `cust-claim-1-${randomUUID()}`;
+      const cust2 = `cust-claim-2-${randomUUID()}`;
+      await prisma.user.create({ data: { telegramUserId: cust1 } });
+      await prisma.user.create({ data: { telegramUserId: cust2 } });
+
+      const voucherCode = `LUCKY-${randomUUID().slice(0, 6).toUpperCase()}`;
+      await prisma.prizeClaim.create({
+        data: {
+          code: voucherCode,
+          telegramUserId: cust1,
+          prizeName: 'Free Drink',
+          prizeType: 'item',
+          status: 'pending',
+        },
+      });
+
+      // cust2 tries to use cust1's voucher
+      const res = await request(app)
+        .post('/api/orders')
+        .set(asCustomer(cust2))
+        .send({
+          items: [{ menuItemId: testItemId, quantity: 1 }],
+          paymentMethod: 'khqr',
+          orderType: 'pickup',
+          prizeClaimCode: voucherCode,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/voucher/i);
+    });
+
+    it('applies prize voucher discount and marks claim as claimed', async () => {
+      const cust = `cust-winner-${randomUUID()}`;
+      await prisma.user.create({ data: { telegramUserId: cust } });
+
+      const voucherCode = `LUCKY-${randomUUID().slice(0, 6).toUpperCase()}`;
+      const claim = await prisma.prizeClaim.create({
+        data: {
+          code: voucherCode,
+          telegramUserId: cust,
+          prizeName: 'Free Drink Reward',
+          prizeType: 'item',
+          status: 'pending',
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/orders')
+        .set(asCustomer(cust))
+        .send({
+          items: [{ menuItemId: testItemId, quantity: 2 }],
+          paymentMethod: 'khqr',
+          orderType: 'pickup',
+          prizeClaimCode: voucherCode,
+        });
+
+      expect(res.status).toBe(200);
+      // 2 items * $2.50 = $5.00. 1 free item discounted = $2.50 discount applied. Total = $2.50
+      expect(res.body.discountApplied).toBe(2.5);
+      expect(res.body.totalAmount).toBe(2.5);
+
+      // Verify claim was marked as claimed in database
+      const updatedClaim = await prisma.prizeClaim.findUnique({ where: { id: claim.id } });
+      expect(updatedClaim?.status).toBe('claimed');
+      expect(updatedClaim?.claimedAt).toBeDefined();
+
+      // Second order with the same voucher must fail
+      const secondRes = await request(app)
+        .post('/api/orders')
+        .set(asCustomer(cust))
+        .send({
+          items: [{ menuItemId: testItemId, quantity: 1 }],
+          paymentMethod: 'khqr',
+          orderType: 'pickup',
+          prizeClaimCode: voucherCode,
+        });
+
+      expect(secondRes.status).toBe(400);
+      expect(secondRes.body.error).toMatch(/claimed|invalid/i);
     });
   });
 });

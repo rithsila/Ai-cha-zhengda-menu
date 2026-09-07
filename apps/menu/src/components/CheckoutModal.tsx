@@ -59,6 +59,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
   const [branches, setBranches] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [userVouchers, setUserVouchers] = useState<any[]>([]);
+  const [selectedVoucherCode, setSelectedVoucherCode] = useState<string | null>(null);
   // Lets "Continue to Payment" save the typed address first — the form's own
   // save button sits under the sticky footer where nobody sees it.
   const addressFormRef = useRef<AddressFormHandle | null>(null);
@@ -87,6 +89,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
       setIsSummaryExpanded(false);
       setIsViewingKhqr(false);
       setClaimedCount(0);
+      setSelectedVoucherCode(null);
       setBranchId('');
       setPaymentOrderId(null);
       return;
@@ -98,11 +101,12 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
 
     const fetchData = async () => {
       try {
-        const [branchRes, userRes, cfgRes, catRes] = await Promise.all([
+        const [branchRes, userRes, cfgRes, catRes, prizesRes] = await Promise.all([
           apiFetch('/api/branches'),
           signedIn ? apiFetch(ME.profile()) : Promise.resolve(null),
           apiFetch('/api/config'),
-          apiFetch('/api/catalog')
+          apiFetch('/api/catalog'),
+          signedIn ? apiFetch('/api/me/prizes') : Promise.resolve(null),
         ]);
         if (branchRes.ok) {
           const data = await branchRes.json();
@@ -112,6 +116,12 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         if (userRes?.ok) {
           const user = await userRes.json();
           setUserProfile(user);
+        }
+        if (prizesRes?.ok) {
+          const prizeList = await prizesRes.json();
+          if (Array.isArray(prizeList)) {
+            setUserVouchers(prizeList.filter((p: any) => p.status === 'pending'));
+          }
         }
         if (catRes.ok) {
           setCatalogItems(await catRes.json());
@@ -193,7 +203,15 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const effectiveClaimCount = Math.min(claimedCount, maxClaimableCount);
   const claimedUnits = claimableCartUnits.slice(0, effectiveClaimCount);
   const discountApplied = claimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
-  const finalTotal = Math.max(0, total + deliveryFee - discountApplied);
+
+  // Prize voucher discount: discount 1 highest-priced unit
+  const highestUnitPrice = cart.reduce((max, c) => Math.max(max, c.unitPrice), 0);
+  const selectedVoucher = userVouchers.find((v) => v.code === selectedVoucherCode);
+  const voucherDiscount = selectedVoucher
+    ? Math.min(highestUnitPrice, Math.max(0, total + deliveryFee - discountApplied))
+    : 0;
+
+  const finalTotal = Math.max(0, total + deliveryFee - discountApplied - voucherDiscount);
   const totalItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleConfirm = async () => {
@@ -219,14 +237,9 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         setError(t('deliveryNeedsTelegram', 'Delivery needs a saved address. Open the shop from Telegram to use it.'));
         return;
       }
-      // The address form's own save button sits below this sticky footer and is
-      // easy to miss, so a filled-in form is saved here before moving on.
-      const form = addressFormRef.current;
-      if (form) {
-        if (!form.canSave) {
-          setError(t('addressRequired', 'Please add your building, room, name and phone number.'));
-          return;
-        }
+      if (editingAddress) {
+        const form = addressFormRef.current;
+        if (!form) return;
         setIsLoading(true);
         const saved = await form.save();
         setIsLoading(false);
@@ -273,6 +286,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
           contactPhone: activeProfile?.phoneNumber || null,
           pointsToUse: effectiveClaimCount * (pointsPerStamp * 10),
           claimReward: effectiveClaimCount > 0 ? effectiveClaimCount : undefined,
+          prizeClaimCode: selectedVoucherCode || undefined,
         }),
       });
 
@@ -667,6 +681,65 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   </>
                 )}
 
+                {/* 4. Lucky Draw Won Prize Vouchers Section */}
+                {signedIn && userVouchers.length > 0 && (
+                  <div className={`rounded-2xl p-4 border transition-all ${
+                    selectedVoucher
+                      ? 'bg-amber-500/10 border-amber-500/40 shadow-xs'
+                      : 'bg-tg-secondary-bg border-tg-hint/15'
+                  }`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500 text-white text-lg shrink-0 shadow-xs">
+                          {selectedVoucher?.prizeIcon || '🎁'}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-tg-text truncate">
+                            {selectedVoucher ? selectedVoucher.prizeName : t('useLuckyVoucher', 'Use Lucky Draw Prize Voucher')}
+                          </div>
+                          <div className="text-xs text-tg-hint">
+                            {userVouchers.length} {userVouchers.length === 1 ? 'prize voucher' : 'prize vouchers'} available
+                          </div>
+                        </div>
+                      </div>
+
+                      {userVouchers.length === 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVoucherCode(selectedVoucherCode ? null : userVouchers[0].code)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                            selectedVoucher
+                              ? 'bg-amber-600 text-white shadow-xs'
+                              : 'bg-tg-hint/15 text-tg-text hover:bg-tg-hint/25'
+                          }`}
+                        >
+                          {selectedVoucher ? t('applied', 'Applied ✓') : t('apply', 'Apply')}
+                        </button>
+                      ) : (
+                        <select
+                          value={selectedVoucherCode || ''}
+                          onChange={(e) => setSelectedVoucherCode(e.target.value || null)}
+                          className="bg-tg-bg border border-tg-hint/20 rounded-xl px-2.5 py-1.5 text-xs font-bold text-tg-text outline-none shrink-0 max-w-[140px]"
+                        >
+                          <option value="">{t('none', 'None')}</option>
+                          {userVouchers.map((v) => (
+                            <option key={v.id} value={v.code}>
+                              {v.prizeIcon || '🎁'} {v.prizeName}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {selectedVoucher && voucherDiscount > 0 && (
+                      <div className="text-xs font-bold text-amber-600 dark:text-amber-400 mt-3 flex items-center justify-between border-t border-amber-500/20 pt-2">
+                        <span>🎉 {selectedVoucher.prizeName} ({t('freePrize', 'Free Prize')})</span>
+                        <span>-{formatCurrency(voucherDiscount)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-3">
                   <h3 className="font-semibold text-sm">{t('paymentMethod')}</h3>
                   {storeStatus.enableKhqr && khqrOffered ? (
@@ -749,6 +822,13 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       </div>
                     )}
 
+                    {voucherDiscount > 0 && (
+                      <div className="flex justify-between items-center text-sm text-amber-600 dark:text-amber-400 font-bold">
+                        <span>🎁 {t('luckyPrizeVoucher', 'Prize Voucher')}:</span>
+                        <span>-{formatCurrency(voucherDiscount)}</span>
+                      </div>
+                    )}
+
                     {orderType === 'delivery' && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-tg-hint">{t('deliveryFee', 'Delivery Fee')}</span>
@@ -757,6 +837,15 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         </span>
                       </div>
                     )}
+
+                    {/* Ticket Earning Transparency Badge */}
+                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <span>🎟️</span>
+                        <span>{t('luckyTicketsEarned', 'Lucky Draw Tickets Earned')}</span>
+                      </span>
+                      <span>+{userTier === 'gold' ? 2 : 1} {t('tickets', 'Tickets')}</span>
+                    </div>
 
                     <div className="border-t border-tg-hint/10 my-1" />
 

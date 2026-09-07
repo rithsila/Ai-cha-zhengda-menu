@@ -329,24 +329,31 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 ))}
               </ul>
 
-              {/* Stamps Earned Tag */}
-              {!isCancelled && (order.pointsEarned ?? 0) > 0 && (() => {
-                const eligibleCount = order.items?.reduce(
-                  (sum, i) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
-                  0
-                ) ?? 0;
-                const freeClaimed = Math.floor((order.pointsRedeemed ?? 0) / 100);
-                const itemStamps = Math.max(0, eligibleCount - freeClaimed);
-                const stamps = itemStamps > 0 ? itemStamps : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
-                return (
-                  <div className="mb-3">
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
-                      <Sparkle size={14} weight="fill" />
-                      +{stamps} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
-                    </span>
-                  </div>
-                );
-              })()}
+              {/* Rewards Earned Tags */}
+              {!isCancelled && (
+                <div className="mb-3 flex items-center gap-2 flex-wrap">
+                  {(order.pointsEarned ?? 0) > 0 && (() => {
+                    const eligibleCount = order.items?.reduce(
+                      (sum, i) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
+                      0
+                    ) ?? 0;
+                    const freeClaimed = Math.floor((order.pointsRedeemed ?? 0) / 100);
+                    const itemStamps = Math.max(0, eligibleCount - freeClaimed);
+                    const stamps = itemStamps > 0 ? itemStamps : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
+                    return (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
+                        <Sparkle size={14} weight="fill" />
+                        +{stamps} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
+                      </span>
+                    );
+                  })()}
+
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20">
+                    <span>🎟️</span>
+                    <span>+1 {t('luckyTicket', 'Ticket')}</span>
+                  </span>
+                </div>
+              )}
 
               {/* Actions: Pay Now for unpaid orders, or Reorder for past orders */}
               {isPending ? (
