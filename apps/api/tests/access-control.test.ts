@@ -436,3 +436,73 @@ describe('GET /api/orders — no order may be hidden by the branch filter', () =
     expect(ids).toContain(noBranch.id);
   });
 });
+
+describe('Security audit: guest order PII masking (GET /api/orders/:id)', () => {
+  it('masks phone number and room for guest order lookups by anonymous caller', async () => {
+    const item = await prisma.menuItem.findFirst({ where: { isSoldOut: false } });
+    const guestOrder = await prisma.order.create({
+      data: {
+        totalAmount: 5,
+        paymentMethod: 'cash',
+        orderType: 'delivery',
+        deliveryBuilding: 'B',
+        deliveryRoom: '1204',
+        contactName: 'Sokha',
+        contactPhone: '+85512999888',
+        items: { create: [{ menuItemId: item!.id, quantity: 1, price: 5, modifiers: '{}' }] },
+      },
+    });
+
+    const anonRes = await request(app).get(`/api/orders/${guestOrder.id}`);
+    expect(anonRes.status).toBe(200);
+    expect(anonRes.body.contactPhone).toBe('+855****88');
+    expect(anonRes.body.deliveryRoom).toBe('****');
+    expect(anonRes.body.deliveryAddress).toBe('Building B, Room ****');
+
+    const staffRes = await request(app).get(`/api/orders/${guestOrder.id}`).set(staffAuth());
+    expect(staffRes.status).toBe(200);
+    expect(staffRes.body.contactPhone).toBe('+85512999888');
+    expect(staffRes.body.deliveryRoom).toBe('1204');
+  });
+});
+
+describe('Security audit: internal kitchen config protection (GET /api/config)', () => {
+  it('hides kitchen alert timer configs from public callers, but exposes them to staff', async () => {
+    await prisma.systemConfig.upsert({
+      where: { key: 'orderWarnPendingMins' },
+      update: { value: '5' },
+      create: { key: 'orderWarnPendingMins', value: '5' },
+    });
+
+    const anonRes = await request(app).get('/api/config');
+    expect(anonRes.status).toBe(200);
+    expect(anonRes.body.some((c: any) => c.key === 'orderWarnPendingMins')).toBe(false);
+
+    const staffRes = await request(app).get('/api/config').set(staffAuth());
+    expect(staffRes.status).toBe(200);
+    expect(staffRes.body.some((c: any) => c.key === 'orderWarnPendingMins')).toBe(true);
+  });
+});
+
+describe('Security audit: catalog inactive items visibility (GET /api/catalog?includeInactive=1)', () => {
+  it('hides inactive menu items from anonymous callers even with ?includeInactive=1', async () => {
+    const inactiveItem = await prisma.menuItem.create({
+      data: {
+        brand: 'ai-cha',
+        category: 'Secret',
+        name: 'Unreleased Drink',
+        basePrice: 3.5,
+        isActive: false,
+      },
+    });
+
+    const anonRes = await request(app).get('/api/catalog?includeInactive=1');
+    expect(anonRes.status).toBe(200);
+    expect(anonRes.body.some((i: any) => i.id === inactiveItem.id)).toBe(false);
+
+    const staffRes = await request(app).get('/api/catalog?includeInactive=1').set(staffAuth());
+    expect(staffRes.status).toBe(200);
+    expect(staffRes.body.some((i: any) => i.id === inactiveItem.id)).toBe(true);
+  });
+});
+

@@ -596,7 +596,9 @@ export function createApp() {
 
   app.get('/api/catalog', async (req, res) => {
     try {
-      const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const wantsInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const isStaff = Boolean(staffRoleOf(req as any));
+      const includeInactive = wantsInactive && isStaff;
       const catalog = await prisma.menuItem.findMany({
         where: includeInactive ? undefined : { isActive: true },
         include: {
@@ -1409,6 +1411,22 @@ export function createApp() {
     }
   });
 
+  function maskPhone(phone?: string | null): string | null {
+    if (!phone) return null;
+    const clean = phone.trim();
+    if (clean.length <= 4) return '***';
+    return `${clean.slice(0, 4)}****${clean.slice(-2)}`;
+  }
+
+  function sanitizeOrderForGuest(order: any) {
+    return {
+      ...order,
+      contactPhone: maskPhone(order.contactPhone),
+      deliveryRoom: order.deliveryRoom ? '****' : null,
+      deliveryAddress: order.deliveryBuilding ? `Building ${order.deliveryBuilding}, Room ****` : null,
+    };
+  }
+
   app.get('/api/orders/:id', resolveCustomer, async (req, res) => {
     try {
       const id = String(req.params.id);
@@ -1425,12 +1443,17 @@ export function createApp() {
       // Readable by the customer who placed it, or by staff working the board.
       // A guest order (telegramUserId null) stays readable by whoever holds its
       // id: there is no account to check it against, and the guest needs the
-      // receipt. Accepted trade-off — the id is a random uuid, not a counter.
+      // receipt. PII (phone, room) is masked for unauthenticated guest lookups.
       const caller = (req as any).telegramUserId as string | null;
+      const isStaff = Boolean(staffRoleOf(req as any));
       const isOwner = order.telegramUserId != null && order.telegramUserId === caller;
       const isGuestOrder = order.telegramUserId == null;
-      if (!isOwner && !isGuestOrder && !staffRoleOf(req as any)) {
+      if (!isOwner && !isGuestOrder && !isStaff) {
         return res.status(403).json({ error: 'This order belongs to someone else' });
+      }
+
+      if (!isOwner && !isStaff) {
+        return res.json(sanitizeOrderForGuest(order));
       }
 
       res.json(order);
@@ -1741,11 +1764,26 @@ export function createApp() {
     }
   });
 
+  const INTERNAL_CONFIG_KEYS = new Set([
+    'orderWarnPendingMins',
+    'orderLatePendingMins',
+    'orderWarnPreparingMins',
+    'orderLatePreparingMins',
+    'orderWarnReadyMins',
+    'orderLateReadyMins',
+    'orderReminderSeconds',
+    'orderAlertSoundEnabled',
+  ]);
+
   // Loyalty & Rewards API
   app.get('/api/config', async (req, res) => {
     try {
       const configs = await prisma.systemConfig.findMany();
-      res.json(configs);
+      const isStaff = Boolean(staffRoleOf(req as any));
+      const filtered = isStaff
+        ? configs
+        : configs.filter((c) => !INTERNAL_CONFIG_KEYS.has(c.key));
+      res.json(filtered);
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch config' });
     }
@@ -1771,7 +1809,9 @@ export function createApp() {
 
   app.get('/api/rewards', async (req, res) => {
     try {
-      const where = req.query.includeInactive === '1' ? {} : { isActive: true };
+      const wantsInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const isStaff = Boolean(staffRoleOf(req as any));
+      const where = wantsInactive && isStaff ? {} : { isActive: true };
       const rewards = await prisma.reward.findMany({ where, orderBy: { pointsCost: 'asc' } });
       res.json(rewards);
     } catch (err) {
@@ -2694,18 +2734,21 @@ export function createApp() {
     }
   });
 
-  app.post('/api/feedback', feedbackRateLimit, async (req, res) => {
+  app.post('/api/feedback', feedbackRateLimit, resolveCustomer, async (req, res) => {
     try {
-      const { message, telegramUserId, userName, userPhone } = req.body || {};
+      const { message, telegramUserId: rawTelegramUserId, userName, userPhone } = req.body || {};
       const cleanMessage = typeof message === 'string' ? message.trim() : '';
       if (!cleanMessage) {
         return res.status(400).json({ error: 'Message is required' });
       }
 
+      const verifiedCallerId = (req as any).telegramUserId as string | null;
+      const effectiveTelegramId = verifiedCallerId || (rawTelegramUserId ? String(rawTelegramUserId).trim() : null);
+
       const report = await prisma.feedbackReport.create({
         data: {
           message: cleanMessage,
-          telegramUserId: telegramUserId ? String(telegramUserId) : null,
+          telegramUserId: effectiveTelegramId,
           userName: userName ? String(userName) : null,
           userPhone: userPhone ? String(userPhone) : null,
           status: 'new',

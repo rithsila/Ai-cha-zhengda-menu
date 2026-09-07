@@ -319,8 +319,14 @@ describe('End-to-End System & Workflow Validation', () => {
     const publicRewards2 = await request(app).get('/api/rewards');
     expect(publicRewards2.body.some((r: any) => r.id === rewardId)).toBe(false);
 
-    // Manager still sees inactive reward with ?includeInactive=1
-    const managerRewards = await request(app).get('/api/rewards?includeInactive=1');
+    // Anonymous caller cannot see inactive reward even with ?includeInactive=1
+    const unauthInactive = await request(app).get('/api/rewards?includeInactive=1');
+    expect(unauthInactive.body.some((r: any) => r.id === rewardId)).toBe(false);
+
+    // Manager still sees inactive reward with ?includeInactive=1 and manager token
+    const managerRewards = await request(app)
+      .get('/api/rewards?includeInactive=1')
+      .set(managerAuth());
     const deactivated = managerRewards.body.find((r: any) => r.id === rewardId);
     expect(deactivated).toBeDefined();
     expect(deactivated.isActive).toBe(false);
