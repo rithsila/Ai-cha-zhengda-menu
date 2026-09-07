@@ -162,7 +162,7 @@ export interface ConfigChange {
   rawNewValue: string;
 }
 
-export function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState): ConfigChange[] {
+function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState): ConfigChange[] {
   const changes: ConfigChange[] = [];
 
   if (draft.storeStatus !== saved.storeStatus) {
