@@ -190,3 +190,42 @@ describe('analytics', () => {
     expect(after.body.totalRevenue).toBeCloseTo(before.body.totalRevenue + 2.0, 2);
   });
 });
+
+describe('CORS origin security', () => {
+  it('blocks untrusted random worker and pages domains', async () => {
+    const res = await request(app)
+      .get('/api/catalog')
+      .set('Origin', 'https://attacker.workers.dev');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+
+    const res2 = await request(app)
+      .get('/api/catalog')
+      .set('Origin', 'https://malicious.pages.dev');
+    expect(res2.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('allows verified shop domains', async () => {
+    const res = await request(app)
+      .get('/api/catalog')
+      .set('Origin', 'https://ai-cha-menu.pages.dev');
+    expect(res.headers['access-control-allow-origin']).toBe('https://ai-cha-menu.pages.dev');
+  });
+});
+
+describe('Rate limiting protection', () => {
+  it('rate limits excessive feedback submissions', async () => {
+    const feedbackPayload = { message: 'Test feedback message' };
+    const ipHeaders = { 'X-Forwarded-For': '192.0.2.1', 'x-test-rate-limit': '1' };
+
+    // Send 5 allowed requests
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app).post('/api/feedback').set(ipHeaders).send(feedbackPayload);
+      expect(res.status).toBe(201);
+    }
+
+    // 6th request should hit 429
+    const blocked = await request(app).post('/api/feedback').set(ipHeaders).send(feedbackPayload);
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error).toMatch(/too many feedback messages/i);
+  });
+});

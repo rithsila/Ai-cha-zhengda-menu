@@ -23,6 +23,7 @@ import {
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
   roleForTelegramId, resolveStaffAccount, adminTelegramIds, adminTelegramUsernames,
   resolveStaffByPhone, createStaffOtp, verifyStaffOtpCode, canonicalPhone, adminPhoneNumbers,
+  orderRateLimit, feedbackRateLimit,
 } from './auth';
 import { sendOtpSms } from './sms';
 import {
@@ -30,7 +31,7 @@ import {
   verifyInitData, devIdentityAllowed, TelegramInitDataUser,
 } from './telegram-initdata';
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
-import { sendTelegramNotification } from './bot';
+import { sendTelegramNotification, escapeTelegramHtml } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -56,13 +57,23 @@ function isOriginAllowed(origin?: string): boolean {
   if (list.includes(origin) || list.includes('*')) return true;
   try {
     const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+
+    // Localhost in development
     if (
-      parsed.hostname === 'localhost' ||
-      parsed.hostname === '127.0.0.1' ||
-      parsed.hostname.endsWith('.localhost') ||
-      parsed.hostname.endsWith('.workers.dev') ||
-      parsed.hostname.endsWith('.pages.dev') ||
-      parsed.hostname.includes('aichazhengdaarakawa.com')
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.localhost')
+    ) {
+      return true;
+    }
+
+    // Official store domains and verified Cloudflare Pages
+    if (
+      host === 'aichazhengdaarakawa.com' ||
+      host.endsWith('.aichazhengdaarakawa.com') ||
+      host === 'ai-cha-menu.pages.dev' ||
+      host === 'ai-cha-staff.pages.dev'
     ) {
       return true;
     }
@@ -74,6 +85,8 @@ function isOriginAllowed(origin?: string): boolean {
 
 export function createApp() {
   const app = express();
+
+  app.set('trust proxy', 1);
 
   app.use(helmet());
 
@@ -223,10 +236,15 @@ export function createApp() {
       let verifiedTelegramId: string | null = null;
 
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      let authUsername: string | undefined;
+
       if (initData && botToken) {
         const { verifyInitData } = await import('./telegram-initdata');
         const verified = verifyInitData(initData, botToken);
-        if (verified) verifiedTelegramId = String(verified.id);
+        if (verified) {
+          verifiedTelegramId = String(verified.id);
+          if (verified.username) authUsername = String(verified.username);
+        }
       }
 
       if (telegramAuth && typeof telegramAuth === 'object' && botToken && !verifiedTelegramId) {
@@ -234,24 +252,25 @@ export function createApp() {
         for (const [k, v] of Object.entries(telegramAuth)) {
           strFields[k] = String(v);
         }
-        if (verifyTelegramLogin(strFields, botToken)) {
+        if (verifyTelegramLogin(strFields, botToken) && isLoginFresh(strFields.auth_date)) {
           verifiedTelegramId = String(strFields.id);
+          if (strFields.username) authUsername = String(strFields.username);
         }
       }
 
-      // If user provided Telegram User ID directly from browser
-      if (!verifiedTelegramId && telegramUserId) {
-        verifiedTelegramId = String(telegramUserId).trim();
+      // Local development only: allow explicit dev_manager or dev_staff test accounts
+      if (
+        !verifiedTelegramId &&
+        process.env.NODE_ENV !== 'production' &&
+        typeof telegramUserId === 'string' &&
+        (telegramUserId === 'dev_manager' || telegramUserId === 'dev_staff')
+      ) {
+        verifiedTelegramId = telegramUserId;
       }
 
       if (!verifiedTelegramId) {
         recordFailedLogin(req);
-        return res.status(401).json({ error: 'Please provide a valid Telegram User ID' });
-      }
-
-      let authUsername: string | undefined;
-      if (telegramAuth && typeof telegramAuth === 'object') {
-        authUsername = (telegramAuth as any).username;
+        return res.status(401).json({ error: 'Valid Telegram sign-in is required' });
       }
 
       let account = await resolveStaffAccount(verifiedTelegramId, prisma, authUsername);
@@ -469,7 +488,8 @@ export function createApp() {
           lastName: initDataUser?.last_name || null,
         }
       });
-      res.json(user);
+      const { trustNotes: _notes, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch user' });
@@ -522,7 +542,8 @@ export function createApp() {
         update: data,
         create: { telegramUserId, loyaltyPoints: 0, ...data }
       });
-      res.json(user);
+      const { trustNotes: _notes, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to save profile' });
@@ -977,7 +998,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/orders', resolveCustomer, async (req, res) => {
+  app.post('/api/orders', orderRateLimit, resolveCustomer, async (req, res) => {
     try {
       const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward, prizeClaimCode } = req.body;
 
@@ -2673,7 +2694,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/feedback', async (req, res) => {
+  app.post('/api/feedback', feedbackRateLimit, async (req, res) => {
     try {
       const { message, telegramUserId, userName, userPhone } = req.body || {};
       const cleanMessage = typeof message === 'string' ? message.trim() : '';
@@ -2693,14 +2714,17 @@ export function createApp() {
 
       // Send Telegram alert to managers / admins if configured
       try {
-        const { sendTelegramNotification } = await import('./bot');
         const envAdmins = adminTelegramIds();
         const dbManagers = await prisma.staffAccount.findMany({
           where: { role: 'manager', isActive: true },
           select: { telegramUserId: true },
         });
         const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers.map((m) => m.telegramUserId).filter((id): id is string => Boolean(id))]));
-        const alertText = `🚨 <b>New Customer Report / Feedback</b>\n\n<b>From:</b> ${report.userName || 'Customer'}${report.telegramUserId ? ` (<code>${report.telegramUserId}</code>)` : ''}\n<b>Phone:</b> ${report.userPhone || 'Not provided'}\n\n<b>Message:</b>\n${report.message}`;
+        const fromName = escapeTelegramHtml(report.userName || 'Customer');
+        const fromId = report.telegramUserId ? ` (<code>${escapeTelegramHtml(report.telegramUserId)}</code>)` : '';
+        const fromPhone = escapeTelegramHtml(report.userPhone || 'Not provided');
+        const safeMsg = escapeTelegramHtml(report.message);
+        const alertText = `🚨 <b>New Customer Report / Feedback</b>\n\n<b>From:</b> ${fromName}${fromId}\n<b>Phone:</b> ${fromPhone}\n\n<b>Message:</b>\n${safeMsg}`;
         for (const managerId of allManagerIds) {
           await sendTelegramNotification(managerId, alertText);
         }

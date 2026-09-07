@@ -54,3 +54,22 @@ describe('GET /api/auth/telegram/callback', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('POST /api/auth/staff-telegram-login', () => {
+  it('rejects raw unverified telegramUserId without signature', async () => {
+    const res = await request(app)
+      .post('/api/auth/staff-telegram-login')
+      .send({ telegramUserId: '99999' });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/valid telegram sign-in is required/i);
+  });
+
+  it('rejects tampered telegramAuth signature', async () => {
+    const fields = { id: '99999', first_name: 'Admin', auth_date: String(Math.floor(Date.now() / 1000)) };
+    const signed = signLogin(fields, BOT_TOKEN);
+    const res = await request(app)
+      .post('/api/auth/staff-telegram-login')
+      .send({ telegramAuth: { ...signed, id: '88888' } });
+    expect(res.status).toBe(401);
+  });
+});
