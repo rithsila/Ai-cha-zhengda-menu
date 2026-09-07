@@ -22,6 +22,7 @@ import { CategoryScroller } from './components/ui/CategoryScroller';
 import { MenuGridSkeleton, EmptyMenuState } from './components/ui/Skeleton';
 import { MenuItemCard } from './components/MenuItemCard';
 import { ModifierModal } from './components/ModifierModal';
+import { ItemPreviewModal } from './components/ItemPreviewModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrdersView } from './components/OrdersView';
@@ -194,6 +195,7 @@ export default function App() {
   const [activeModalItem, setActiveModalItem] = useState<MenuItem | null>(null);
   const [modalInitialSelected, setModalInitialSelected] = useState<Record<string, ModifierOption[]> | undefined>();
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<MenuItem | null>(null);
   
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -732,6 +734,7 @@ export default function App() {
                             onAdd={handleAddItem} 
                             isFavorite={isFavorite(item.id)}
                             onToggleFavorite={toggleFavorite}
+                            onPreview={setPreviewItem}
                           />
                         ))}
                       </div>
@@ -756,6 +759,7 @@ export default function App() {
                   onAdd={handleAddItem} 
                   isFavorite={isFavorite(item.id)}
                   onToggleFavorite={toggleFavorite}
+                  onPreview={setPreviewItem}
                 />
               ))}
             </div>
@@ -843,6 +847,16 @@ export default function App() {
             setEditingCartItemId(null);
           }}
           onConfirm={addToCart}
+        />
+      )}
+
+      {previewItem && (
+        <ItemPreviewModal
+          item={previewItem}
+          isFavorite={isFavorite(previewItem.id)}
+          onToggleFavorite={toggleFavorite}
+          onClose={() => setPreviewItem(null)}
+          onAdd={handleAddItem}
         />
       )}
 
