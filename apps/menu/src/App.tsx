@@ -239,6 +239,64 @@ export default function App() {
     }
   }, [menuTabs, activeBrand]);
 
+  // Multi-photo banner list from storeStatus
+  const bannerList = useMemo(() => {
+    if (storeStatus.menuBannerUrls) {
+      try {
+        const parsed = typeof storeStatus.menuBannerUrls === 'string'
+          ? JSON.parse(storeStatus.menuBannerUrls)
+          : storeStatus.menuBannerUrls;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.filter((u): u is string => typeof u === 'string' && u.trim().length > 0);
+          if (valid.length > 0) return valid;
+        }
+      } catch {}
+    }
+    return [storeStatus.menuBannerUrl || '/banner.webp'];
+  }, [storeStatus.menuBannerUrls, storeStatus.menuBannerUrl]);
+
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [isBannerPaused, setIsBannerPaused] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  // Auto-slide banner every 4.5 seconds
+  useEffect(() => {
+    if (bannerList.length <= 1 || isBannerPaused) return;
+    const timer = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % bannerList.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [bannerList.length, isBannerPaused]);
+
+  // Keep index within bounds if photos are removed
+  useEffect(() => {
+    if (currentBannerIndex >= bannerList.length) {
+      setCurrentBannerIndex(0);
+    }
+  }, [bannerList.length, currentBannerIndex]);
+
+  const handleBannerTouchStart = (e: React.TouchEvent) => {
+    setIsBannerPaused(true);
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleBannerTouchEnd = (e: React.TouchEvent) => {
+    setIsBannerPaused(false);
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX - touchEndX;
+    if (Math.abs(diff) > 40 && bannerList.length > 1) {
+      if (diff > 0) {
+        // swipe left -> next slide
+        setCurrentBannerIndex((prev) => (prev + 1) % bannerList.length);
+      } else {
+        // swipe right -> prev slide
+        setCurrentBannerIndex((prev) => (prev - 1 + bannerList.length) % bannerList.length);
+      }
+    }
+    setTouchStartX(null);
+  };
+
   // Refresh payment and store status periodically
   useEffect(() => {
     refreshOnlinePaymentState();
@@ -488,11 +546,28 @@ export default function App() {
       <DevPersonaBar />
       {/* Top Banner Section */}
       <div 
-        className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
-        style={{ backgroundImage: `url(${storeStatus.menuBannerUrl || '/banner.webp'})` }}
+        className="relative rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden select-none"
+        onTouchStart={handleBannerTouchStart}
+        onTouchEnd={handleBannerTouchEnd}
+        onMouseEnter={() => setIsBannerPaused(true)}
+        onMouseLeave={() => setIsBannerPaused(false)}
       >
-        <div className="absolute inset-0 bg-black/20 z-0 pointer-events-none"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent z-0 pointer-events-none"></div>
+        {/* Sliding Background Track */}
+        <div 
+          className="absolute inset-0 z-0 flex transition-transform duration-700 ease-in-out pointer-events-none"
+          style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
+        >
+          {bannerList.map((url, idx) => (
+            <div
+              key={`${url}-${idx}`}
+              className="w-full h-full shrink-0 bg-cover bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${url})` }}
+            />
+          ))}
+        </div>
+
+        <div className="absolute inset-0 bg-black/25 z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent z-0 pointer-events-none"></div>
         
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
@@ -587,6 +662,25 @@ export default function App() {
                 </span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Banner Slide Indicators */}
+        {bannerList.length > 1 && (
+          <div className="relative z-10 flex items-center justify-center gap-1.5 pt-3 pb-0.5">
+            {bannerList.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                aria-label={`Go to slide ${idx + 1}`}
+                onClick={() => setCurrentBannerIndex(idx)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  idx === currentBannerIndex
+                    ? 'w-5 bg-white shadow-sm'
+                    : 'w-1.5 bg-white/40 hover:bg-white/70'
+                }`}
+              />
+            ))}
           </div>
         )}
       </div>

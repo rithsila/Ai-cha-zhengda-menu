@@ -28,6 +28,7 @@ export interface StoreStatus {
   currentTime: string;
   reason: 'manual_open' | 'manual_closed' | 'schedule_open' | 'schedule_closed';
   menuBannerUrl: string;
+  menuBannerUrls: string;
   menuTabsConfig: string;
   shopName: string;
   shopAddress: string;
@@ -55,6 +56,7 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
   luckyTicketsCostPerSpin: 5,
   luckyWheelPrizes: '[]',
   menuBannerUrl: '/banner.webp',
+  menuBannerUrls: JSON.stringify(['/banner.webp']),
   menuTabsConfig: JSON.stringify([
     { id: 'ai-cha', label: 'Ai-Cha', icon: '/images/aicha-logo.webp', enabled: true },
     { id: 'zhengda', label: 'Zhengda', icon: '/images/zhengda_logo_cropped.webp', enabled: true },
@@ -214,6 +216,32 @@ export async function getStoreStatus(prisma: PrismaClient, now: Date = new Date(
   }
 
   const menuBannerUrl = configMap.get('menuBannerUrl') ?? (CONFIG_DEFAULTS.menuBannerUrl as string);
+  const rawMenuBannerUrls = configMap.get('menuBannerUrls');
+  let menuBannerUrls = CONFIG_DEFAULTS.menuBannerUrls as string;
+
+  if (rawMenuBannerUrls) {
+    try {
+      const parsed = JSON.parse(rawMenuBannerUrls);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        menuBannerUrls = JSON.stringify(parsed);
+      } else {
+        menuBannerUrls = JSON.stringify([menuBannerUrl]);
+      }
+    } catch {
+      menuBannerUrls = JSON.stringify([menuBannerUrl]);
+    }
+  } else {
+    menuBannerUrls = JSON.stringify([menuBannerUrl]);
+  }
+
+  let effectiveBannerUrl = menuBannerUrl;
+  try {
+    const parsed = JSON.parse(menuBannerUrls);
+    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+      effectiveBannerUrl = parsed[0];
+    }
+  } catch {}
+
   const menuTabsConfig = configMap.get('menuTabsConfig') ?? (CONFIG_DEFAULTS.menuTabsConfig as string);
   const shopName = configMap.get('shopName') ?? (CONFIG_DEFAULTS.shopName as string);
   const shopAddress = configMap.get('shopAddress') ?? (CONFIG_DEFAULTS.shopAddress as string);
@@ -232,7 +260,8 @@ export async function getStoreStatus(prisma: PrismaClient, now: Date = new Date(
     enableKhqr,
     currentTime,
     reason,
-    menuBannerUrl,
+    menuBannerUrl: effectiveBannerUrl,
+    menuBannerUrls,
     menuTabsConfig,
     shopName,
     shopAddress,
@@ -348,6 +377,24 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
       return { valid: false, normalizedValue: '', error: 'menuBannerUrl cannot be empty' };
     }
     return { valid: true, normalizedValue: strVal };
+  }
+
+  // Menu banner multiple images list (1 to 5 images)
+  if (key === 'menuBannerUrls') {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 5) {
+        return { valid: false, normalizedValue: '', error: 'menuBannerUrls must be an array of 1 to 5 image URLs' };
+      }
+      for (const url of parsed) {
+        if (!url || typeof url !== 'string' || !url.trim()) {
+          return { valid: false, normalizedValue: '', error: 'Each banner URL must be a non-empty string' };
+        }
+      }
+      return { valid: true, normalizedValue: JSON.stringify(parsed.map((u: string) => u.trim())) };
+    } catch {
+      return { valid: false, normalizedValue: '', error: 'menuBannerUrls must be valid JSON array' };
+    }
   }
 
   // Menu tabs configuration (1 to 3 tabs)

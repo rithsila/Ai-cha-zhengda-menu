@@ -229,4 +229,38 @@ describe('StoreSettings strict layer', () => {
       expect(screen.queryByText(/UNSAVED DRAFT/i)).toBeNull();
     });
   });
+
+  it('manages multi-photo banner carousel: adding preset, updating count, and saving', async () => {
+    render(
+      <ToastProvider>
+        <StoreSettings />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Customer Menu Banner Photos/i)).toBeDefined();
+    });
+
+    // Initial state: 1 / 5 Photos
+    expect(screen.getByText('1 / 5 Photos')).toBeDefined();
+
+    // Click Add Zhengda Banner preset
+    const addZhengdaBtn = screen.getByRole('button', { name: /Add Zhengda Banner/i });
+    fireEvent.click(addZhengdaBtn);
+
+    // Now should show 2 / 5 Photos
+    expect(screen.getByText('2 / 5 Photos')).toBeDefined();
+    expect(screen.getByText('Slide 2 of 2')).toBeDefined();
+
+    // Dirty bar should be active
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm & Apply to Menu/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(putRequests.some((r) => r.key === 'menuBannerUrls')).toBe(true);
+    });
+  });
 });

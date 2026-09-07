@@ -20,6 +20,7 @@ export interface StoreStatusData {
   currentTime?: string;
   reason?: string;
   menuBannerUrl?: string;
+  menuBannerUrls?: string;
   menuTabsConfig?: string;
   shopName?: string;
   shopAddress?: string;
@@ -38,6 +39,7 @@ const DEFAULT_STORE_STATUS: StoreStatusData = {
   enableCash: true,
   enableKhqr: true,
   menuBannerUrl: '/banner.webp',
+  menuBannerUrls: JSON.stringify(['/banner.webp']),
   shopName: 'Our shop',
   shopAddress: 'J03, Ground Floor, Arakawa',
   shopDeliveryNote: 'Delivery inside Arakawa is free',

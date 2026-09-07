@@ -21,6 +21,10 @@ import {
   Check,
   Save,
   X,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Eye,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
@@ -53,6 +57,7 @@ export interface StoreConfigState {
   currentTime: string;
   reason: string;
   menuBannerUrl: string;
+  menuBannerUrls: string[];
   menuTabsConfig: MenuTabItem[];
   shopName: string;
   shopAddress: string;
@@ -97,6 +102,7 @@ const DEFAULT_CONFIG: StoreConfigState = {
   currentTime: '',
   reason: 'schedule_open',
   menuBannerUrl: '/banner.webp',
+  menuBannerUrls: ['/banner.webp'],
   menuTabsConfig: DEFAULT_TABS,
   shopName: 'Our shop',
   shopAddress: 'J03, Ground Floor, Arakawa',
@@ -241,14 +247,33 @@ export function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfi
     });
   }
 
-  if (draft.menuBannerUrl !== saved.menuBannerUrl) {
+  const draftBanners = draft.menuBannerUrls && draft.menuBannerUrls.length > 0 ? draft.menuBannerUrls : [draft.menuBannerUrl || '/banner.webp'];
+  const savedBanners = saved.menuBannerUrls && saved.menuBannerUrls.length > 0 ? saved.menuBannerUrls : [saved.menuBannerUrl || '/banner.webp'];
+  const bannersChanged = JSON.stringify(draftBanners) !== JSON.stringify(savedBanners);
+  const primaryBannerChanged = draft.menuBannerUrl !== saved.menuBannerUrl;
+
+  if (bannersChanged) {
     changes.push({
-      key: 'menuBannerUrl',
-      label: 'Top Banner Photo',
-      oldDisplay: saved.menuBannerUrl.length > 25 ? `...${saved.menuBannerUrl.slice(-22)}` : saved.menuBannerUrl,
-      newDisplay: draft.menuBannerUrl.length > 25 ? `...${draft.menuBannerUrl.slice(-22)}` : draft.menuBannerUrl,
-      rawNewValue: draft.menuBannerUrl,
+      key: 'menuBannerUrls',
+      label: 'Top Banner Photos (Carousel)',
+      oldDisplay: `${savedBanners.length} photo${savedBanners.length > 1 ? 's' : ''}`,
+      newDisplay: `${draftBanners.length} photo${draftBanners.length > 1 ? 's' : ''}`,
+      rawNewValue: JSON.stringify(draftBanners),
     });
+  }
+
+  if (primaryBannerChanged || bannersChanged) {
+    const effectiveDraftPrimary = draftBanners[0] || draft.menuBannerUrl || '/banner.webp';
+    const effectiveSavedPrimary = savedBanners[0] || saved.menuBannerUrl || '/banner.webp';
+    if (effectiveDraftPrimary !== effectiveSavedPrimary) {
+      changes.push({
+        key: 'menuBannerUrl',
+        label: 'Primary Banner Photo',
+        oldDisplay: effectiveSavedPrimary.length > 25 ? `...${effectiveSavedPrimary.slice(-22)}` : effectiveSavedPrimary,
+        newDisplay: effectiveDraftPrimary.length > 25 ? `...${effectiveDraftPrimary.slice(-22)}` : effectiveDraftPrimary,
+        rawNewValue: effectiveDraftPrimary,
+      });
+    }
   }
 
   if (JSON.stringify(draft.menuTabsConfig) !== JSON.stringify(saved.menuTabsConfig)) {
@@ -398,6 +423,7 @@ export function StoreSettings() {
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingTabIdx, setUploadingTabIdx] = useState<number | null>(null);
   const [showManualUrls, setShowManualUrls] = useState(false);
+  const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
 
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const tabLogoInput0Ref = useRef<HTMLInputElement>(null);
@@ -443,6 +469,19 @@ export function StoreSettings() {
         } catch {}
       }
 
+      let parsedBanners = ['/banner.webp'];
+      const rawBanners = statusRes.menuBannerUrls || configMap.get('menuBannerUrls');
+      if (rawBanners) {
+        try {
+          const parsed = typeof rawBanners === 'string' ? JSON.parse(rawBanners) : rawBanners;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedBanners = parsed.filter((u: any): u is string => typeof u === 'string' && u.trim().length > 0);
+          }
+        } catch {}
+      } else if (statusRes.menuBannerUrl || configMap.get('menuBannerUrl')) {
+        parsedBanners = [statusRes.menuBannerUrl || configMap.get('menuBannerUrl') || '/banner.webp'];
+      }
+
       const loadedConfig: StoreConfigState = {
         storeStatus: (statusRes.storeStatus || 'auto') as 'auto' | 'open' | 'closed',
         openTime: statusRes.openTime || configMap.get('openTime') || '08:00',
@@ -455,7 +494,8 @@ export function StoreSettings() {
         isOpen: !!statusRes.isOpen,
         currentTime: statusRes.currentTime || '',
         reason: statusRes.reason || '',
-        menuBannerUrl: statusRes.menuBannerUrl || configMap.get('menuBannerUrl') || '/banner.webp',
+        menuBannerUrl: parsedBanners[0] || '/banner.webp',
+        menuBannerUrls: parsedBanners,
         menuTabsConfig: parsedTabs,
         shopName: statusRes.shopName ?? configMap.get('shopName') ?? 'Our shop',
         shopAddress: statusRes.shopAddress ?? configMap.get('shopAddress') ?? 'J03, Ground Floor, Arakawa',
@@ -553,11 +593,23 @@ export function StoreSettings() {
     { id: 'closed', label: 'Force Closed' },
   ];
 
+  const currentBannerList = config.menuBannerUrls && config.menuBannerUrls.length > 0
+    ? config.menuBannerUrls
+    : [config.menuBannerUrl || '/banner.webp'];
+
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: 'File too large', description: 'Banner image must be under 5MB', variant: 'error' });
+      return;
+    }
+    if (currentBannerList.length >= 5) {
+      toast({
+        title: 'Maximum 5 photos reached',
+        description: 'Best practice is 3 to 4 photos. Remove one before adding more.',
+        variant: 'info',
+      });
       return;
     }
     setUploadingBanner(true);
@@ -575,10 +627,16 @@ export function StoreSettings() {
       }
       const data = await res.json();
       if (data.url) {
-        setConfig((prev) => ({ ...prev, menuBannerUrl: data.url }));
+        const nextList = [...currentBannerList, data.url];
+        setConfig((prev) => ({
+          ...prev,
+          menuBannerUrls: nextList,
+          menuBannerUrl: nextList[0],
+        }));
+        setPreviewSlideIdx(nextList.length - 1);
         toast({
-          title: 'Banner uploaded to draft',
-          description: 'Click Save Changes to apply it to live menu.',
+          title: 'Banner added to draft',
+          description: `Photo ${nextList.length} of 5 added. Click Save Changes to apply to live menu.`,
           variant: 'info',
         });
       }
@@ -588,6 +646,72 @@ export function StoreSettings() {
       setUploadingBanner(false);
       if (bannerInputRef.current) bannerInputRef.current.value = '';
     }
+  };
+
+  const handleMoveBanner = (index: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= currentBannerList.length) return;
+    const nextList = [...currentBannerList];
+    const temp = nextList[index];
+    nextList[index] = nextList[targetIndex];
+    nextList[targetIndex] = temp;
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: nextList,
+      menuBannerUrl: nextList[0],
+    }));
+    setPreviewSlideIdx(targetIndex);
+  };
+
+  const handleRemoveBanner = (index: number) => {
+    if (currentBannerList.length <= 1) {
+      toast({
+        title: 'Cannot remove last photo',
+        description: 'Customer menu requires at least 1 banner photo.',
+        variant: 'info',
+      });
+      return;
+    }
+    const nextList = currentBannerList.filter((_, i) => i !== index);
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: nextList,
+      menuBannerUrl: nextList[0],
+    }));
+    setPreviewSlideIdx((prev) => Math.min(prev, nextList.length - 1));
+    toast({
+      title: 'Photo removed from draft',
+      description: 'Click Save Changes to update live menu.',
+      variant: 'info',
+    });
+  };
+
+  const handleAddPresetBanner = (url: string) => {
+    if (currentBannerList.includes(url)) {
+      toast({ title: 'Already in list', description: 'This banner is already in your slide list.', variant: 'info' });
+      return;
+    }
+    if (currentBannerList.length >= 5) {
+      toast({ title: 'Maximum 5 photos reached', description: 'Remove a photo first before adding more.', variant: 'info' });
+      return;
+    }
+    const nextList = [...currentBannerList, url];
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: nextList,
+      menuBannerUrl: nextList[0],
+    }));
+    setPreviewSlideIdx(nextList.length - 1);
+  };
+
+  const handleResetBanners = (urls: string[]) => {
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: urls,
+      menuBannerUrl: urls[0],
+    }));
+    setPreviewSlideIdx(0);
+    toast({ title: 'Presets updated in draft', description: 'Click Save Changes to apply to live menu.', variant: 'info' });
   };
 
   const handleTabUpdate = (index: number, partial: Partial<MenuTabItem>) => {
@@ -793,29 +917,86 @@ export function StoreSettings() {
 
         {/* Banner Section */}
         <div className="flex flex-col gap-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-ink-faint">
-            Top Header Background Photo
-          </label>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-ink-faint block">
+                Customer Menu Banner Photos (1 to 5 Photos)
+              </label>
+              <span className="text-xs text-ink-soft">
+                Multiple photos will slide automatically in customer menu. Best practice: <strong>3 to 4 photos</strong>.
+              </span>
+            </div>
+            <Badge
+              variant={currentBannerList.length >= 3 && currentBannerList.length <= 4 ? 'success' : 'neutral'}
+              className="text-[11px] font-mono font-bold"
+            >
+              {currentBannerList.length} / 5 Photos
+            </Badge>
+          </div>
 
-          {/* Banner Preview */}
-          <div className="relative h-36 w-full rounded-none overflow-hidden border border-border bg-black/40 shadow-inner flex items-end p-4">
+          {/* Banner Preview Box (Carousel) */}
+          <div className="relative h-40 w-full rounded-none overflow-hidden border border-border bg-black/40 shadow-inner flex items-end p-4">
             <img
-              src={resolveImageUrl(config.menuBannerUrl)}
-              alt="Menu Background Preview"
-              className="absolute inset-0 h-full w-full object-cover opacity-85"
+              src={resolveImageUrl(currentBannerList[previewSlideIdx] || config.menuBannerUrl || '/banner.webp')}
+              alt={`Menu Background Preview Slide ${previewSlideIdx + 1}`}
+              className="absolute inset-0 h-full w-full object-cover opacity-85 transition-opacity duration-300"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/banner.webp';
               }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
-            <div className="relative z-10 text-white flex items-center justify-between w-full">
+
+            {/* Slide Navigation Arrows on Preview */}
+            {currentBannerList.length > 1 && (
+              <div className="absolute inset-y-0 left-2 right-2 flex items-center justify-between pointer-events-none">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewSlideIdx((prev) => (prev - 1 + currentBannerList.length) % currentBannerList.length)
+                  }
+                  aria-label="Previous preview slide"
+                  className="pointer-events-auto size-8 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 transition-transform active:scale-95"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewSlideIdx((prev) => (prev + 1) % currentBannerList.length)}
+                  aria-label="Next preview slide"
+                  className="pointer-events-auto size-8 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 transition-transform active:scale-95"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="relative z-10 text-white flex items-end justify-between w-full">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider opacity-80 block">Customer Menu Preview</span>
-                <span className="text-base font-extrabold drop-shadow">Top Background Photo</span>
+                <span className="text-base font-extrabold drop-shadow">
+                  Slide {previewSlideIdx + 1} of {currentBannerList.length}
+                </span>
               </div>
-              <Badge variant="neutral" className="bg-black/60 backdrop-blur-md text-white border-white/20 text-[10px]">
-                Active Banner
-              </Badge>
+              <div className="flex flex-col items-end gap-1.5">
+                <Badge variant="neutral" className="bg-black/60 backdrop-blur-md text-white border-white/20 text-[10px]">
+                  {previewSlideIdx === 0 ? 'Cover (First Photo)' : `Slide #${previewSlideIdx + 1}`}
+                </Badge>
+                {/* Dots */}
+                {currentBannerList.length > 1 && (
+                  <div className="flex items-center gap-1">
+                    {currentBannerList.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setPreviewSlideIdx(i)}
+                        className={`h-1.5 rounded-full transition-all ${
+                          i === previewSlideIdx ? 'w-4 bg-white' : 'w-1.5 bg-white/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -843,46 +1024,145 @@ export function StoreSettings() {
                 type="button"
                 variant="primary"
                 size="md"
-                disabled={uploadingBanner}
+                disabled={uploadingBanner || currentBannerList.length >= 5}
                 onClick={() => bannerInputRef.current?.click()}
                 className="gap-2 text-xs shrink-0"
               >
                 <Upload className="size-4" />
-                {uploadingBanner ? 'Uploading...' : 'Upload Banner Photo'}
+                {uploadingBanner
+                  ? 'Uploading...'
+                  : currentBannerList.length >= 5
+                  ? 'Max 5 Photos Reached'
+                  : `Upload Photo (${currentBannerList.length}/5)`}
               </Button>
             </div>
           </div>
 
+          {/* Photo Slides List / Order Management */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold text-ink flex items-center justify-between">
+              <span>Photo Slides Order ({currentBannerList.length}):</span>
+              <span className="text-[11px] font-normal text-ink-soft">Use arrows to change slide order</span>
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {currentBannerList.map((url, idx) => (
+                <div
+                  key={`${url}-${idx}`}
+                  className={`p-2.5 rounded-none border flex items-center justify-between gap-2.5 transition-colors ${
+                    idx === previewSlideIdx
+                      ? 'border-accent bg-accent/5'
+                      : 'border-border bg-surface hover:bg-surface-sunken'
+                  }`}
+                >
+                  {/* Thumbnail & Title */}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span className="size-5 rounded-full bg-ink/10 text-ink text-[10px] font-bold flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div className="relative h-12 w-20 shrink-0 overflow-hidden border border-border bg-black/20">
+                      <img
+                        src={resolveImageUrl(url)}
+                        alt={`Slide ${idx + 1}`}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/banner.webp';
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-ink truncate">
+                        {idx === 0 ? 'Cover Slide' : `Slide #${idx + 1}`}
+                      </span>
+                      <span className="text-[10px] text-ink-soft font-mono truncate">
+                        {url.length > 20 ? `...${url.slice(-17)}` : url}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions: Preview, Left, Right, Delete */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      title="Preview this slide"
+                      onClick={() => setPreviewSlideIdx(idx)}
+                      className={`p-1.5 rounded-none border transition-colors ${
+                        idx === previewSlideIdx
+                          ? 'border-accent bg-accent text-white'
+                          : 'border-border text-ink-soft hover:text-ink hover:bg-surface-sunken'
+                      }`}
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Move slide left"
+                      disabled={idx === 0}
+                      onClick={() => handleMoveBanner(idx, 'left')}
+                      className="p-1.5 rounded-none border border-border text-ink-soft hover:text-ink hover:bg-surface-sunken disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Move slide right"
+                      disabled={idx === currentBannerList.length - 1}
+                      onClick={() => handleMoveBanner(idx, 'right')}
+                      className="p-1.5 rounded-none border border-border text-ink-soft hover:text-ink hover:bg-surface-sunken disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Remove this slide"
+                      disabled={currentBannerList.length <= 1}
+                      onClick={() => handleRemoveBanner(idx)}
+                      className="p-1.5 rounded-none border border-border text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Quick Banner Presets & Advanced Toggle */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border mt-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-ink-faint font-medium">Quick Presets:</span>
               <button
                 type="button"
-                onClick={() => setConfig((prev) => ({ ...prev, menuBannerUrl: '/banner.webp' }))}
-                className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  config.menuBannerUrl === '/banner.webp'
-                    ? 'border-accent bg-accent/10 text-accent font-bold'
-                    : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
+                onClick={() => handleAddPresetBanner('/banner.webp')}
+                className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink flex items-center gap-1"
               >
-                Default (Ai-Cha &amp; Zhengda)
+                <Plus className="size-3" /> Add Ai-Cha Banner
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddPresetBanner('/images/zhengda_downloads/web-banner-zhengda_1_.webp')}
+                className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink flex items-center gap-1"
+              >
+                <Plus className="size-3" /> Add Zhengda Banner
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    menuBannerUrl: '/images/zhengda_downloads/web-banner-zhengda_1_.webp',
-                  }))
+                  handleResetBanners([
+                    '/banner.webp',
+                    '/images/zhengda_downloads/web-banner-zhengda_1_.webp',
+                  ])
                 }
-                className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  config.menuBannerUrl === '/images/zhengda_downloads/web-banner-zhengda_1_.webp'
-                    ? 'border-accent bg-accent/10 text-accent font-bold'
-                    : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
+                className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
               >
-                Zhengda Banner
+                Set Combo (Ai-Cha + Zhengda)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleResetBanners(['/banner.webp'])}
+                className="rounded-none border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-ink-faint hover:text-ink"
+              >
+                Reset to Default
               </button>
             </div>
 
@@ -892,18 +1172,32 @@ export function StoreSettings() {
               className="text-[11px] font-medium text-ink-faint hover:text-ink transition-colors flex items-center gap-1"
             >
               <Link className="size-3" />
-              {showManualUrls ? 'Hide URL inputs' : 'Advanced: Edit URL directly'}
+              {showManualUrls ? 'Hide URL inputs' : 'Advanced: Edit URLs directly'}
             </button>
           </div>
 
           {showManualUrls && (
-            <div className="flex gap-2 pt-1 animate-fade-in">
-              <input
-                type="text"
-                placeholder="e.g. /banner.webp or https://..."
-                value={config.menuBannerUrl}
-                onChange={(e) => setConfig((prev) => ({ ...prev, menuBannerUrl: e.target.value }))}
-                className="h-10 flex-1 rounded-none border border-border bg-surface px-3 text-xs font-mono text-ink focus:border-accent focus:outline-none"
+            <div className="flex flex-col gap-2 pt-1 animate-fade-in bg-surface-raised p-3 border border-border">
+              <span className="text-xs font-bold text-ink">Direct Image URLs (one per line, up to 5):</span>
+              <textarea
+                rows={3}
+                placeholder="e.g.&#10;/banner.webp&#10;/images/zhengda_downloads/web-banner-zhengda_1_.webp"
+                value={currentBannerList.join('\n')}
+                onChange={(e) => {
+                  const lines = e.target.value
+                    .split('\n')
+                    .map((l) => l.trim())
+                    .filter((l) => l.length > 0)
+                    .slice(0, 5);
+                  if (lines.length > 0) {
+                    setConfig((prev) => ({
+                      ...prev,
+                      menuBannerUrls: lines,
+                      menuBannerUrl: lines[0],
+                    }));
+                  }
+                }}
+                className="w-full rounded-none border border-border bg-surface p-2 text-xs font-mono text-ink focus:border-accent focus:outline-none"
               />
             </div>
           )}

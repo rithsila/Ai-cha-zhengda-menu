@@ -114,6 +114,7 @@ describe('GET /api/store/status and PUT /api/config', () => {
   it('allows manager to update menu banner URL and menu tabs config', async () => {
     const defaultRes = await request(app).get('/api/store/status');
     expect(defaultRes.body.menuBannerUrl).toBe('/banner.webp');
+    expect(defaultRes.body.menuBannerUrls).toBe(JSON.stringify(['/banner.webp']));
     expect(defaultRes.body.menuTabsConfig).toContain('ai-cha');
 
     await putConfig({ key: 'menuBannerUrl', value: '/custom-banner.jpg' });
@@ -129,6 +130,20 @@ describe('GET /api/store/status and PUT /api/config', () => {
     const parsedTabs = JSON.parse(updatedRes.body.menuTabsConfig);
     expect(parsedTabs).toHaveLength(3);
     expect(parsedTabs[2].label).toBe('Coffee');
+
+    // Test multiple banner photos
+    const multipleBanners = ['/banner1.webp', '/banner2.webp', '/banner3.webp'];
+    await putConfig({ key: 'menuBannerUrls', value: JSON.stringify(multipleBanners) });
+    const multiRes = await request(app).get('/api/store/status');
+    expect(multiRes.body.menuBannerUrls).toBe(JSON.stringify(multipleBanners));
+    expect(multiRes.body.menuBannerUrl).toBe('/banner1.webp');
+
+    // Reject > 5 banners
+    const resOverLimit = await request(app)
+      .put('/api/config')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ key: 'menuBannerUrls', value: JSON.stringify(['/1.jpg', '/2.jpg', '/3.jpg', '/4.jpg', '/5.jpg', '/6.jpg']) });
+    expect(resOverLimit.status).toBe(400);
   });
 
   it('allows manager to update shop info and social media badges', async () => {
