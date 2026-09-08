@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useCallback, useState } from 'react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import {
   Package,
@@ -14,7 +14,8 @@ import {
 } from '@phosphor-icons/react';
 import { formatCurrency } from '../utils/format';
 import type { CartItem, MenuItem } from '../types';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { hasIdentity } from '../utils/api';
+import { useMyOrders } from '../hooks/useMyOrders';
 import { SignInPrompt } from './SignInPrompt';
 import { useOnlinePaymentState } from '../utils/onlinePayment';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
@@ -76,47 +77,19 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   const signedIn = hasIdentity();
   const khqrOffered = useOnlinePaymentState() === 'available';
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, ordersLoading: loading, mutateOrders } = useMyOrders({ poll: true });
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [paidCode, setPaidCode] = useState<string | null>(null);
 
-  const panelOpenRef = useRef(false);
-  panelOpenRef.current = selectedOrderId !== null;
-
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await apiFetch(ME.orders());
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setLoading(false);
-      return;
-    }
-    fetchOrders();
-    const interval = setInterval(() => {
-      if (!panelOpenRef.current) fetchOrders();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchOrders, signedIn]);
+  const dragControls = useDragControls();
 
   const handlePaid = useCallback(
     (pickupCode: string) => {
       setSelectedOrderId(null);
       setPaidCode(pickupCode);
-      fetchOrders();
+      mutateOrders();
     },
-    [fetchOrders]
+    [mutateOrders]
   );
 
   const handleReorder = (order: Order) => {
@@ -134,11 +107,29 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   };
 
   const getStatusBadge = (order: Order) => {
-    if (isExpiredKhqrPayment(order)) {
+    if (isExpiredKhqrPayment(order) || order.cancelReason === 'Payment expired') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
           <X size={13} weight="bold" />
-          {t('paymentFailed', 'Payment failed')}
+          {t('qrExpired', 'QR expired')}
+        </span>
+      );
+    }
+
+    if (order.status === 'cancelled' && (order.cancelReason === 'Payment declined' || order.cancelReason?.toLowerCase().includes('declined'))) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
+          <X size={13} weight="bold" />
+          {t('paymentDeclined', 'Payment declined')}
+        </span>
+      );
+    }
+
+    if (order.status === 'cancelled' && order.cancelReason === 'Customer cancelled payment') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
+          <X size={13} weight="bold" />
+          {t('paymentCancelled', 'Payment cancelled')}
         </span>
       );
     }
@@ -148,7 +139,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/15 text-yellow-700">
             <Clock size={13} weight="bold" />
-            {t('pending', 'Pending')}
+            {order.paymentMethod === 'khqr' ? t('awaitingPaymentConfirmation', 'Pending') : t('pending', 'Pending')}
           </span>
         );
       case 'preparing':
@@ -226,7 +217,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
           >
             <CheckCircle size={24} weight="fill" className="text-green-600 flex-shrink-0" />
             <div className="flex-1">
-              <h3 className="font-bold text-tg-text">{t('paymentDone', 'Payment done')}</h3>
+              <h3 className="font-bold text-tg-text">{t('paymentSuccessful', 'Payment successful')}</h3>
               <p className="text-sm text-tg-hint">
                 {t('showThisCode', 'Show this code at the counter:')}
               </p>
@@ -289,16 +280,22 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                     {shortDate(order.createdAt)}
                   </p>
 
-                  {isCancelled && !paymentFailed && order.cancelReason && (
+                  {isCancelled && !paymentFailed && order.cancelReason && !order.cancelReason.startsWith('Late ABA payment') && (
                     <p className="text-xs font-semibold text-rose-500 mt-1">
-                      Reason: {order.cancelReason}
+                      {order.cancelReason === 'Payment expired'
+                        ? t('qrExpired', 'QR expired')
+                        : order.cancelReason === 'Customer cancelled payment'
+                        ? t('paymentCancelled', 'Payment cancelled')
+                        : order.cancelReason}
                     </p>
                   )}
                   {isCancelled && (
                     <p className="text-xs text-tg-hint mt-0.5">
-                      {paymentFailed
-                        ? t('paymentFailedExpired', 'KHQR payment was not completed before the QR code expired. You were not charged.')
-                        : t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
+                      {paymentFailed || order.cancelReason === 'Payment expired'
+                        ? t('paymentFailedExpired', 'KHQR payment was not completed before the QR code expired.')
+                        : order.cancelReason === 'Customer cancelled payment'
+                        ? t('paymentCancelledDesc', 'Your payment was cancelled and your order has not been placed.')
+                        : t('orderCancelledDesc', 'This order was cancelled.')}
                     </p>
                   )}
                 </div>
@@ -321,7 +318,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
 
               {/* Items List */}
               <ul className="space-y-1.5 mb-3 text-sm">
-                {order.items.map(item => (
+                {order.items.map((item: any) => (
                   <li key={item.id} className="flex justify-between text-tg-text">
                     <span className="font-medium">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
                     <span className="text-tg-hint text-xs">{formatCurrency(item.price)}</span>
@@ -329,24 +326,31 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 ))}
               </ul>
 
-              {/* Stamps Earned Tag */}
-              {!isCancelled && (order.pointsEarned ?? 0) > 0 && (() => {
-                const eligibleCount = order.items?.reduce(
-                  (sum, i) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
-                  0
-                ) ?? 0;
-                const freeClaimed = Math.floor((order.pointsRedeemed ?? 0) / 100);
-                const itemStamps = Math.max(0, eligibleCount - freeClaimed);
-                const stamps = itemStamps > 0 ? itemStamps : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
-                return (
-                  <div className="mb-3">
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
-                      <Sparkle size={14} weight="fill" />
-                      +{stamps} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
-                    </span>
-                  </div>
-                );
-              })()}
+              {/* Rewards Earned Tags */}
+              {!isCancelled && (
+                <div className="mb-3 flex items-center gap-2 flex-wrap">
+                  {(order.pointsEarned ?? 0) > 0 && (() => {
+                    const eligibleCount = order.items?.reduce(
+                      (sum: number, i: any) => sum + (i.menuItem?.earnsStamp !== false ? i.quantity : 0),
+                      0
+                    ) ?? 0;
+                    const freeClaimed = Math.floor((order.pointsRedeemed ?? 0) / 100);
+                    const itemStamps = Math.max(0, eligibleCount - freeClaimed);
+                    const stamps = itemStamps > 0 ? itemStamps : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
+                    return (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
+                        <Sparkle size={14} weight="fill" />
+                        +{stamps} {stamps === 1 ? t('stamp', 'stamp') : t('stamps', 'stamps')}
+                      </span>
+                    );
+                  })()}
+
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg border border-amber-500/20">
+                    <span>🎟️</span>
+                    <span>+1 {t('luckyTicket', 'Ticket')}</span>
+                  </span>
+                </div>
+              )}
 
               {/* Actions: Pay Now for unpaid orders, or Reorder for past orders */}
               {isPending ? (
@@ -401,29 +405,52 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
             onClick={() => setSelectedOrderId(null)}
           >
             <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              drag="y"
+              dragControls={dragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0 }}
+              dragElastic={{ top: 0, bottom: 0.6 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 80 || info.velocity.y > 400) {
+                  setSelectedOrderId(null);
+                }
+              }}
               onClick={e => e.stopPropagation()}
-              className="w-full sm:max-w-md bg-tg-bg rounded-t-3xl sm:rounded-3xl p-4 max-h-[90vh] overflow-y-auto"
+              className="w-full sm:max-w-md bg-tg-bg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-tg-text">{t('payWithKhqr', 'Pay with KHQR')}</h3>
-                <button
-                  onClick={() => setSelectedOrderId(null)}
-                  aria-label={t('close', 'Close')}
-                  className="p-2 rounded-full text-tg-hint active:scale-90 transition-transform"
-                >
-                  <X size={20} />
-                </button>
+              <div
+                onPointerDown={(e) => {
+                  if ((e.target as HTMLElement).closest('button')) return;
+                  dragControls.start(e);
+                }}
+                className="border-b border-tg-hint/20 sticky top-0 bg-tg-bg z-10 touch-none select-none cursor-grab active:cursor-grabbing rounded-t-3xl"
+              >
+                <div className="w-12 h-1 bg-tg-hint/30 rounded-full mx-auto mt-3 mb-1" />
+                <div className="flex items-center justify-between px-4 pb-3">
+                  <h3 className="font-bold text-tg-text">{t('payWithKhqr', 'Pay with KHQR')}</h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderId(null)}
+                    aria-label={t('close', 'Close')}
+                    className="p-2 rounded-full text-tg-hint hover:text-tg-text active:scale-90 transition-transform"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
-              <KhqrPaymentPanel
-                orderId={selectedOrderId}
-                onPaid={handlePaid}
-                onCancel={() => setSelectedOrderId(null)}
-                onUseCash={() => setSelectedOrderId(null)}
-              />
+              <div className="p-4 overflow-y-auto flex-1 flex flex-col">
+                <KhqrPaymentPanel
+                  orderId={selectedOrderId}
+                  onPaid={handlePaid}
+                  onCancel={() => setSelectedOrderId(null)}
+                  onExpired={() => setSelectedOrderId(null)}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}

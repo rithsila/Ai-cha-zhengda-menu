@@ -58,6 +58,9 @@ export function stubAbaFetch(opts: { purchase?: any; status?: any } = {}) {
     if (href.includes('/payments/purchase')) {
       return reply(opts.purchase ?? DEFAULT_PURCHASE);
     }
+    if (href.includes('close-transaction')) {
+      return reply({ status: { code: '00', message: 'Success!' } });
+    }
     return { ok: false, status: 404, text: async () => 'not stubbed' };
   });
   vi.stubGlobal('fetch', spy);

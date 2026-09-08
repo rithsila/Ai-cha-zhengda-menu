@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { FormEvent, ChangeEvent } from 'react';
 import {
   X,
@@ -11,8 +11,13 @@ import {
   AlertCircle,
   Award
 } from 'lucide-react';
-import { Button, CustomSelect, Segmented, Switch, useToast } from './ui';
-import { API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
+import { Button } from './ui/Button';
+import { CustomSelect } from './ui/CustomSelect';
+import { Switch } from './ui/Switch';
+import { useToast } from './ui/Toast';
+import { API_BASE, apiFetch, authHeaders, resolveImageUrl } from '../lib/api';
+
+import type { Category } from './CategoryManagementModal';
 
 export type ModifierOptionInput = {
   id?: string;
@@ -32,7 +37,7 @@ export type ModifierGroupInput = {
 
 export type MenuItemFull = {
   id?: string;
-  brand: string;
+  brand?: string;
   category: string;
   name: string;
   description?: string | null;
@@ -144,8 +149,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [brand, setBrand] = useState<'ai-cha' | 'zhengda'>('ai-cha');
-  const [category, setCategory] = useState('Milk Tea');
+  const [brand, setBrand] = useState<string>('default');
+  const [category, setCategory] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [basePrice, setBasePrice] = useState('1.50');
@@ -154,7 +159,14 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const [canClaim, setCanClaim] = useState(false);
   const [modifiers, setModifiers] = useState<ModifierGroupInput[]>([]);
 
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,9 +181,48 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     }
   }, [isOpen]);
 
+  const [availableTabs, setAvailableTabs] = useState<Array<{ id: string; label: string }>>([
+    { id: 'ai-cha', label: 'Ai-Cha' },
+    { id: 'zhengda', label: 'Zhengda' },
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    apiFetch<any>('/api/store/status')
+      .then((data) => {
+        if (data?.menuTabsConfig) {
+          try {
+            const parsed = typeof data.menuTabsConfig === 'string'
+              ? JSON.parse(data.menuTabsConfig)
+              : data.menuTabsConfig;
+            if (Array.isArray(parsed)) {
+              const enabled = parsed
+                .filter((t: any) => t.enabled !== false && t.id)
+                .map((t: any) => ({
+                  id: String(t.id).trim().toLowerCase(),
+                  label: String(t.label || t.id).trim(),
+                }));
+              if (enabled.length > 0) {
+                setAvailableTabs(enabled);
+              }
+            }
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
+  const tabOptions = useMemo(() => {
+    const options = availableTabs.map((t) => ({ value: t.id, label: t.label }));
+    if (brand && !options.some((o) => o.value.toLowerCase() === brand.toLowerCase())) {
+      options.push({ value: brand, label: brand === 'default' ? 'Default / Both' : brand });
+    }
+    return options;
+  }, [availableTabs, brand]);
+
   useEffect(() => {
     if (item) {
-      setBrand(item.brand.toLowerCase() === 'zhengda' ? 'zhengda' : 'ai-cha');
+      setBrand(item.brand ? item.brand.toLowerCase() : 'ai-cha');
       setCategory(item.category || '');
       setName(item.name || '');
       setDescription(item.description || '');
@@ -196,7 +247,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       );
     } else {
       setBrand('ai-cha');
-      setCategory('Milk Tea');
+      setCategory('');
       setName('');
       setDescription('');
       setBasePrice('1.50');
@@ -205,38 +256,239 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setCanClaim(false);
       setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
     }
+    setIsAddingCategory(false);
+    setNewCategoryName('');
     setError(null);
   }, [item, isOpen]);
 
-  if (!isOpen) return null;
+  const itemCategory = item?.category;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    setLoadingCategories(true);
+
+    fetch(`${API_BASE}/api/categories`, {
+      headers: authHeaders(),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to fetch categories');
+        }
+        return res.json();
+      })
+      .then((data: Category[]) => {
+        if (!isMounted) return;
+        setCategories(data);
+
+        if (itemCategory) {
+          setCategory(itemCategory);
+          return;
+        }
+
+        if (data.length > 0) {
+          setCategory(data[0].name);
+        } else {
+          setCategory('');
+        }
+      })
+      .catch((err) => {
+        console.error('Error fetching categories:', err);
+        if (isMounted) {
+          setCategories([]);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingCategories(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, itemCategory]);
+
+  const handleQuickAddCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      toast({
+        title: 'Category name is required',
+        variant: 'error',
+      });
+      return;
+    }
+
+    setCreatingCategory(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ brand, name: trimmed }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to add category');
+      }
+
+      const createdName = data.name || trimmed;
+      setCategories((prev) => {
+        if (prev.some((c) => c.name.toLowerCase() === createdName.toLowerCase())) {
+          return prev;
+        }
+        return [
+          ...prev,
+          data.id
+            ? data
+            : {
+                id: `cat_${Date.now()}`,
+                brand,
+                name: createdName,
+                sortOrder: prev.length,
+                isActive: true,
+              },
+        ];
+      });
+
+      setCategory(createdName);
+      setIsAddingCategory(false);
+      setNewCategoryName('');
+      toast({
+        title: 'Category created',
+        description: `"${createdName}" has been added and selected.`,
+        variant: 'success',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not create category',
+        description: err.message || 'An error occurred',
+        variant: 'error',
+      });
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
+  const categoryOptions = useMemo(() => {
+    const opts = categories.map((c) => ({
+      value: c.name,
+      label: c.name,
+    }));
+    if (category && !opts.some((o) => o.value.toLowerCase() === category.trim().toLowerCase())) {
+      opts.unshift({
+        value: category,
+        label: category,
+      });
+    }
+    return opts;
+  }, [categories, category]);
 
   const isEditing = Boolean(item?.id);
 
-  const handleImageFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+  const uploadImageFile = useCallback(
+    async (file: File) => {
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: 'Invalid file type',
+          description: 'Please select or paste an image file.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image is too large. Maximum size is 5MB.');
+        toast({
+          title: 'Image too large',
+          description: 'Maximum allowed image size is 5MB.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      setUploadingImage(true);
+      setError(null);
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const res = await fetch(`${API_BASE}/api/upload`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: formData,
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Upload failed');
+        }
+        const data = await res.json();
+        setImage(data.url);
+        toast({ title: 'Image uploaded', variant: 'success' });
+      } catch (err: any) {
+        setError(err?.message || 'Failed to upload image. Ensure it is PNG/JPG under 5MB.');
+        toast({
+          title: 'Upload failed',
+          description: err?.message || 'Could not upload image',
+          variant: 'error',
+        });
+      } finally {
+        setUploadingImage(false);
+      }
+    },
+    [toast]
+  );
+
+  const handleImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    setUploadingImage(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const res = await fetch(`${API_BASE}/api/upload`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      setImage(data.url);
-      toast({ title: 'Image uploaded', variant: 'success' });
-    } catch {
-      setError('Failed to upload image. Ensure it is PNG/JPG under 5MB.');
-    } finally {
-      setUploadingImage(false);
-    }
+    uploadImageFile(file);
+    e.target.value = '';
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const clipboardFiles = e.clipboardData?.files;
+      let imageFile: File | null = null;
+
+      if (clipboardFiles && clipboardFiles.length > 0) {
+        for (let i = 0; i < clipboardFiles.length; i++) {
+          if (clipboardFiles[i].type.startsWith('image/')) {
+            imageFile = clipboardFiles[i];
+            break;
+          }
+        }
+      }
+
+      if (!imageFile && e.clipboardData?.items) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.startsWith('image/')) {
+            const blob = items[i].getAsFile();
+            if (blob) {
+              imageFile = blob;
+              break;
+            }
+          }
+        }
+      }
+
+      if (imageFile) {
+        e.preventDefault();
+        uploadImageFile(imageFile);
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [isOpen, uploadImageFile]);
+
 
   // Modifier Groups Management
   const loadDrinkPreset = () => {
@@ -424,6 +676,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto"
@@ -464,35 +718,98 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             </div>
           )}
 
-          {/* Brand & Category */}
+          {/* Menu Tab & Category */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Menu Tab / Brand */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-                Brand
+                Menu Tab / Brand
               </label>
-              <Segmented
-                options={[
-                  { id: 'ai-cha', label: 'Ai-Cha' },
-                  { id: 'zhengda', label: 'Zhengda' },
-                ]}
+              <CustomSelect
                 value={brand}
-                onChange={(val) => setBrand(val as 'ai-cha' | 'zhengda')}
-                ariaLabel="Select Brand"
+                onChange={(val) => setBrand(val)}
+                options={tabOptions}
+                placeholder="Select Menu Tab"
+                aria-label="Menu Tab / Brand"
               />
             </div>
 
+            {/* Category */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
                 Category
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Milk Tea, Ice Cream, Signature, Frappe"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
-              />
+              {isAddingCategory ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="New category name"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickAddCategory();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsAddingCategory(false);
+                        setNewCategoryName('');
+                      }
+                    }}
+                    className="h-10 flex-1 rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    loading={creatingCategory}
+                    onClick={handleQuickAddCategory}
+                    className="font-bold shrink-0 rounded-none"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={creatingCategory}
+                    onClick={() => {
+                      setIsAddingCategory(false);
+                      setNewCategoryName('');
+                    }}
+                    className="font-bold shrink-0 rounded-none"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CustomSelect
+                      value={category}
+                      onChange={(val) => setCategory(val)}
+                      options={categoryOptions}
+                      placeholder={loadingCategories ? 'Loading categories...' : 'Select category'}
+                      disabled={loadingCategories}
+                      aria-label="Category"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setIsAddingCategory(true);
+                      setNewCategoryName('');
+                    }}
+                    className="font-bold shrink-0 rounded-none"
+                  >
+                    <Plus className="size-3.5" />
+                    New
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -548,8 +865,23 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
             <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
               Item Image
             </label>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="relative flex size-20 items-center justify-center rounded-none border border-border bg-surface-sunken overflow-hidden">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) uploadImageFile(file);
+              }}
+              className={`flex flex-wrap items-center gap-4 p-3 border border-dashed transition-colors ${
+                isDragging ? 'border-accent bg-accent/10' : 'border-border bg-surface-sunken/30'
+              }`}
+            >
+              <div className="relative flex size-20 items-center justify-center rounded-none border border-border bg-surface-sunken overflow-hidden shrink-0">
                 {image ? (
                   <img
                     src={resolveImageUrl(image)}
@@ -561,7 +893,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 )}
               </div>
 
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 space-y-2 min-w-[220px]">
                 <div className="flex items-center gap-2">
                   <input
                     type="file"
@@ -593,6 +925,9 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                     </Button>
                   )}
                 </div>
+                <p className="text-[11px] text-ink-soft">
+                  Press <kbd className="px-1 py-0.5 rounded-xs bg-surface border border-border font-mono text-[10px] text-ink">Ctrl+V</kbd> or <kbd className="px-1 py-0.5 rounded-xs bg-surface border border-border font-mono text-[10px] text-ink">⌘V</kbd> to paste screenshot / image, or drag &amp; drop here.
+                </p>
               </div>
             </div>
           </div>
@@ -803,7 +1138,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                       <Button
                         type="button"
                         variant="ghost"
-                        size="md"
+                        size="xs"
                         onClick={() => addOptionToGroup(gIdx)}
                         className="text-xs text-accent mt-1"
                       >

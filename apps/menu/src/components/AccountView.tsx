@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, House, Storefront, CreditCard, Money } from '@phosphor-icons/react';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { useProfile } from '../hooks/useProfile';
+import { useConfig } from '../hooks/useConfig';
 import { SignInPrompt } from './SignInPrompt';
 import { AddressForm, AddressSummary } from './AddressForm';
 import { isValidBuilding, isValidRoom, formatPhone, SHOP_UNIT, RESIDENCE_NAME } from '../utils/address';
@@ -107,40 +108,28 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const storeStatus = useStoreStatus();
   const khqrOffered = useOnlinePaymentState() === 'available';
   const [defaultMethod, setMethod] = useState<PaymentMethod>(() => getDefaultPaymentMethod());
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { profile, profileLoading, mutateProfile, signedIn } = useProfile();
+  const { configRows, configLoading } = useConfig();
+  const allowCashForStandard = configRows.find(r => r.key === 'allowCashForStandard')?.value === '1';
+  const loading = profileLoading || configLoading;
   const [editing, setEditing] = useState(false);
   const [imgError, setImgError] = useState(false);
   const tgUser = getTelegramDisplayUser();
-  // A profile, address and phone number belong to one person. Without a
-  // verified identity every guest would share the same row.
-  const signedIn = hasIdentity();
+
+  const userTier = profile?.tier || 'standard';
+  const isCashUnlocked = userTier === 'gold' || allowCashForStandard;
+  const cashAllowed = storeStatus.enableCash && isCashUnlocked;
 
   useEffect(() => {
-    if (!signedIn) {
-      setLoading(false);
-      return;
-    }
-    const fetchData = async () => {
-      try {
-        const userRes = await apiFetch(ME.profile());
-
-        if (userRes.ok) setProfile(await userRes.json());
-      } catch (err) {
-        console.error('Failed to fetch account data', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [signedIn]);
-
-  useEffect(() => {
-    if (!khqrOffered && defaultMethod === 'khqr') {
+    if (loading) return;
+    if (!cashAllowed && defaultMethod === 'cash' && khqrOffered) {
+      setMethod('khqr');
+      setDefaultPaymentMethod('khqr');
+    } else if (!khqrOffered && defaultMethod === 'khqr' && cashAllowed) {
       setMethod('cash');
       setDefaultPaymentMethod('cash');
     }
-  }, [khqrOffered, defaultMethod]);
+  }, [loading, cashAllowed, khqrOffered, defaultMethod]);
 
   const handleChangeMethod = (method: PaymentMethod) => {
     setMethod(method);
@@ -240,7 +229,7 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           {editing ? (
             <AddressForm
               profile={profile}
-              onSaved={(user) => { setProfile(user); setEditing(false); }}
+              onSaved={(user) => { mutateProfile(user, false); setEditing(false); }}
               onCancel={hasAddress ? () => setEditing(false) : undefined}
             />
           ) : hasAddress ? (
@@ -272,12 +261,14 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
           {t('defaultPaymentHint', 'We pick this for you at checkout. You can still change it there.')}
         </p>
 
-        <div className={`grid gap-3 pt-1 ${khqrOffered ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-3 pt-1 ${khqrOffered && cashAllowed ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {([
             ...(khqrOffered
               ? [{ key: 'khqr' as const, label: t('khqr', 'KHQR'), Icon: CreditCard }]
               : []),
-            { key: 'cash' as const, label: t('cash', 'Cash'), Icon: Money },
+            ...(cashAllowed
+              ? [{ key: 'cash' as const, label: t('cash', 'Cash'), Icon: Money }]
+              : []),
           ]).map(({ key, label, Icon }) => {
             const active = defaultMethod === key;
             return (

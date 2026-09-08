@@ -7,10 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
-import { apiFetch, hasIdentity } from './utils/api';
+import { hasIdentity, apiFetch } from './utils/api';
 import { refreshOnlinePaymentState } from './utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
 import { loginAsDevCustomer } from './utils/telegramUser';
+import { useLuckyDrawConfig } from './hooks/useLuckyDrawConfig';
+import { useCatalog } from './hooks/useCatalog';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
@@ -20,6 +22,7 @@ import { CategoryScroller } from './components/ui/CategoryScroller';
 import { MenuGridSkeleton, EmptyMenuState } from './components/ui/Skeleton';
 import { MenuItemCard } from './components/MenuItemCard';
 import { ModifierModal } from './components/ModifierModal';
+import { ItemPreviewModal } from './components/ItemPreviewModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrdersView } from './components/OrdersView';
@@ -61,8 +64,8 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
   const botName = import.meta.env.VITE_BOT_NAME || 'aicha_zhengda_arakawa_bot';
 
   return (
-    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-[#0A0D14]">
-      {/* Dynamic Brand Ambient Glow Orbs */}
+    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-gradient-to-br from-[#FFF5F5] via-[#FFF9F6] to-[#FEE2E2]">
+      {/* Dynamic Brand Ambient Glow Orbs: Ai-Cha Red + Zhengda Golden Amber */}
       <motion.div
         animate={{
           scale: [1, 1.25, 1],
@@ -71,7 +74,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           y: [0, -40, 0],
         }}
         transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#10b981]/30 via-[#059669]/20 to-transparent blur-3xl pointer-events-none"
+        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#e53935]/25 via-[#dc2626]/15 to-transparent blur-3xl pointer-events-none"
       />
       <motion.div
         animate={{
@@ -81,7 +84,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           y: [0, 35, 0],
         }}
         transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#e53935]/30 via-[#ef4444]/20 to-transparent blur-3xl pointer-events-none"
+        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#f59e0b]/25 via-[#d97706]/15 to-transparent blur-3xl pointer-events-none"
       />
       <motion.div
         animate={{
@@ -89,13 +92,13 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           opacity: [0.15, 0.3, 0.15],
         }}
         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#38bdf8]/15 via-transparent to-transparent blur-2xl pointer-events-none"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#e53935]/10 via-transparent to-transparent blur-2xl pointer-events-none"
       />
 
-      {/* Subtle Pattern Grid */}
+      {/* Subtle Warm Pattern Grid */}
       <div 
-        className="absolute inset-0 opacity-[0.04] pointer-events-none" 
-        style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+        className="absolute inset-0 opacity-[0.07] pointer-events-none" 
+        style={{ backgroundImage: 'radial-gradient(rgba(229, 57, 53, 0.35) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
       />
 
       {/* Double-Bezel Hardware Card Container */}
@@ -103,28 +106,32 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-sm p-2 rounded-[2.5rem] bg-gradient-to-b from-white/15 to-white/5 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-2xl"
+        className="relative z-10 w-full max-w-sm p-2.5 rounded-[2.5rem] bg-white/70 border border-rose-200/70 shadow-[0_20px_50px_rgba(229,57,53,0.12),0_4px_20px_rgba(245,158,11,0.08)] backdrop-blur-2xl"
       >
-        <div className="p-7 sm:p-8 rounded-[2rem] bg-[#111827]/85 border border-white/10 shadow-inner flex flex-col items-center">
+        <div className="p-7 sm:p-8 rounded-[2rem] bg-white border border-rose-100/80 shadow-sm flex flex-col items-center">
           
           {/* Dual Brand Header Floating Badges */}
-          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md shadow-sm">
+          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-rose-50/80 border border-rose-200/60 shadow-xs">
             <div className="flex items-center gap-1.5">
-              <img src="/images/aicha-logo.webp" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
-              <span className="text-xs font-bold text-white tracking-wide">Ai-Cha</span>
+              <img src="/images/aicha-logo.webp" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-sm" />
+              <span className="text-xs font-bold text-slate-800 tracking-wide">Ai-Cha</span>
             </div>
-            <span className="text-white/30 text-xs font-light">✕</span>
+            <span className="text-[#e53935] font-extrabold text-sm">+</span>
             <div className="flex items-center gap-1.5">
-              <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
-              <span className="text-xs font-bold text-white tracking-wide">Zhengda</span>
+              <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-sm" />
+              <span className="text-xs font-bold text-slate-800 tracking-wide">Zhengda</span>
             </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2">
-            Fresh Tea & Crispy
+          <p className="text-xs font-bold uppercase tracking-widest text-[#e53935] mb-1">
+            Welcome to
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2 leading-tight">
+            Ai-Cha & Zhengda<br />
+            <span className="text-amber-600 font-bold text-lg sm:text-xl">Arakawa Branch</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300/80 mb-8 max-w-[260px] leading-relaxed">
-            Order your favorite boba, smoothies & crispy chicken on Telegram.
+          <p className="text-xs sm:text-sm text-slate-600 mb-7 max-w-[280px] leading-relaxed">
+            Order fresh boba, ice cream & crispy chicken on Telegram.
           </p>
 
           {/* Primary CTA - Open in Telegram App */}
@@ -136,7 +143,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
             }}
             target="_blank"
             rel="noopener noreferrer"
-            className="group relative flex items-center justify-center gap-3 w-full py-3.5 px-5 bg-gradient-to-r from-[#2AABEE] to-[#229ED9] hover:from-[#32b2f5] hover:to-[#25a5e3] text-white text-sm font-bold rounded-2xl transition-all duration-300 shadow-[0_8px_24px_rgba(42,171,238,0.35)] hover:shadow-[0_12px_28px_rgba(42,171,238,0.45)] active:scale-[0.98]"
+            className="group relative flex items-center justify-center gap-3 w-full py-3.5 px-5 bg-gradient-to-r from-[#e53935] to-[#d32f2f] hover:from-[#f0433f] hover:to-[#c62828] text-white text-sm font-bold rounded-2xl transition-all duration-300 shadow-[0_8px_24px_rgba(229,57,53,0.32)] hover:shadow-[0_12px_28px_rgba(229,57,53,0.42)] active:scale-[0.98]"
           >
             <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6">
               <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
@@ -150,9 +157,10 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           <button
             type="button"
             onClick={onContinueAsGuest}
-            className="mt-4 text-xs font-semibold text-slate-400 hover:text-white transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-white/5"
+            className="mt-3 flex items-center justify-center gap-2 w-full py-3 px-5 bg-rose-50 hover:bg-rose-100/80 text-[#e53935] text-sm font-bold rounded-2xl border border-rose-200/80 transition-all duration-200 active:scale-[0.98]"
           >
-            Or browse as guest →
+            <span>Browse Menu as Guest</span>
+            <span>→</span>
           </button>
 
           {import.meta.env.DEV && (
@@ -162,7 +170,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
                 await loginAsDevCustomer('dev_test_customer');
                 onContinueAsGuest();
               }}
-              className="mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-emerald-500/10 flex items-center gap-1.5"
+              className="mt-2 text-xs font-bold text-amber-700 hover:text-amber-800 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-amber-100/60 flex items-center gap-1.5"
             >
               <span>🧪</span> Sign in with Test Account (Dev)
             </button>
@@ -171,7 +179,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
       </motion.div>
 
       {/* Subtle Footer Identity */}
-      <p className="relative z-10 text-[11px] font-medium text-slate-500 mt-8 tracking-wider uppercase">
+      <p className="relative z-10 text-[11px] font-semibold text-slate-400 mt-8 tracking-wider uppercase">
         Arakawa Branch • Official Menu
       </p>
     </div>
@@ -192,26 +200,24 @@ export default function App() {
   const [activeModalItem, setActiveModalItem] = useState<MenuItem | null>(null);
   const [modalInitialSelected, setModalInitialSelected] = useState<Record<string, ModifierOption[]> | undefined>();
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<MenuItem | null>(null);
   
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [pickupCode, setPickupCode] = useState('');
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<'khqr' | 'cash' | null>(null);
+  const [activePendingOrderId, setActivePendingOrderId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem('ai_cha_active_payment');
+    } catch {
+      return null;
+    }
+  });
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
-  const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
-
-  useEffect(() => {
-    apiFetch('/api/lucky-draw/config')
-      .then(async (res) => {
-        if (res.ok) {
-          const cfg = await res.json();
-          setLuckyDrawEnabled(cfg.enabled !== false);
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const { luckyDrawEnabled } = useLuckyDrawConfig();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -248,6 +254,64 @@ export default function App() {
     }
   }, [menuTabs, activeBrand]);
 
+  // Multi-photo banner list from storeStatus
+  const bannerList = useMemo(() => {
+    if (storeStatus.menuBannerUrls) {
+      try {
+        const parsed = typeof storeStatus.menuBannerUrls === 'string'
+          ? JSON.parse(storeStatus.menuBannerUrls)
+          : storeStatus.menuBannerUrls;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.filter((u): u is string => typeof u === 'string' && u.trim().length > 0);
+          if (valid.length > 0) return valid;
+        }
+      } catch {}
+    }
+    return [storeStatus.menuBannerUrl || '/banner.webp'];
+  }, [storeStatus.menuBannerUrls, storeStatus.menuBannerUrl]);
+
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [isBannerPaused, setIsBannerPaused] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  // Auto-slide banner every 4.5 seconds
+  useEffect(() => {
+    if (bannerList.length <= 1 || isBannerPaused) return;
+    const timer = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % bannerList.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [bannerList.length, isBannerPaused]);
+
+  // Keep index within bounds if photos are removed
+  useEffect(() => {
+    if (currentBannerIndex >= bannerList.length) {
+      setCurrentBannerIndex(0);
+    }
+  }, [bannerList.length, currentBannerIndex]);
+
+  const handleBannerTouchStart = (e: React.TouchEvent) => {
+    setIsBannerPaused(true);
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleBannerTouchEnd = (e: React.TouchEvent) => {
+    setIsBannerPaused(false);
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX - touchEndX;
+    if (Math.abs(diff) > 40 && bannerList.length > 1) {
+      if (diff > 0) {
+        // swipe left -> next slide
+        setCurrentBannerIndex((prev) => (prev + 1) % bannerList.length);
+      } else {
+        // swipe right -> prev slide
+        setCurrentBannerIndex((prev) => (prev - 1 + bannerList.length) % bannerList.length);
+      }
+    }
+    setTouchStartX(null);
+  };
+
   // Refresh payment and store status periodically
   useEffect(() => {
     refreshOnlinePaymentState();
@@ -256,68 +320,70 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const [dynamicCatalog, setDynamicCatalog] = useState<MenuItem[]>(CATALOG);
-  const [isLoading, setIsLoading] = useState(true);
+  // Shared SWR hook — deduplicates with CheckoutModal, polls every 60s
+  const { catalogItems: rawCatalog, categoriesList, catalogLoading: isLoading } = useCatalog();
 
-  const fetchCatalog = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/catalog');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: MenuItem[] = data.map((item: any) => ({
-            id: item.id,
-            brand: item.brand,
-            category: item.category,
-            name: item.name,
-            description: item.description,
-            basePrice: item.basePrice,
-            imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
-            isSoldOut: Boolean(item.isSoldOut),
-            modifiers: item.modifiers?.map((g: any) => ({
-              id: g.key || g.id,
-              name: g.name,
-              type: g.type,
-              required: g.required,
-              options: g.options?.map((o: any) => ({
-                id: o.key || o.id,
-                name: o.name,
-                priceDelta: o.priceDelta,
-              })) || [],
-            })),
-          }));
-          setDynamicCatalog(mapped);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch dynamic catalog', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCatalog();
-    const handleFocus = () => fetchCatalog();
-    window.addEventListener('focus', handleFocus);
-    const interval = setInterval(fetchCatalog, 60000); // Poll catalog updates every 60s
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(interval);
-    };
-  }, [fetchCatalog]);
+  const dynamicCatalog = useMemo<MenuItem[]>(() => {
+    if (rawCatalog.length === 0) return CATALOG;
+    return rawCatalog.map((item: any) => ({
+      id: item.id,
+      brand: item.brand,
+      category: item.category,
+      name: item.name,
+      description: item.description,
+      basePrice: item.basePrice,
+      imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
+      isSoldOut: Boolean(item.isSoldOut),
+      modifiers: item.modifiers?.map((g: any) => ({
+        id: g.key || g.id,
+        name: g.name,
+        type: g.type,
+        required: g.required,
+        options: g.options?.map((o: any) => ({
+          id: o.key || o.id,
+          name: o.name,
+          priceDelta: o.priceDelta,
+        })) || [],
+      })),
+    }));
+  }, [rawCatalog]);
 
   // Derived state for current brand's items
   const brandItems = useMemo(() => {
     if (menuTabs.length === 0) {
       return dynamicCatalog;
     }
-    return dynamicCatalog.filter((i) => i.brand === activeBrand);
+    const isPrimaryTab = menuTabs[0]?.id?.toLowerCase() === activeBrand.toLowerCase();
+    const filtered = dynamicCatalog.filter((i) => {
+      const b = (i.brand || '').toLowerCase();
+      if (b === activeBrand.toLowerCase()) return true;
+      if (isPrimaryTab && (!b || b === 'default')) return true;
+      return false;
+    });
+    return filtered.length > 0 ? filtered : dynamicCatalog;
   }, [activeBrand, dynamicCatalog, menuTabs]);
 
   const categories = useMemo(() => {
-    return ['All', ...new Set(brandItems.map((i) => i.category))];
-  }, [brandItems]);
+    const brandCategories = categoriesList.filter(
+      (c) => !c.brand || c.brand.toLowerCase() === activeBrand.toLowerCase()
+    );
+    const orderMap = new Map<string, number>();
+    brandCategories.forEach((c) => {
+      orderMap.set(c.name.trim().toLowerCase(), c.sortOrder);
+    });
+
+    const unique = Array.from(new Set(brandItems.map((i) => i.category)));
+    unique.sort((a, b) => {
+      const orderA = orderMap.get(a.trim().toLowerCase()) ?? 999;
+      const orderB = orderMap.get(b.trim().toLowerCase()) ?? 999;
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return a.localeCompare(b);
+    });
+
+    return ['All', ...unique];
+  }, [brandItems, categoriesList, activeBrand]);
 
   // Filtered items
   const visibleItems = useMemo(() => {
@@ -452,14 +518,68 @@ export default function App() {
     }
   };
 
-  const handleCheckoutSuccess = (newPickupCode: string) => {
+  const handleCheckoutSuccess = useCallback((newPickupCode: string, method: 'khqr' | 'cash' = 'cash') => {
     if (WebApp?.HapticFeedback) WebApp.HapticFeedback.notificationOccurred?.('success');
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
+    setActivePendingOrderId(null);
     setPickupCode(newPickupCode);
+    setLastPaymentMethod(method);
     setIsSuccessOpen(true);
     setCart([]);
-  };
+  }, []);
+
+  // Check active pending KHQR payment on mount and app visibility
+  useEffect(() => {
+    const checkActivePayment = async () => {
+      let activeId: string | null = null;
+      try {
+        activeId = sessionStorage.getItem('ai_cha_active_payment');
+      } catch {}
+      if (!activeId) {
+        setActivePendingOrderId(null);
+        return;
+      }
+      try {
+        const res = await apiFetch(`/api/payment/aba/status/${activeId}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          if (res.status === 409 && errData?.lateApproved) {
+            try { sessionStorage.removeItem('ai_cha_active_payment'); } catch {}
+            setActivePendingOrderId(null);
+            handleCheckoutSuccess(errData.pickupCode || '', 'khqr');
+          }
+          return;
+        }
+        const data = await res.json();
+        if (data.status === 'APPROVED') {
+          try { sessionStorage.removeItem('ai_cha_active_payment'); } catch {}
+          setActivePendingOrderId(null);
+          handleCheckoutSuccess(data.pickupCode, 'khqr');
+        } else if (data.status === 'DECLINED' || data.status === 'EXPIRED' || data.status === 'CANCELLED') {
+          try { sessionStorage.removeItem('ai_cha_active_payment'); } catch {}
+          setActivePendingOrderId(null);
+        } else {
+          setActivePendingOrderId(activeId);
+        }
+      } catch {
+        // Network error: keep active pending payment state
+      }
+    };
+
+    checkActivePayment();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkActivePayment();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', checkActivePayment);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', checkActivePayment);
+    };
+  }, [handleCheckoutSuccess]);
 
   const cycleLanguage = () => {
     const langs = ['en', 'km', 'zh'];
@@ -474,32 +594,50 @@ export default function App() {
   }
 
   if (isSuccessOpen) {
+    const isKhqr = lastPaymentMethod === 'khqr';
     return (
       <div className="min-h-screen bg-tg-bg flex flex-col items-center justify-center p-6 text-center">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-24 h-24 bg-brand-primary rounded-full flex items-center justify-center mb-6 text-white text-4xl">
           ✓
         </motion.div>
-        <h1 className="text-3xl font-bold mb-2">{t('successTitle')}</h1>
-        <p className="text-tg-hint mb-8">{t('successDesc')}</p>
+        <h1 className="text-3xl font-bold mb-2">{isKhqr ? t('paymentSuccessful', 'Payment successful') : t('successTitle', 'Order Placed!')}</h1>
+        <p className="text-tg-hint mb-8">{isKhqr ? t('paymentSuccessfulDesc', 'Your payment has been verified. Show this code to the staff.') : t('successDescCash', 'Pay with cash at the counter. Show this code to the staff.')}</p>
         <div className="bg-tg-secondary-bg p-6 rounded-2xl w-full mb-8">
-          <p className="text-sm font-bold text-tg-hint mb-1">{t('pickupCode')}</p>
+          <p className="text-sm font-bold text-tg-hint mb-1">{t('pickupCode', 'Pickup Code')}</p>
           <p className="text-4xl font-black font-mono">{pickupCode}</p>
         </div>
-        <Button fullWidth onClick={() => setIsSuccessOpen(false)}>{t('backToMenu')}</Button>
+        <Button fullWidth onClick={() => { setIsSuccessOpen(false); setLastPaymentMethod(null); }}>{t('backToMenu', 'Back to Menu')}</Button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-tg-bg text-tg-text pb-44">
+    <div className="min-h-screen bg-tg-bg text-tg-text pb-44 overflow-x-hidden">
       <DevPersonaBar />
       {/* Top Banner Section */}
       <div 
-        className="relative bg-cover bg-center bg-no-repeat rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden"
-        style={{ backgroundImage: `url(${storeStatus.menuBannerUrl || '/banner.webp'})` }}
+        className="relative rounded-b-[2rem] pt-8 px-4 pb-4 shadow-sm overflow-hidden select-none"
+        onTouchStart={handleBannerTouchStart}
+        onTouchEnd={handleBannerTouchEnd}
+        onMouseEnter={() => setIsBannerPaused(true)}
+        onMouseLeave={() => setIsBannerPaused(false)}
       >
-        <div className="absolute inset-0 bg-black/20 z-0 pointer-events-none"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent z-0 pointer-events-none"></div>
+        {/* Sliding Background Track */}
+        <div 
+          className="absolute inset-0 z-0 flex transition-transform duration-700 ease-in-out pointer-events-none"
+          style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
+        >
+          {bannerList.map((url, idx) => (
+            <div
+              key={`${url}-${idx}`}
+              className="w-full h-full shrink-0 bg-cover bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${url})` }}
+            />
+          ))}
+        </div>
+
+        <div className="absolute inset-0 bg-black/25 z-0 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent z-0 pointer-events-none"></div>
         
         {/* Header */}
         <header className="mb-6 flex justify-between items-start relative z-10 text-white">
@@ -572,7 +710,7 @@ export default function App() {
 
             {!searchQuery && (
               <div className="mt-2">
-                {/* Brand Tabs */}
+                {/* Brand / Menu Tabs */}
                 <BrandTabs activeBrand={activeBrand} onChange={handleBrandChange} tabs={menuTabs} />
               </div>
             )}
@@ -596,6 +734,25 @@ export default function App() {
             )}
           </div>
         )}
+
+        {/* Banner Slide Indicators */}
+        {bannerList.length > 1 && (
+          <div className="relative z-10 flex items-center justify-center gap-1.5 pt-3 pb-0.5">
+            {bannerList.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                aria-label={`Go to slide ${idx + 1}`}
+                onClick={() => setCurrentBannerIndex(idx)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  idx === currentBannerIndex
+                    ? 'w-5 bg-white shadow-sm'
+                    : 'w-1.5 bg-white/40 hover:bg-white/70'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="px-4 pt-4">
@@ -615,44 +772,45 @@ export default function App() {
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeBrand}
-              initial={{ opacity: 0, x: activeBrand === 'ai-cha' ? -10 : 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: activeBrand === 'ai-cha' ? 10 : -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {/* Categories */}
-              <CategoryScroller 
-                brand={activeBrand}
-                categories={categories}
-                activeCategory={activeCategory}
-                onChange={setActiveCategory}
-              />
-
-              {/* Menu Grid */}
-              {isLoading ? (
-                <MenuGridSkeleton count={6} />
-              ) : visibleItems.length === 0 ? (
-                <EmptyMenuState 
-                  type="category" 
-                  onAction={activeCategory !== 'All' ? () => setActiveCategory('All') : undefined} 
-                />
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {visibleItems.map(item => (
-                    <MenuItemCard 
-                      key={item.id} 
-                      item={item} 
-                      onAdd={handleAddItem} 
-                      isFavorite={isFavorite(item.id)}
-                      onToggleFavorite={toggleFavorite}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    {/* Categories */}
+                    <CategoryScroller 
+                      brand={activeBrand}
+                      categories={categories}
+                      activeCategory={activeCategory}
+                      onChange={setActiveCategory}
                     />
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </>
-      )}
+
+                    {/* Menu Grid */}
+                    {isLoading ? (
+                      <MenuGridSkeleton count={6} />
+                    ) : visibleItems.length === 0 ? (
+                      <EmptyMenuState 
+                        type="category" 
+                        onAction={activeCategory !== 'All' ? () => setActiveCategory('All') : undefined} 
+                      />
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {visibleItems.map(item => (
+                          <MenuItemCard 
+                            key={item.id} 
+                            item={item} 
+                            onAdd={handleAddItem} 
+                            isFavorite={isFavorite(item.id)}
+                            onToggleFavorite={toggleFavorite}
+                            onPreview={setPreviewItem}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </>
+            )}
 
       {/* Search Results */}
       {searchQuery && (
@@ -669,6 +827,7 @@ export default function App() {
                   onAdd={handleAddItem} 
                   isFavorite={isFavorite(item.id)}
                   onToggleFavorite={toggleFavorite}
+                  onPreview={setPreviewItem}
                 />
               ))}
             </div>
@@ -686,14 +845,22 @@ export default function App() {
           return (
             <button 
               key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex-1 flex flex-col items-center py-1 px-1 rounded-xl transition-all active:scale-95 ${
+              onClick={() => {
+                setActiveTab(id);
+                window.scrollTo({ top: 0, behavior: 'instant' });
+              }}
+              className={`flex-1 flex flex-col items-center py-1 px-1 rounded-xl transition-all active:scale-95 relative ${
                 isActive 
                   ? 'text-brand-primary font-bold drop-shadow-[0_2px_6px_rgba(229,57,53,0.35)]' 
                   : 'text-tg-hint hover:text-tg-text font-medium'
               }`}
             >
-              <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
+              <div className="relative">
+                <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
+                {id === 'orders' && activePendingOrderId && (
+                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </div>
               <span className="text-[10px] mt-0.5 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
             </button>
           );
@@ -701,30 +868,34 @@ export default function App() {
       </div>
 
       {/* Floating Cart Button (Apple Liquid Glass Red Pill) */}
-      {(!WebApp?.isExpanded && cart.length > 0 && !isCartOpen) && (
-        <motion.div 
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[4.5rem] left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] z-30"
-        >
-          <button 
-            onClick={() => setIsCartOpen(true)}
-            className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-2.5 rounded-full font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_12px_30px_rgba(229,57,53,0.35),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
+      <AnimatePresence>
+        {(!WebApp?.isExpanded && cart.length > 0 && !isCartOpen) && (
+          <motion.div 
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-[4.5rem] left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] z-30"
           >
-            <div className="flex items-center gap-2 text-sm">
-              <ShoppingCart size={18} weight="fill" />
-              <span>{cart.length} {t('items')}</span>
-            </div>
-            <span className="text-sm font-black">
-              {!storeStatus.isOpen ? t('shopClosed', 'Shop Closed') : `${t('checkout')} ${formatCurrency(cartTotal)}`}
-            </span>
-          </button>
-        </motion.div>
-      )}
+            <button 
+              onClick={() => setIsCartOpen(true)}
+              className="w-full bg-gradient-to-b from-[#ef4444]/95 via-[#e53935]/90 to-[#dc2626]/95 backdrop-blur-2xl text-white py-2.5 rounded-full font-bold flex justify-between items-center px-5 border border-white/35 shadow-[0_12px_30px_rgba(229,57,53,0.35),inset_0_1.5px_1.5px_rgba(255,255,255,0.6),inset_0_-1px_1px_rgba(0,0,0,0.25)] transition-all duration-300 active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-2 text-sm">
+                <ShoppingCart size={18} weight="fill" />
+                <span>{cart.length} {t('items')}</span>
+              </div>
+              <span className="text-sm font-black">
+                {!storeStatus.isOpen ? t('shopClosed', 'Shop Closed') : `${t('checkout')} ${formatCurrency(cartTotal)}`}
+              </span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Scroll to Top Button */}
       <AnimatePresence>
-        {showScrollTop && (
+        {activeTab === 'menu' && showScrollTop && (
           <motion.button
             initial={{ opacity: 0, y: 20, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -749,6 +920,16 @@ export default function App() {
             setEditingCartItemId(null);
           }}
           onConfirm={addToCart}
+        />
+      )}
+
+      {previewItem && (
+        <ItemPreviewModal
+          item={previewItem}
+          isFavorite={isFavorite(previewItem.id)}
+          onToggleFavorite={toggleFavorite}
+          onClose={() => setPreviewItem(null)}
+          onAdd={handleAddItem}
         />
       )}
 

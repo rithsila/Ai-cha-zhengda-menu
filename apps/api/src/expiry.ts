@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
-import { refundOrderPoints } from './loyalty';
+import { refundOrderPoints, settleOrderPoints } from './loyalty';
+import { getAbaClient, closeAbaTransaction } from './app';
+import type { ABAPayWay } from 'aba-payway-sdk-unofficial';
 
 /**
  * Cancel KHQR orders that were never paid for.
@@ -31,12 +33,14 @@ export const SWEEP_INTERVAL_MS = 60 * 1000;
 
 /**
  * Cancel every unpaid, expired KHQR order and hand back the points it reserved.
- * Returns the ids it cancelled. Exported so tests can drive it directly instead
- * of waiting for the timer.
+ * Reconciles with PayWay before cancelling an apparently expired unpaid order.
+ * Preserves an unresolved state when verification is unavailable.
+ * Returns the ids it cancelled.
  */
 export async function expireUnpaidKhqrOrders(
   prisma: PrismaClient,
-  now: Date = new Date()
+  now: Date = new Date(),
+  abaClient?: ABAPayWay | null
 ): Promise<string[]> {
   const unstartedCutoff = new Date(now.getTime() - UNSTARTED_KHQR_GRACE_MS);
 
@@ -51,26 +55,61 @@ export async function expireUnpaidKhqrOrders(
         { paymentExpiresAt: null, createdAt: { lt: unstartedCutoff } },
       ],
     },
-    select: { id: true },
+    select: { id: true, transactionId: true, totalAmount: true },
   });
 
   const cancelled: string[] = [];
-  for (const { id } of candidates) {
-    // Re-check the status inside the write. A payment that landed between the
-    // read above and this line moved the row to `paid`, and updateMany with the
-    // same filter simply matches nothing rather than cancelling a paid order.
+  const aba = abaClient !== undefined ? abaClient : getAbaClient();
+
+  for (const candidate of candidates) {
+    // 1. Reconcile with PayWay before cancelling an apparently expired unpaid order
+    if (candidate.transactionId && aba) {
+      try {
+        const result = await aba.checkStatus(candidate.transactionId);
+        if (!result.success) {
+          // If errorCode !== '6' (where 6 means tran_id not found in ABA), gateway returned an error.
+          // Preserve an unresolved state when verification is unavailable.
+          if (result.errorCode !== '6') {
+            console.warn(`ABA verification unavailable for order ${candidate.id}: ${result.error}. Preserving unresolved state.`);
+            continue;
+          }
+        } else if (result.status === 'APPROVED') {
+          // The customer was actually charged! Settle the order as paid instead of cancelling it.
+          if (result.amount != null && Math.abs(result.amount - candidate.totalAmount) <= 0.01) {
+            const updatePaid = await prisma.order.updateMany({
+              where: { id: candidate.id, status: 'pending' },
+              data: { status: 'paid' },
+            });
+            if (updatePaid.count > 0) {
+              await settleOrderPoints(prisma, candidate.id);
+            }
+            continue;
+          }
+        }
+      } catch (err) {
+        // Verification is unavailable (network exception). Preserve unresolved state.
+        console.warn(`ABA checkStatus threw for order ${candidate.id}, skipping cancellation:`, err);
+        continue;
+      }
+    }
+
+    // Close transaction on ABA PayWay to reject any late incoming payment
+    if (candidate.transactionId) {
+      await closeAbaTransaction(candidate.transactionId).catch((err) => {
+        console.warn(`ABA close-transaction failed for expired order ${candidate.id}:`, err);
+      });
+    }
+
+    // 2. Re-check the status inside the write.
     const result = await prisma.order.updateMany({
-      where: { id, paymentMethod: 'khqr', status: 'pending' },
-      data: { status: 'cancelled' },
+      where: { id: candidate.id, paymentMethod: 'khqr', status: 'pending' },
+      data: { status: 'cancelled', cancelReason: 'Payment expired' },
     });
     if (result.count === 0) continue;
 
-    // Give the reserved points back. refundOrderPoints returns early once
-    // `pointsSettled` is true, so it is safe to call more than once — and a
-    // second sweep cannot even reach here, because the order is no longer
-    // `pending`.
-    await refundOrderPoints(prisma, id);
-    cancelled.push(id);
+    // Give the reserved points back.
+    await refundOrderPoints(prisma, candidate.id);
+    cancelled.push(candidate.id);
   }
   return cancelled;
 }

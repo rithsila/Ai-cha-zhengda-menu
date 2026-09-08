@@ -1,9 +1,10 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { expireUnpaidKhqrOrders, UNSTARTED_KHQR_GRACE_MS } from '../src/expiry';
 import { asCustomer } from './helpers/customer';
+import { enableAba, disableAba, stubAbaFetch, approvedStatus } from './helpers/aba';
 
 /**
  * An order row exists before the customer has paid. If a KHQR payment is
@@ -55,6 +56,14 @@ beforeAll(async () => {
   await prisma.menuItem.create({
     data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Expiry Tea', basePrice: ITEM_PRICE },
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+afterAll(() => {
+  disableAba();
 });
 
 describe('expireUnpaidKhqrOrders', () => {
@@ -166,4 +175,43 @@ describe('expireUnpaidKhqrOrders', () => {
     expect(res.body.status).toBe('pending');
     expect('paymentExpiresAt' in res.body).toBe(true);
   });
+
+  it('settles an expired KHQR order if PayWay reports it was approved', async () => {
+    enableAba();
+    const order = await makeOrder('khqr');
+    const transactionId = `exp-tx-${randomUUID()}`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        transactionId,
+        paymentExpiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    stubAbaFetch({ status: approvedStatus(ITEM_PRICE) });
+
+    const cancelled = await expireUnpaidKhqrOrders(prisma);
+    expect(cancelled).not.toContain(order.id);
+    expect(await statusOf(order.id)).toBe('paid');
+  });
+
+  it('preserves order as pending when PayWay verification is unavailable', async () => {
+    enableAba();
+    const order = await makeOrder('khqr');
+    const transactionId = `exp-tx-err-${randomUUID()}`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        transactionId,
+        paymentExpiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    const cancelled = await expireUnpaidKhqrOrders(prisma);
+    expect(cancelled).not.toContain(order.id);
+    expect(await statusOf(order.id)).toBe('pending');
+  });
 });
+

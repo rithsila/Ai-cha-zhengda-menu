@@ -1,22 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Gift, ClockCounterClockwise, Sparkle, Check } from '@phosphor-icons/react';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
 import { formatCurrency } from '../utils/format';
-import { loginAsDevCustomer, clearWebLoginToken } from '../utils/telegramUser';
 import { SignInPrompt } from './SignInPrompt';
 import { RewardCard } from './RewardCard';
-import { CustomerLuckyWheelModal, type LuckyPrize } from './CustomerLuckyWheelModal';
+import { CustomerLuckyWheelModal } from './CustomerLuckyWheelModal';
 import { CustomerPrizeModal, type CustomerPrizeClaim } from './CustomerPrizeModal';
 import { LuckyWheelIcon } from './ui/LuckyWheelIcon';
+import { useProfile } from '../hooks/useProfile';
+import { useConfig, configNumber } from '../hooks/useConfig';
+import { useMyOrders } from '../hooks/useMyOrders';
+import { useLuckyDrawConfig } from '../hooks/useLuckyDrawConfig';
+import { useMyPrizes } from '../hooks/useMyPrizes';
 
 const DEFAULT_POINTS_PER_DOLLAR = 100;
-
-/** Reads one numeric config row, falling back when it is missing or not a number. */
-function readConfigNumber(rows: { key: string; value: string }[], key: string, fallback: number): number {
-  const n = Number(rows.find(r => r.key === key)?.value);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
 
 function shortDate(value: string): string {
   const date = new Date(value);
@@ -37,123 +34,41 @@ interface RewardsViewProps {
 
 export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw }: RewardsViewProps) {
   const { t } = useTranslation();
-  // Points belong to one account. A guest has none to show.
-  const signedIn = hasIdentity();
-  const [points, setPoints] = useState<number | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [claimOrders, setClaimOrders] = useState<any[]>([]);
-  const [paidOrderCount, setPaidOrderCount] = useState(0);
-  const [goldThreshold, setGoldThreshold] = useState(3);
-  const [pointsPerDollar, setPointsPerDollar] = useState(DEFAULT_POINTS_PER_DOLLAR);
+
+  // Shared SWR hooks — these deduplicate across all components
+  const { profile: userProfile, signedIn, profileLoading, mutateProfile } = useProfile();
+  const { orders: allOrders, ordersLoading } = useMyOrders();
+  const { configRows, configLoading } = useConfig();
+  const { luckyDrawEnabled, luckyCostPerSpin, luckyPrizes, luckyDrawLoading } = useLuckyDrawConfig();
+  const { prizes: userPrizes, mutatePrizes, prizesLoading } = useMyPrizes();
+
+  const points = userProfile ? (Number(userProfile.loyaltyPoints) || 0) : null;
+  const goldThreshold = configNumber(configRows, 'goldMinOrdersThreshold', 3);
+  const pointsPerDollar = configNumber(configRows, 'pointsPerDollar', DEFAULT_POINTS_PER_DOLLAR);
+  const loading = signedIn ? (profileLoading || ordersLoading || configLoading || luckyDrawLoading || prizesLoading) : false;
+  const failed = !!(signedIn && !loading && !userProfile && !profileLoading);
+
+  // Derive order-dependent values
+  const { claimOrders, paidOrderCount } = useMemo(() => {
+    const claims = allOrders.filter(
+      (o: any) => (o.pointsRedeemed ?? 0) > 0 || (o.discountApplied ?? 0) > 0
+    );
+    const paidCount = allOrders.filter(
+      (o: any) => o.status === 'paid' || o.status === 'completed'
+    ).length;
+    return { claimOrders: claims, paidOrderCount: paidCount };
+  }, [allOrders]);
+
+  // UI state
   const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
-  const [luckyDrawEnabled, setLuckyDrawEnabled] = useState(true);
-  const [luckyCostPerSpin, setLuckyCostPerSpin] = useState(5);
-  const [luckyPrizes, setLuckyPrizes] = useState<LuckyPrize[]>([]);
-  const [userPrizes, setUserPrizes] = useState<CustomerPrizeClaim[]>([]);
   const [selectedClaim, setSelectedClaim] = useState<CustomerPrizeClaim | null>(null);
   const [giftFilter, setGiftFilter] = useState<'all' | 'pending' | 'claimed'>('all');
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  const fetchUserPrizes = async () => {
-    try {
-      const res = await apiFetch('/api/me/prizes');
-      if (res.ok) {
-        const data = await res.json();
-        setUserPrizes(Array.isArray(data) ? data : []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch user prize claims:', err);
-    }
-  };
 
   useEffect(() => {
     if (forceOpenLuckyDraw) {
       setLuckyDrawOpen(true);
     }
   }, [forceOpenLuckyDraw]);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setLoading(false);
-      return;
-    }
-    const fetchData = async () => {
-      try {
-        const [userRes, ordersRes, cfgRes, luckyRes, prizesRes] = await Promise.all([
-          apiFetch(ME.profile()),
-          apiFetch(ME.orders()),
-          apiFetch('/api/config'),
-          apiFetch('/api/lucky-draw/config'),
-          apiFetch('/api/me/prizes'),
-        ]);
-
-        if (userRes.ok) {
-          const user = await userRes.json();
-          setUserProfile(user);
-          setPoints(Number(user.loyaltyPoints) || 0);
-        } else if (userRes.status === 401) {
-          if (import.meta.env.DEV) {
-            await loginAsDevCustomer({
-              telegramUserId: 'dev_standard_user',
-              firstName: 'Bob',
-              lastName: 'Sok',
-              tier: 'standard',
-              loyaltyPoints: 20,
-              luckyTickets: 5,
-              phoneNumber: '+85598765432',
-              building: 'B',
-              roomNumber: '0512',
-            });
-            window.location.reload();
-            return;
-          }
-          clearWebLoginToken();
-          setLoading(false);
-          return;
-        } else {
-          setFailed(true);
-        }
-
-        if (ordersRes.ok) {
-          const orders = await ordersRes.json();
-          const orderList = Array.isArray(orders) ? orders : [];
-          const claims = orderList.filter(
-            (o: any) => (o.pointsRedeemed ?? 0) > 0 || (o.discountApplied ?? 0) > 0
-          );
-          setClaimOrders(claims);
-          const paidCount = orderList.filter(
-            (o: any) => o.status === 'paid' || o.status === 'completed'
-          ).length;
-          setPaidOrderCount(paidCount);
-        }
-
-        if (cfgRes.ok) {
-          const rows: { key: string; value: string }[] = await cfgRes.json();
-          setPointsPerDollar(readConfigNumber(rows, 'pointsPerDollar', DEFAULT_POINTS_PER_DOLLAR));
-          setGoldThreshold(readConfigNumber(rows, 'goldMinOrdersThreshold', 3));
-        }
-
-        if (luckyRes.ok) {
-          const luckyData = await luckyRes.json();
-          setLuckyDrawEnabled(luckyData.enabled !== false);
-          if (luckyData.costPerSpin) setLuckyCostPerSpin(luckyData.costPerSpin);
-          if (Array.isArray(luckyData.prizes)) setLuckyPrizes(luckyData.prizes);
-        }
-
-        if (prizesRes.ok) {
-          const prizeList = await prizesRes.json();
-          setUserPrizes(Array.isArray(prizeList) ? prizeList : []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch rewards data', err);
-        setFailed(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [signedIn]);
 
   const pointsPerStamp = Math.max(1, Math.round(pointsPerDollar / 10));
 
@@ -488,13 +403,12 @@ export function RewardsView({ onBrowseMenu, forceOpenLuckyDraw, onCloseLuckyDraw
         costPerSpin={luckyCostPerSpin}
         prizes={luckyPrizes}
         onSpinSuccess={({ remainingTickets, loyaltyPoints: newPoints, prize: _prize }) => {
-          setUserProfile((prev: any) => ({
+          mutateProfile((prev: any) => ({
             ...prev,
             luckyTickets: remainingTickets,
             loyaltyPoints: newPoints,
-          }));
-          setPoints(newPoints);
-          fetchUserPrizes();
+          }), false);
+          mutatePrizes();
         }}
       />
 

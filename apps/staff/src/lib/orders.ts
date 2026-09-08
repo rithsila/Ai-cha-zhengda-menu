@@ -10,13 +10,55 @@ export const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 
 export type Tone = 'normal' | 'warn' | 'late';
 
-/** Minutes at which each lane turns amber, then red. Shown to staff in the board legend. */
-export const TONE_THRESHOLDS: Record<string, { warn: number; late: number }> = {
-  pending: { warn: 5, late: 10 },
-  paid: { warn: 5, late: 10 },
-  preparing: { warn: 8, late: 15 },
-  ready: { warn: 10, late: 20 },
+export interface ThresholdConfig {
+  pendingWarn: number;
+  pendingLate: number;
+  preparingWarn: number;
+  preparingLate: number;
+  readyWarn: number;
+  readyLate: number;
+}
+
+export const DEFAULT_THRESHOLDS: ThresholdConfig = {
+  pendingWarn: 5,
+  pendingLate: 10,
+  preparingWarn: 8,
+  preparingLate: 15,
+  readyWarn: 10,
+  readyLate: 20,
 };
+
+/** Minutes at which each lane turns amber, then red. Default fallback. */
+export const TONE_THRESHOLDS: Record<string, { warn: number; late: number }> = {
+  pending: { warn: DEFAULT_THRESHOLDS.pendingWarn, late: DEFAULT_THRESHOLDS.pendingLate },
+  paid: { warn: DEFAULT_THRESHOLDS.pendingWarn, late: DEFAULT_THRESHOLDS.pendingLate },
+  preparing: { warn: DEFAULT_THRESHOLDS.preparingWarn, late: DEFAULT_THRESHOLDS.preparingLate },
+  ready: { warn: DEFAULT_THRESHOLDS.readyWarn, late: DEFAULT_THRESHOLDS.readyLate },
+};
+
+export function getToneLimits(
+  status: string,
+  thresholds?: Partial<ThresholdConfig> | null,
+): { warn: number; late: number } | null {
+  const pWarn = thresholds?.pendingWarn ?? DEFAULT_THRESHOLDS.pendingWarn;
+  const pLate = thresholds?.pendingLate ?? DEFAULT_THRESHOLDS.pendingLate;
+  const prepWarn = thresholds?.preparingWarn ?? DEFAULT_THRESHOLDS.preparingWarn;
+  const prepLate = thresholds?.preparingLate ?? DEFAULT_THRESHOLDS.preparingLate;
+  const rWarn = thresholds?.readyWarn ?? DEFAULT_THRESHOLDS.readyWarn;
+  const rLate = thresholds?.readyLate ?? DEFAULT_THRESHOLDS.readyLate;
+
+  switch (status) {
+    case 'pending':
+    case 'paid':
+      return { warn: pWarn, late: pLate };
+    case 'preparing':
+      return { warn: prepWarn, late: prepLate };
+    case 'ready':
+      return { warn: rWarn, late: rLate };
+    default:
+      return null;
+  }
+}
 
 export function formatElapsed(
   createdAt: string,
@@ -42,14 +84,19 @@ export function formatElapsed(
   return { label: `${hours}h ${String(mins % 60).padStart(2, '0')}m`, stale: false };
 }
 
-export function elapsedTone(status: string, createdAt: string, now: number): Tone {
+export function elapsedTone(
+  status: string,
+  createdAt: string,
+  now: number,
+  thresholds?: Partial<ThresholdConfig> | null,
+): Tone {
   const ms = now - new Date(createdAt).getTime();
   if (ms >= STALE_AFTER_MS) return 'normal';
-  const limits = TONE_THRESHOLDS[status];
+  const limits = getToneLimits(status, thresholds) ?? TONE_THRESHOLDS[status];
   if (!limits) return 'normal';
   const mins = ms / 60000;
-  if (mins > limits.late) return 'late';
-  if (mins > limits.warn) return 'warn';
+  if (mins >= limits.late) return 'late';
+  if (mins >= limits.warn) return 'warn';
   return 'normal';
 }
 

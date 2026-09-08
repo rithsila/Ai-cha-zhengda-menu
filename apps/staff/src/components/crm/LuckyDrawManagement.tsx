@@ -68,7 +68,52 @@ export function LuckyDrawManagement() {
   const [claimsSearch, setClaimsSearch] = useState('');
   const [loadingClaims, setLoadingClaims] = useState(false);
 
+  // Raffle Draw states
+  const [rafflePrizeName, setRafflePrizeName] = useState('Monthly Grand Prize');
+  const [raffleTierFilter, setRaffleTierFilter] = useState<'all' | 'gold' | 'standard'>('all');
+  const [drawingRaffle, setDrawingRaffle] = useState(false);
+  const [raffleWinnerModalOpen, setRaffleWinnerModalOpen] = useState(false);
+  const [raffleWinnerData, setRaffleWinnerData] = useState<any>(null);
+
   const savePrizesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDrawWinner = async () => {
+    if (!rafflePrizeName.trim()) {
+      toast({
+        title: 'Prize name required',
+        description: 'Please enter a prize name for the raffle.',
+        variant: 'error',
+      });
+      return;
+    }
+    setDrawingRaffle(true);
+    try {
+      const res = await apiFetch<any>('/api/lucky-draw/draw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prizeName: rafflePrizeName.trim(),
+          tierFilter: raffleTierFilter,
+        }),
+      });
+      setRaffleWinnerData(res);
+      setRaffleWinnerModalOpen(true);
+      fetchClaims();
+      toast({
+        title: '🎉 Winner Drawn!',
+        description: `${res.winner.contactName || res.winner.firstName || 'Customer'} won ${res.prizeName || 'the prize'}!`,
+        variant: 'success',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Could not draw winner',
+        description: err.message || 'No eligible participants found with tickets.',
+        variant: 'error',
+      });
+    } finally {
+      setDrawingRaffle(false);
+    }
+  };
 
   const fetchClaims = async () => {
     setLoadingClaims(true);
@@ -554,6 +599,66 @@ export function LuckyDrawManagement() {
               </div>
             </div>
           </Card>
+
+          {/* Section 3: Manager Raffle Draw */}
+          <Card padding="lg" className="border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-surface to-surface shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                <Trophy className="size-4 text-amber-500" />
+                <span>Manager Lucky Raffle Draw</span>
+              </div>
+              <Badge variant="neutral" className="text-[10px] font-mono">
+                {summary?.totalLuckyTickets ?? 0} Tickets Pool
+              </Badge>
+            </div>
+
+            <p className="text-xs text-ink-soft">
+              Conduct a live raffle draw among customers holding lucky tickets. Each ticket gives one entry.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-ink-soft mb-1">
+                  Raffle Prize Name
+                </label>
+                <input
+                  type="text"
+                  value={rafflePrizeName}
+                  onChange={(e) => setRafflePrizeName(e.target.value)}
+                  placeholder="e.g. Grand Prize: Mystery Blind Box Set"
+                  className="h-9 w-full rounded-none border border-border bg-surface px-3 text-xs font-bold text-ink outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-ink-soft mb-1">
+                  Eligible Participants
+                </label>
+                <CustomSelect<'all' | 'gold' | 'standard'>
+                  value={raffleTierFilter}
+                  onChange={(val) => setRaffleTierFilter(val)}
+                  options={[
+                    { value: 'all', label: 'All Customers with Tickets' },
+                    { value: 'gold', label: 'Gold VIP Members Only' },
+                    { value: 'standard', label: 'Standard Customers Only' },
+                  ]}
+                  size="md"
+                />
+              </div>
+
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleDrawWinner}
+                loading={drawingRaffle}
+                disabled={drawingRaffle || (summary?.totalLuckyTickets ?? 0) <= 0}
+                className="w-full h-10 gap-2 font-bold text-xs bg-amber-600 hover:bg-amber-700 text-white shadow-xs border-0"
+              >
+                <Dices className="size-4" />
+                <span>Draw Random Winner</span>
+              </Button>
+            </div>
+          </Card>
         </div>
 
         {/* Right Column: Wheel Prize Segments */}
@@ -932,6 +1037,78 @@ export function LuckyDrawManagement() {
           fetchClaims();
         }}
       />
+
+      {/* Raffle Winner Celebration Modal */}
+      {raffleWinnerModalOpen && raffleWinnerData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-none border border-amber-500/40 bg-surface shadow-2xl p-6 text-center space-y-4">
+            <div className="size-16 mx-auto rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center text-3xl shadow-inner">
+              🏆
+            </div>
+
+            <div>
+              <Badge variant="neutral" className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">
+                🎉 Lucky Raffle Winner Drawn!
+              </Badge>
+              <h3 className="mt-2 text-xl font-black text-ink">
+                {raffleWinnerData.winner.contactName ||
+                  [raffleWinnerData.winner.firstName, raffleWinnerData.winner.lastName].filter(Boolean).join(' ') ||
+                  `Customer #${raffleWinnerData.winner.telegramUserId}`}
+              </h3>
+              <p className="text-xs text-ink-soft mt-0.5">
+                {raffleWinnerData.winner.phoneNumber || 'No phone'}
+                {raffleWinnerData.winner.tier === 'gold' && ' • ⭐ Gold VIP'}
+              </p>
+            </div>
+
+            <div className="rounded-none border border-border bg-surface-sunken p-3 text-left space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-ink-soft">Prize Won:</span>
+                <span className="font-bold text-ink">{raffleWinnerData.prizeName || 'Grand Prize'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-soft">Claim Code:</span>
+                <span className="font-mono font-black text-amber-600 dark:text-amber-400 bg-surface px-2 py-0.5 border border-border">
+                  {raffleWinnerData.claimCode || 'LUCKY-WINNER'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-soft">Participant's Tickets:</span>
+                <span className="font-bold text-ink">🎟️ {raffleWinnerData.winner.luckyTickets} tickets</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-soft">Pool Competed In:</span>
+                <span className="text-ink-soft">{raffleWinnerData.totalParticipants} participants ({raffleWinnerData.totalTickets} tickets)</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setRaffleWinnerModalOpen(false)}
+                className="w-full text-xs font-bold"
+              >
+                Close
+              </Button>
+              {raffleWinnerData.claimCode && (
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    setRaffleWinnerModalOpen(false);
+                    setVerifyInitialCode(raffleWinnerData.claimCode);
+                    setVerifyModalOpen(true);
+                  }}
+                  className="w-full text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                >
+                  Verify / Hand Over
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

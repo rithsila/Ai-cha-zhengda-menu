@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DownloadSimple, Check, CaretRight, CaretLeft } from '@phosphor-icons/react';
+import { DownloadSimple, Check, CaretRight, WarningCircle, XCircle } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
 import { apiFetch } from '../utils/api';
+import { launchAbaPayment } from '../utils/abaPaymentLaunch';
 import { markOnlinePaymentAvailable, markOnlinePaymentUnavailable } from '../utils/onlinePayment';
 
 /** Seconds -> "m:ss" for the KHQR countdown. */
@@ -12,46 +13,174 @@ function formatCountdown(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-/** Official KHQR Vector Logo (from Wikimedia Commons / NBC Bakong) */
-function KhqrLogo({ className = "h-5" }: { className?: string }) {
+const KHQR_RED = '#bc271a';
+const CARD_SHELL_PATH =
+  'M189.868 10.8675H27.8677C18.4788 10.8675 10.8677 18.4787 10.8677 27.8675V287.867C10.8677 297.256 18.4788 304.867 27.8677 304.867H189.868C199.257 304.867 206.868 297.256 206.868 287.867V27.8675C206.868 18.4787 199.257 10.8675 189.868 10.8675Z';
+const KHQR_HEADER_BACKGROUND_PATH =
+  'M178.91 0C188.299 0.00000824649 195.91 7.61117 195.91 17V36.3516H196V54L178.582 37H0V17C0.00000103088 7.61116 7.61116 0 17 0H178.91Z';
+const KHQR_HEADER_MARK_PATHS = [
+  'M104.488 17.1027V20.5948H100.95C100.596 20.5948 100.331 20.3329 100.331 19.9836V17.1027C100.331 16.7535 100.596 16.4916 100.95 16.4916H103.781C104.223 16.4043 104.488 16.7535 104.488 17.1027Z',
+  'M120.944 18.5H119.175C119.175 16.4047 117.494 14.746 115.371 14.746C113.69 14.746 112.274 15.7936 111.743 17.365C111.655 17.7143 111.566 18.1507 111.566 18.5V23.9999H111.478C110.505 23.9999 109.797 23.2142 109.797 22.3412V18.5C109.797 17.0159 110.416 15.5317 111.566 14.4841C112.628 13.5238 113.955 13 115.371 13C118.467 13 120.944 15.4444 120.944 18.5Z',
+  'M120.945 24H118.467L117.848 23.3889L116.521 22.0794L114.663 20.2461H117.14L120.945 24Z',
+  'M105.107 22.2539H99.7994C99.18 22.2539 98.6492 21.7301 98.6492 21.119V15.8809C98.6492 15.2698 99.18 14.746 99.7994 14.746H105.107C105.727 14.746 106.257 15.2698 106.257 15.8809V21.119L108.027 22.865V14.6587C108.027 13.6984 107.231 13 106.346 13H98.6492C97.6756 13 96.9683 13.7857 96.9683 14.6587V22.2539C96.9683 23.2142 97.7642 23.9126 98.6492 23.9126H106.877L105.107 22.2539Z',
+  'M83.6093 23.9999H81.1318L76.0005 18.8492V23.9999H73.9658V13H76.0005V17.8888L80.9553 13H83.3436L78.0356 18.2381L83.6093 23.9999Z',
+  'M92.898 13H94.8446V23.9999H92.898V19.1984H87.2358V23.9999H85.2012V13H87.2358V17.6269H92.898V13Z',
+];
+
+function formatKhqrAmount(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
+/** Official KHQR Vector Logo mark */
+function KhqrLogo({ className = 'h-5' }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 3000 710"
+      viewBox="71 11 52 15"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-label="KHQR"
     >
-      <path
-        d="m 0,0.03316065 h 130.12116 l 0.014,318.13267935 C 233.74068,213.55008 443.94173,2.5596428 444.48677,1.0664481 444.9679,-0.25167388 599.68926,-0.32516983 599.68926,0.99272374 486.57317,115.28505 371.72975,227.87418 257.21308,340.76853 c 20.97523,21.33678 282.3634,288.92492 357.65314,368.20425 0.65411,0.68876 -1.66382,0.99992 -77.17034,0.99992 H 459.73294 L 336.53629,585.72505 C 192.18995,440.14727 131.5997,379.75815 130.74116,379.75815 c -0.97346,110.06303 -0.62,220.14479 -0.62,330.21455 H 0 Z M 1208.4296,400.10055 H 842.95884 V 709.9727 H 716.79789 L 716.22858,0.03316065 H 842.95884 V 297.25838 H 1208.4296 V 0.10393571 L 1335.1563,0 v 709.9727 h -126.7267 z m 1514.243,188.60833 c -66.7198,-66.68699 -121.2089,-121.26394 -121.0692,-121.29991 0.1397,-0.036 35.4501,0.18884 78.4672,0.49963 l 78.2133,0.56505 86.4183,85.46964 c 137.7689,136.25637 155.0701,156.03188 154.7403,156.02941 -0.4084,-0.003 -103.6312,-0.51832 -155.4465,0 z M 1560.4467,709.97304 c -16.1379,-0.55379 -32.9532,-10.24556 -46.6705,-19.51539 -6.9569,-4.70134 -19.2747,-16.38202 -26.5809,-25.20617 -5.9447,-7.17977 -15.0496,-25.92873 -18.2971,-37.67776 l -3.055,-11.05251 -0.3309,-256.54041 c -0.359,-278.392633 -0.5867,-266.806561 5.6132,-285.669744 6.3968,-19.462404 20.5256,-39.027764 37.2996,-51.652247 11.1554,-8.39579 20.5183,-13.2107146 35.4908,-18.2513305 l 11.3149,-3.8092509 261.205,-0.29674884 261.205,-0.29674882 11.3309,2.86097216 c 14.8478,3.7488926 26.437,8.6527199 36.7824,15.5638289 20.3137,13.570359 35.5357,32.794807 42.7843,54.033877 6.4483,18.89392 6.1728,5.744005 6.1777,294.858942 v 266.14221 l -55.4189,-55.344 -55.4191,-55.344 -0.3093,-175.76404 c -0.291,-167.92384 -0.3987,-176.04133 -2.4096,-181.97982 -8.8441,-26.11777 -26.8665,-43.73799 -52.2413,-51.0754 l -9.0122,-2.60596 h -181.6039 -181.6039 l -7.3546,2.62867 c -12.3916,4.42895 -21.5422,10.21361 -30.5502,19.31286 -9.677,9.77482 -15.9266,19.7384 -19.5545,31.17478 l -2.5095,7.91094 v 181.38648 c 0,143.66042 0.3021,182.67929 1.4523,187.60223 0.7989,3.41864 3.6817,10.79277 6.4062,16.38694 8.578,17.61255 21.6642,29.51025 40.3928,36.72405 7.7117,2.97044 11.4807,3.67874 23.4647,4.40965 7.8524,0.47892 86.6496,0.72975 175.1047,0.55739 88.4552,-0.17235 162.086,0.0394 163.6242,0.47031 1.5395,0.43146 27.3682,25.03821 57.466,54.74757 l 54.6697,55.30949 h -264.6848 c -145.5766,0 -272.4039,0.0612 -274.1782,3.4e-4 z m 825.7135,-1.19632 c -26.9307,-3.11842 -54.2309,-19.77939 -71.1259,-41.95624 -11.6294,-15.26477 -17.997,-29.27579 -21.0351,-46.28374 -1.9276,-10.79088 -2.2975,-251.84349 -0.4287,-279.39581 3.9643,-58.45084 14.914,-100.14281 38.5348,-146.72478 23.4952,-46.33445 54.5203,-84.65461 93.8058,-115.863057 56.046,-44.522955 118.0676,-69.6753622 189.5243,-76.8600649 50.7725,-5.1049871 107.4757,2.901448 158.9994,22.4505889 18.2153,6.911221 49.0282,22.704492 65.0829,33.358531 28.5306,18.933106 61.4883,48.706502 81.5007,73.626512 34.6076,43.09443 60.4913,97.70145 71.1609,150.12886 4.2544,20.90466 9.2611,68.41547 7.4337,70.54076 -0.4059,0.47222 -25.4026,0.7265 -55.5478,0.56508 l -54.8096,-0.29351 -0.8411,-12.43146 c -1.7656,-26.10028 -7.7173,-54.37893 -14.9847,-71.19845 -0.8057,-1.86472 -3.1133,-7.20461 -5.1278,-11.86641 -18.9374,-43.82127 -52.4615,-82.6438 -93.4721,-108.24536 -72.0624,-44.98604 -158.5339,-49.629366 -235.2042,-12.62994 -60.7818,29.33194 -108.1942,85.64793 -126.5514,150.31634 -9.6873,34.12675 -8.9807,16.73362 -9.4418,231.33736 l -0.4139,192.62077 c -6.3032,-0.0934 -17.0584,-1.19598 -17.0584,-1.19598 z M 1715.9021,485.02273 c -9.8918,-3.24648 -19.6413,-11.95632 -24.217,-21.63467 l -2.9387,-6.21574 V 354.8952 252.61809 l 2.8287,-5.5517 c 4.2081,-8.259 11.6883,-15.94802 19.0063,-19.53718 l 6.4522,-3.16448 h 101.2682 101.2682 l 6.7317,2.70833 c 8.4892,3.41539 16.2362,10.59855 20.5044,19.01219 l 3.3141,6.53284 0.5658,116.21582 c 0.3111,63.9187 0.3536,116.42756 0.094,116.68633 -0.7905,0.78894 -232.4534,0.29825 -234.8781,-0.49751 z"
-      />
+      {KHQR_HEADER_MARK_PATHS.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
     </svg>
   );
 }
 
 /**
- * Save KHQR image to the user's photo library or file downloads.
- * Uses Web Share API on mobile (iOS/Android) for direct Save to Photos,
- * Telegram WebApp downloadFile when available, and standard blob download fallback.
+ * Render the official ABA PayWay KHQR card template
+ * onto a high-resolution canvas and return a PNG Blob to save to Photos.
  */
-async function saveQrToPhotos(qrImageSrc: string): Promise<boolean> {
-  try {
-    // 1. If inside Telegram Mini App with downloadFile support
-    const tg = (window as unknown as { Telegram?: { WebApp?: { downloadFile?: (params: { url: string; file_name: string }) => void } } })
-      .Telegram?.WebApp;
-    if (tg?.downloadFile && (qrImageSrc.startsWith('http://') || qrImageSrc.startsWith('https://'))) {
-      tg.downloadFile({
-        url: qrImageSrc,
-        file_name: `khqr-${Date.now()}.png`,
-      });
-      return true;
+async function renderKhqrTemplateToBlob(params: {
+  qrImageSrc: string;
+  merchantName?: string;
+  amount: number;
+}): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    try {
+      const qrImg = new Image();
+      qrImg.crossOrigin = 'anonymous';
+      qrImg.onload = () => {
+        // High resolution 4x scale for crisp text and scan reliability (872 x 1264)
+        const scale = 4;
+        const logicalW = 218;
+        const logicalH = 316;
+        const canvas = document.createElement('canvas');
+        canvas.width = logicalW * scale;
+        canvas.height = logicalH * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+
+        ctx.scale(scale, scale);
+
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, logicalW, logicalH);
+
+        const cardPath = new Path2D(CARD_SHELL_PATH);
+
+        // Drop shadow under the rounded card
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+        ctx.shadowBlur = 5.43375;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.fill(cardPath);
+        ctx.restore();
+
+        // Clip card content strictly inside the rounded card path
+        ctx.save();
+        ctx.clip(cardPath);
+
+        // KHQR Header Logo & Ribbon Flap
+        ctx.save();
+        ctx.translate(11, 11);
+        ctx.fillStyle = KHQR_RED;
+        ctx.fill(new Path2D(KHQR_HEADER_BACKGROUND_PATH));
+        ctx.fillStyle = '#ffffff';
+        for (const pathStr of KHQR_HEADER_MARK_PATHS) {
+          ctx.fill(new Path2D(pathStr));
+        }
+        ctx.restore();
+
+        // Merchant Name
+        ctx.fillStyle = '#111111';
+        ctx.font = '10px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(params.merchantName || 'Ai-Cha & Zhengda', 51, 81);
+
+        // Amount
+        ctx.fillStyle = '#000000';
+        ctx.font = '500 20px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(formatKhqrAmount(params.amount), 51, 108);
+
+        // Dashed line
+        ctx.beginPath();
+        ctx.setLineDash([4, 5]);
+        ctx.strokeStyle = '#8a8a8a';
+        ctx.lineWidth = 1;
+        ctx.moveTo(11, 124);
+        ctx.lineTo(207, 124);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // QR Code area
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(37, 145, 144, 144);
+        ctx.drawImage(qrImg, 37, 145, 144, 144);
+
+        // KHQR center brand mark
+        ctx.beginPath();
+        ctx.arc(109, 217, 17, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(109, 217, 13, 0, Math.PI * 2);
+        ctx.fillStyle = KHQR_RED;
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+        ctx.lineJoin = 'round';
+        ctx.stroke(new Path2D('M102 213h3v-3h8v3h3v8h-3v3h-8v-3h-3z'));
+
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = 'round';
+        ctx.stroke(new Path2D('M109 213v8M105 217h8'));
+
+        ctx.restore(); // end card-clip
+
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/png');
+      };
+      qrImg.onerror = () => resolve(null);
+      qrImg.src = params.qrImageSrc;
+    } catch {
+      resolve(null);
     }
+  });
+}
 
-    // 2. Fetch image data into a blob / file
-    const res = await fetch(qrImageSrc);
-    const blob = await res.blob();
-    const file = new File([blob], `khqr-${Date.now()}.png`, { type: blob.type || 'image/png' });
+/**
+ * Save image blob to user photo library or file downloads.
+ * Uses Web Share API on mobile (iOS/Android) for direct Save to Photos,
+ * and standard blob download fallback.
+ */
+async function saveBlobToPhotos(blob: Blob, fileName: string): Promise<boolean> {
+  try {
+    const file = new File([blob], fileName, { type: blob.type || 'image/png' });
 
-    // 3. Web Share API (native iOS / Android prompt with "Save Image" to Photos)
+    // 1. Web Share API (native iOS / Android prompt with "Save Image" to Photos)
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({
         files: [file],
@@ -60,11 +189,11 @@ async function saveQrToPhotos(qrImageSrc: string): Promise<boolean> {
       return true;
     }
 
-    // 4. Standard browser download fallback
+    // 2. Standard browser download fallback
     const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = blobUrl;
-    link.download = `khqr-${Date.now()}.png`;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -74,7 +203,21 @@ async function saveQrToPhotos(qrImageSrc: string): Promise<boolean> {
     if (typeof err === 'object' && err !== null && 'name' in err && (err as { name: string }).name === 'AbortError') {
       return false;
     }
-    console.error('Failed to save KHQR image:', err);
+    console.error('Failed to save image:', err);
+    return false;
+  }
+}
+
+/**
+ * Fallback to save raw square QR image if canvas rendering is unavailable.
+ */
+async function saveQrToPhotos(qrImageSrc: string): Promise<boolean> {
+  try {
+    const res = await fetch(qrImageSrc);
+    const blob = await res.blob();
+    return await saveBlobToPhotos(blob, `khqr-${Date.now()}.png`);
+  } catch (err) {
+    console.error('Failed to save fallback QR image:', err);
     return false;
   }
 }
@@ -84,8 +227,9 @@ interface KhqrPaymentPanelProps {
   totalAmount?: number;
   onPaid: (pickupCode: string) => void;
   onCancel?: () => void;
-  /** Way out when online payment fails, so the customer is never stuck. */
-  onUseCash?: () => void;
+  onExpired?: () => void;
+  isViewingKhqr?: boolean;
+  onViewingKhqrChange?: (viewing: boolean) => void;
 }
 
 /**
@@ -96,7 +240,15 @@ interface KhqrPaymentPanelProps {
  * Customers can pay directly via ABA Mobile or open the official KHQR template
  * card to scan or save to their photo library.
  */
-export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUseCash }: KhqrPaymentPanelProps) {
+export function KhqrPaymentPanel({
+  orderId,
+  totalAmount,
+  onPaid,
+  onCancel,
+  onExpired,
+  isViewingKhqr: controlledViewingKhqr,
+  onViewingKhqrChange,
+}: KhqrPaymentPanelProps) {
   const { t } = useTranslation();
 
   const [payment, setPayment] = useState<{
@@ -109,27 +261,78 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
     expiresAt: number;
   } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [expired, setExpired] = useState(false);
+  const [resultState, setResultState] = useState<'pending' | 'declined' | 'expired' | 'cancelled'>('pending');
+  const [networkInterrupted, setNetworkInterrupted] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [isViewingKhqr, setIsViewingKhqr] = useState(false);
-  // 'unavailable' means the shop has no online payment set up yet; 'failed' is a normal error.
-  const [error, setError] = useState<'unavailable' | 'failed' | null>(null);
+  const [abaLaunchHint, setAbaLaunchHint] = useState<string | null>(null);
+  const [internalViewingKhqr, setInternalViewingKhqr] = useState(false);
+  const isViewingKhqr = controlledViewingKhqr !== undefined ? controlledViewingKhqr : internalViewingKhqr;
+  const setIsViewingKhqr = (val: boolean) => {
+    setInternalViewingKhqr(val);
+    onViewingKhqrChange?.(val);
+  };
+  // 'unavailable' means the shop has no online payment set up yet; 'failed' is a payment start error.
+  const [startError, setStartError] = useState<'unavailable' | 'failed' | null>(null);
   // Bumped by "Try again" to ask for a fresh QR for the same order.
   const [attempt, setAttempt] = useState(0);
 
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
 
+  const onExpiredRef = useRef(onExpired);
+  onExpiredRef.current = onExpired;
+
+  // Check payment status with server
+  const checkStatusNow = useCallback(async () => {
+    try {
+      const res = await apiFetch(`/api/payment/aba/status/${orderId}`);
+      setNetworkInterrupted(false);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        if (res.status === 409 && errData?.lateApproved) {
+          sessionStorage.removeItem('ai_cha_active_payment');
+          setPayment(null);
+          onPaidRef.current(errData.pickupCode || '');
+          return;
+        }
+        return;
+      }
+
+      const data = await res.json();
+      if (data.status === 'APPROVED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setPayment(null);
+        onPaidRef.current(data.pickupCode);
+      } else if (data.status === 'DECLINED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('declined');
+      } else if (data.status === 'EXPIRED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('expired');
+      } else if (data.status === 'CANCELLED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('cancelled');
+      }
+    } catch {
+      setNetworkInterrupted(true);
+    }
+  }, [orderId]);
+
   // Create (or re-create) the ABA payment for this order.
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    setError(null);
+    setStartError(null);
     setPayment(null);
-    setExpired(false);
+    setResultState('pending');
     setIsSaved(false);
+    setConfirmingCancel(false);
+    setCancelError(null);
 
     (async () => {
       try {
@@ -142,15 +345,17 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
         if (!res.ok) {
           if (res.status === 503) {
             markOnlinePaymentUnavailable();
-            if (!cancelled) setError('unavailable');
+            if (!cancelled) setStartError('unavailable');
             return;
           }
-          if (!cancelled) setError('failed');
+          if (!cancelled) setStartError('failed');
           return;
         }
 
         const data = await res.json();
         markOnlinePaymentAvailable();
+        sessionStorage.setItem('ai_cha_active_payment', orderId);
+
         if (cancelled) return;
         setPayment({
           abapayDeeplink: data.abapayDeeplink,
@@ -163,7 +368,7 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
         });
       } catch {
         if (cancelled) return;
-        setError('failed');
+        setStartError('failed');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -172,74 +377,139 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
     return () => { cancelled = true; };
   }, [orderId, attempt]);
 
-  // Poll status from server
+  // Poll status from server every 3s while pending
   useEffect(() => {
-    if (!payment || expired) return;
-    let cancelled = false;
+    if (!payment || resultState !== 'pending') return;
 
-    const interval = setInterval(async () => {
-      try {
-        const res = await apiFetch(`/api/payment/aba/status/${orderId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-
-        if (data.status === 'APPROVED') {
-          setPayment(null);
-          onPaidRef.current(data.pickupCode);
-        } else if (data.status === 'EXPIRED' || data.status === 'DECLINED') {
-          setExpired(true);
-        }
-      } catch {}
+    const interval = setInterval(() => {
+      checkStatusNow();
     }, 3000);
 
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [orderId, payment, expired]);
+    return () => clearInterval(interval);
+  }, [payment, resultState, checkStatusNow]);
 
-  // Countdown timer
+  // Check status immediately when returning to tab from ABA Mobile
   useEffect(() => {
-    if (!payment) return;
+    if (!payment || resultState !== 'pending') return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkStatusNow();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [payment, resultState, checkStatusNow]);
+
+  // Countdown timer: on reaching 0, check with server before declaring expired
+  useEffect(() => {
+    if (!payment || resultState !== 'pending') return;
 
     const tick = () => {
       const left = Math.max(0, Math.round((payment.expiresAt - Date.now()) / 1000));
       setSecondsLeft(left);
-      if (left === 0) setExpired(true);
+      if (left === 0) {
+        // Reconcile with server before claiming expired
+        checkStatusNow();
+      }
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [payment]);
+  }, [payment, resultState, checkStatusNow]);
 
-  const handleRetry = () => setAttempt(a => a + 1);
+  const displayAmount = payment?.amount ?? totalAmount ?? 0;
+  const handleRetry = () => {
+    setResultState('pending');
+    setAttempt(a => a + 1);
+  };
+
+  const handleOpenAbaPayment = () => {
+    if (!payment?.abapayDeeplink) return;
+    const result = launchAbaPayment(payment.abapayDeeplink);
+    if (!result.ok) {
+      setAbaLaunchHint(t('abaLaunchInvalid', 'This ABA payment link is invalid. Please use KHQR or try again.'));
+      return;
+    }
+
+    setAbaLaunchHint(null);
+    window.setTimeout(() => {
+      if (document.visibilityState === 'visible') {
+        setAbaLaunchHint(t('abaLaunchFallback', 'If ABA Mobile did not open, use ABA KHQR below or make sure ABA Mobile is installed.'));
+      }
+    }, result.mode === 'telegram-external-browser' ? 1800 : 1400);
+  };
 
   const handleSaveKhqr = async () => {
     if (!payment?.qrImage || isSaving) return;
     setIsSaving(true);
-    const success = await saveQrToPhotos(payment.qrImage);
-    setIsSaving(false);
+    let success = false;
+    try {
+      const templateBlob = await renderKhqrTemplateToBlob({
+        qrImageSrc: payment.qrImage,
+        merchantName: payment.merchantName || 'Ai-Cha & Zhengda',
+        amount: displayAmount,
+      });
+      if (templateBlob) {
+        success = await saveBlobToPhotos(templateBlob, `khqr-${Date.now()}.png`);
+      } else {
+        success = await saveQrToPhotos(payment.qrImage);
+      }
+    } catch {
+      success = await saveQrToPhotos(payment.qrImage);
+    } finally {
+      setIsSaving(false);
+    }
+
     if (success) {
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 5000);
     }
   };
 
+  const handleCancelOrder = async () => {
+    setIsCancelling(true);
+    setCancelError(null);
+    try {
+      const res = await apiFetch('/api/payment/aba/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.status === 'cancelled') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('cancelled');
+        setConfirmingCancel(false);
+        onCancel?.();
+        return;
+      }
+      if (res.status === 409 && data?.status === 'APPROVED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setPayment(null);
+        onPaidRef.current(data.pickupCode);
+        return;
+      }
+      setCancelError(data?.error || t('cancelFailed', 'Could not cancel order. Please try again.'));
+    } catch {
+      setCancelError(t('cancelFailed', 'Could not cancel order. Please try again.'));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const cancelButton = onCancel ? (
     <button
       type="button"
-      onClick={onCancel}
+      onClick={() => setConfirmingCancel(true)}
       className="text-sm font-semibold text-tg-hint hover:text-tg-text transition-colors py-2"
     >
       {t('cancel', 'Cancel')}
-    </button>
-  ) : null;
-
-  const cashButton = onUseCash ? (
-    <button
-      type="button"
-      onClick={onUseCash}
-      className="w-full rounded-xl border border-brand-primary/30 bg-brand-primary/10 py-3 text-sm font-bold text-brand-primary active:scale-95 transition-transform"
-    >
-      {t('payWithCashInstead', 'Pay with cash instead')}
     </button>
   ) : null;
 
@@ -255,121 +525,244 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
     );
   }
 
-  if (error) {
+  // Payment start failure (distinguished from bank decline and expiry)
+  if (startError) {
     return (
       <div className="flex flex-col gap-4 items-center w-full text-center py-6">
         <div className="w-full bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium">
-          {error === 'unavailable'
+          {startError === 'unavailable'
             ? t('onlinePaymentUnavailable', 'Online payment is not available right now.')
             : t('paymentStartFailed', 'Could not start the payment. Please try again.')}
         </div>
-        {error === 'unavailable' && (
+        {startError === 'unavailable' && (
           <p className="text-sm text-tg-hint">
             {t('orderSavedPayCash', 'Your order is saved. Please pay with cash at the counter.')}
           </p>
         )}
-        {error === 'failed' && (
+        {startError === 'failed' && (
           <Button onClick={handleRetry} className="w-full">
             {t('tryAgain', 'Try again')}
           </Button>
         )}
-        {cashButton}
         {cancelButton}
       </div>
     );
   }
 
-  if (!payment || expired) {
+  // Cancel confirmation dialog
+  if (confirmingCancel) {
     return (
-      <div className="flex flex-col gap-4 items-center w-full text-center py-6">
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+          <WarningCircle size={36} weight="fill" />
+        </div>
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('confirmCancelPayment', 'Cancel payment?')}
+        </h3>
+        <p className="text-sm text-tg-hint max-w-xs">
+          {t('confirmCancelPaymentHint', 'If you already approved payment in ABA Mobile, please wait a moment for confirmation.')}
+        </p>
+        {cancelError && (
+          <div className="w-full bg-[#E53935]/10 text-[#E53935] text-xs p-3 rounded-xl">
+            {cancelError}
+          </div>
+        )}
+        <div className="flex flex-col gap-2 w-full mt-2">
+          <Button
+            onClick={() => setConfirmingCancel(false)}
+            className="w-full"
+            disabled={isCancelling}
+          >
+            {t('keepWaiting', 'Keep waiting')}
+          </Button>
+          <button
+            type="button"
+            onClick={handleCancelOrder}
+            disabled={isCancelling}
+            className="w-full py-2.5 rounded-xl border border-rose-500/30 text-rose-500 font-semibold text-sm hover:bg-rose-500/10 transition-colors"
+          >
+            {isCancelling ? t('saving', 'Cancelling...') : t('cancelOrder', 'Cancel order')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Result: Declined by bank
+  if (resultState === 'declined') {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
+          <XCircle size={40} weight="fill" />
+        </div>
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('paymentDeclined', 'Payment declined')}
+        </h3>
+        <p className="text-sm text-tg-hint max-w-xs">
+          {t('paymentDeclinedHint', 'Your bank declined this transaction. Please try again or pay with cash.')}
+        </p>
+        <Button onClick={handleRetry} className="w-full mt-2">
+          {t('tryAgain', 'Try again')}
+        </Button>
+        {cancelButton}
+      </div>
+    );
+  }
+
+  // Result: Cancelled confirmed by server
+  if (resultState === 'cancelled') {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-tg-hint/15 text-tg-hint flex items-center justify-center">
+          <XCircle size={40} weight="fill" />
+        </div>
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('paymentCancelled', 'Payment cancelled')}
+        </h3>
+        <p className="text-sm text-tg-hint max-w-xs">
+          {t('paymentCancelledDesc', 'Your payment was cancelled and your order has not been placed.')}
+        </p>
+        {onCancel && (
+          <Button onClick={onCancel} className="w-full mt-2">
+            {t('backToMenu', 'Back to Menu')}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // Result: Expired QR confirmed by server
+  if (resultState === 'expired' || !payment) {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+          <WarningCircle size={40} weight="fill" />
+        </div>
         <h3 className="font-bold text-lg text-tg-text">
           {t('paymentExpired', 'This QR code has expired')}
         </h3>
-        <p className="text-sm text-tg-hint">
+        <p className="text-sm text-tg-hint max-w-xs">
           {t('paymentExpiredHint', 'Your order is still saved. Get a new QR code to pay.')}
         </p>
         <Button onClick={handleRetry} className="w-full mt-2">
           {t('tryAgain', 'Try again')}
         </Button>
-        {cashButton}
         {cancelButton}
       </div>
     );
   }
 
-  const displayAmount = payment.amount ?? totalAmount ?? 0;
-
   // View 2: KHQR Card Template View (Compact & Clean)
   if (isViewingKhqr) {
     return (
       <div className="flex flex-col gap-3 items-center w-full animate-in fade-in duration-200">
-        {/* Top Header bar with Back button, Title & Timer */}
-        <div className="w-full flex items-center justify-between px-1">
-          <button
-            type="button"
-            onClick={() => setIsViewingKhqr(false)}
-            className="w-8 h-8 rounded-full bg-tg-secondary-bg flex items-center justify-center text-tg-text active:scale-90 transition-transform"
-            aria-label={t('back', 'Back')}
-          >
-            <CaretLeft size={20} weight="bold" />
-          </button>
-
-          <h3 className="font-bold text-base text-tg-text">
-            {t('abaKhqr', 'ABA KHQR')}
-          </h3>
-
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-tg-text tabular-nums bg-tg-secondary-bg px-2.5 py-1 rounded-full border border-tg-hint/15">
-            <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-            <span>{formatCountdown(secondsLeft)}</span>
-          </div>
+        {/* Countdown Timer Badge */}
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-tg-text tabular-nums bg-tg-secondary-bg px-3 py-1 rounded-full border border-tg-hint/15 shadow-2xs">
+          <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+          <span>{formatCountdown(secondsLeft)}</span>
         </div>
 
-        {/* Authentic KHQR Card Template - Compact Size */}
-        <div className="w-full max-w-[220px] bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden relative text-gray-900 mt-1">
-          {/* Top Red Header with Exact Wikimedia KHQR Logo and Signature Downward Flap */}
-          <div
-            className="w-full bg-[#E21A1A] text-white pt-2.5 pb-4 px-3 flex items-center justify-center relative"
-            style={{
-              clipPath: 'polygon(0 0, 100% 0, 100% 100%, 84% 75%, 0 75%)',
-            }}
+        {/* Authentic KHQR Card Template - ABA Bank Specification */}
+        <div className="w-full max-w-[220px] flex justify-center mt-1">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 218 316"
+            className="w-full h-auto drop-shadow-md select-none rounded-2xl overflow-hidden"
+            role="img"
+            aria-label="PayWay KHQR payment card"
           >
-            <div className="pb-1.5 flex items-center justify-center w-full max-w-[68px]">
-              <KhqrLogo className="w-full h-auto text-white" />
-            </div>
-          </div>
-
-          {/* Merchant Name & Amount */}
-          <div className="pt-1.5 pb-0.5 px-3 text-center">
-            <p className="text-[11px] text-gray-600 font-semibold truncate">
-              {payment.merchantName || 'Ai-Cha & Zhengda'}
-            </p>
-            <p className="font-black text-lg text-gray-900 mt-0.5 flex items-baseline justify-center gap-1">
-              <span>{displayAmount.toFixed(2)}</span>
-              <span className="text-[10px] font-bold text-gray-500">USD</span>
-            </p>
-          </div>
-
-          {/* Dashed Line Separator with Side Circular Cutouts */}
-          <div className="relative my-1.5">
-            <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-tg-bg" />
-            <div className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-tg-bg" />
-            <div className="border-b border-dashed border-gray-300 mx-4" />
-          </div>
-
-          {/* QR Code Container */}
-          <div className="p-2 pb-3 flex items-center justify-center">
-            <img
-              src={payment.qrImage}
-              alt="KHQR"
-              className="w-full max-w-[155px] h-auto object-contain"
-            />
-          </div>
+            <defs>
+              <filter
+                id="card-shadow"
+                x="0"
+                y="0"
+                width="217.735"
+                height="315.735"
+                filterUnits="userSpaceOnUse"
+                colorInterpolationFilters="sRGB"
+              >
+                <feFlood floodOpacity="0" result="BackgroundImageFix" />
+                <feColorMatrix
+                  in="SourceAlpha"
+                  type="matrix"
+                  values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+                  result="hardAlpha"
+                />
+                <feOffset />
+                <feGaussianBlur stdDeviation="5.43375" />
+                <feComposite in2="hardAlpha" operator="out" />
+                <feColorMatrix
+                  type="matrix"
+                  values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.16 0"
+                />
+                <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
+                <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+              </filter>
+              <clipPath id="card-clip">
+                <path d={CARD_SHELL_PATH} />
+              </clipPath>
+              <clipPath id="qr-clip">
+                <rect id="qr-area" x="37" y="145" width="144" height="144" />
+              </clipPath>
+            </defs>
+            <rect width="218" height="316" fill="#ffffff" />
+            <g filter="url(#card-shadow)">
+              <path d={CARD_SHELL_PATH} fill="#ffffff" />
+            </g>
+            <g clipPath="url(#card-clip)">
+              <g id="khqr-header-logo" transform="translate(11,11)" aria-label="KHQR logo">
+                <path d={KHQR_HEADER_BACKGROUND_PATH} fill={KHQR_RED} />
+                {KHQR_HEADER_MARK_PATHS.map((d, i) => (
+                  <path key={i} d={d} fill="#ffffff" />
+                ))}
+              </g>
+              <text x="51" y="81" fill="#111111" fontFamily="Arial, Helvetica, sans-serif" fontSize="10">
+                {payment.merchantName || 'Ai-Cha & Zhengda'}
+              </text>
+              <text
+                x="51"
+                y="108"
+                fill="#000000"
+                fontFamily="Arial, Helvetica, sans-serif"
+                fontSize="20"
+                fontWeight="500"
+              >
+                {formatKhqrAmount(displayAmount)}
+              </text>
+              <line x1="11" y1="124" x2="207" y2="124" stroke="#8a8a8a" strokeWidth="1" strokeDasharray="4 5" />
+              <rect x="37" y="145" width="144" height="144" fill="#ffffff" />
+              <g clipPath="url(#qr-clip)">
+                <image
+                  href={payment.qrImage}
+                  x="37"
+                  y="145"
+                  width="144"
+                  height="144"
+                  preserveAspectRatio="none"
+                />
+              </g>
+              <g aria-label="KHQR brand mark">
+                <circle cx="109" cy="217" r="17" fill="#ffffff" />
+                <circle cx="109" cy="217" r="13" fill={KHQR_RED} />
+                <path
+                  d="M102 213h3v-3h8v3h3v8h-3v3h-8v-3h-3z"
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+                <path d="M109 213v8M105 217h8" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+              </g>
+            </g>
+          </svg>
         </div>
 
         {/* Subtitle */}
         <p className="text-[11px] text-tg-hint text-center max-w-[220px] leading-snug">
           {t('scanWithMobileBankingApp', 'Scan with mobile banking app that supports KHQR')}
         </p>
+
+
 
         {/* Button: Save KHQR to Photos */}
         <button
@@ -379,7 +772,7 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
           className={`w-full max-w-[220px] font-bold py-2.5 px-3 text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98 ${
             isSaved
               ? 'bg-emerald-600 text-white'
-              : 'bg-[#E21A1A] text-white hover:bg-[#D32323]'
+              : 'bg-[#bc271a] text-white hover:bg-[#a52115]'
           }`}
         >
           {isSaving ? (
@@ -389,7 +782,7 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
           ) : (
             <DownloadSimple size={16} weight="bold" />
           )}
-          <span>{isSaved ? t('khqrSaved', 'KHQR saved to photos!') : t('saveKhqr', 'Save KHQR to Photos')}</span>
+          <span>{isSaved ? t('khqrSaved', 'Saved!') : t('saveKhqr', 'Save')}</span>
         </button>
 
         {cancelButton}
@@ -399,32 +792,49 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
 
   // View 1: Main payment options view
   return (
-    <div className="flex flex-col justify-between flex-1 w-full min-h-[380px] gap-6">
-      <div className="flex flex-col gap-4 items-center w-full">
-        <div className="text-center">
-          <h3 className="font-bold text-lg mb-1 text-tg-text">
-            {t('completePayment', 'Complete Payment')}
-          </h3>
-          <p className="text-sm text-tg-hint">
-            {t('completePaymentHint', 'Pay directly with ABA Mobile or save KHQR to scan in any bank app.')}
-          </p>
-        </div>
+    <div className="flex flex-col justify-between flex-1 w-full min-h-[440px] animate-in fade-in duration-200">
+      <div className="w-full flex flex-col items-center">
+
+
+        {networkInterrupted && (
+          <div className="w-full bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs p-2.5 rounded-xl border border-amber-500/20 text-center mb-3">
+            {t('connectionInterrupted', 'Connection interrupted. Tap below to check status.')}
+          </div>
+        )}
 
         {/* Action Buttons */}
-        <div className="w-full flex flex-col gap-2.5">
-          {/* Button 1: Pay directly with ABA Mobile */}
+        <div className="w-full flex flex-col gap-3">
+          {/* Option 1: Pay directly with ABA Mobile */}
           {payment.abapayDeeplink && (
             <button
               type="button"
-              onClick={() => { window.location.href = payment.abapayDeeplink!; }}
-              className="w-full bg-[#005E8E] text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-[#004A70] active:scale-98 transition-all shadow-sm"
+              onClick={handleOpenAbaPayment}
+              className="w-full bg-tg-secondary-bg hover:bg-tg-hint/5 border border-tg-hint/15 rounded-2xl p-4 flex items-center justify-between transition-all active:scale-98 shadow-sm text-left"
             >
-              <span className="text-base">📱</span>
-              <span>{t('payWithAba', 'Pay with ABA Mobile')}</span>
+              <div className="flex items-center gap-3 min-w-0">
+                {/* Official ABA Bank Logo */}
+                <img
+                  src="/images/aba-logo.png"
+                  alt="ABA Mobile"
+                  className="w-12 h-12 rounded-2xl shrink-0 shadow-sm object-cover"
+                />
+                <div className="min-w-0">
+                  <div className="font-bold text-base text-tg-text">{t('payWithAba', 'ABA Mobile')}</div>
+                  <div className="text-xs text-tg-hint mt-0.5 truncate">
+                    {t('payWithAbaDesc', 'Tap to open & pay instantly in ABA app')}
+                  </div>
+                </div>
+              </div>
+              <CaretRight size={20} className="text-tg-hint shrink-0 ml-2" />
             </button>
           )}
+          {abaLaunchHint && (
+            <p className="text-xs leading-5 text-tg-hint px-1 -mt-1">
+              {abaLaunchHint}
+            </p>
+          )}
 
-          {/* Button 2: ABA KHQR Card Button */}
+          {/* Option 2: ABA KHQR Card Button */}
           <button
             type="button"
             onClick={() => setIsViewingKhqr(true)}
@@ -432,13 +842,13 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
           >
             <div className="flex items-center gap-3 min-w-0">
               {/* Red KHQR Badge Icon */}
-              <div className="w-13 h-13 rounded-2xl bg-[#E21A1A] flex items-center justify-center shrink-0 shadow-sm p-2">
+              <div className="w-12 h-12 rounded-2xl bg-[#bc271a] flex items-center justify-center shrink-0 shadow-sm p-2">
                 <KhqrLogo className="w-full h-auto text-white" />
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-base text-tg-text">{t('abaKhqr', 'ABA KHQR')}</div>
                 <div className="text-xs text-tg-hint mt-0.5 truncate">
-                  {t('scanToPayWithBankApp', 'Scan to pay with member bank app')}
+                  {t('scanToPayWithBankApp', 'Scan to pay with any bank app')}
                 </div>
               </div>
             </div>
@@ -448,7 +858,7 @@ export function KhqrPaymentPanel({ orderId, totalAmount, onPaid, onCancel, onUse
       </div>
 
       {/* Bottom Footer links: ABA Mobile is not installed? & Cancel */}
-      <div className="w-full flex flex-col items-center gap-3 mt-auto pt-6">
+      <div className="w-full flex flex-col items-center gap-3 mt-auto pt-14 pb-2">
         {(payment.playStoreUrl || payment.appStoreUrl) && (
           <div className="text-center text-xs text-tg-hint">
             <p>{t('abaNotInstalled', 'ABA Mobile is not installed?')}</p>

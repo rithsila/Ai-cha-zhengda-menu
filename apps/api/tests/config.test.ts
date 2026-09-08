@@ -31,6 +31,12 @@ describe('PUT /api/config validation', () => {
   it('accepts a valid rate', async () => {
     expect((await put({ key: 'pointsPerDollar', value: '50' })).status).toBe(200);
   });
+  it('accepts valid alert threshold configurations', async () => {
+    expect((await put({ key: 'orderWarnPendingMins', value: '7' })).status).toBe(200);
+    expect((await put({ key: 'orderLatePendingMins', value: '12' })).status).toBe(200);
+    expect((await put({ key: 'orderReminderSeconds', value: '90' })).status).toBe(200);
+    expect((await put({ key: 'orderAlertSoundEnabled', value: '1' })).status).toBe(200);
+  });
 });
 
 describe('order creation uses the configured rate', () => {

@@ -7,9 +7,8 @@
 export type PaymentMethod = 'khqr' | 'cash';
 
 const KEY = 'aicha:defaultPaymentMethod';
-// Cash is the safe default: it always works, while KHQR needs the shop's ABA
-// credentials to be set up on the server.
-const DEFAULT: PaymentMethod = 'cash';
+// KHQR is the default payment method.
+const DEFAULT: PaymentMethod = 'khqr';
 
 export function getDefaultPaymentMethod(): PaymentMethod {
   try {

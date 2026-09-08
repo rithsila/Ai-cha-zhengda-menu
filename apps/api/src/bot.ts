@@ -99,9 +99,9 @@ export const setupBot = () => {
 
       const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers]));
       const alertText = `🚨 <b>New Customer Issue / Feedback Report</b>\n\n` +
-        `<b>From:</b> ${userName} (ID: <code>${userId}</code>)\n` +
-        `<b>Phone:</b> ${userPhone || 'Not provided'}\n\n` +
-        `<b>Message:</b>\n${text}`;
+        `<b>From:</b> ${escapeTelegramHtml(userName)} (ID: <code>${escapeTelegramHtml(userId)}</code>)\n` +
+        `<b>Phone:</b> ${escapeTelegramHtml(userPhone || 'Not provided')}\n\n` +
+        `<b>Message:</b>\n${escapeTelegramHtml(text)}`;
 
       for (const managerId of allManagerIds) {
         if (managerId !== userId) {
@@ -162,6 +162,13 @@ export const setupBot = () => {
 
   return bot;
 };
+
+export function escapeTelegramHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 export async function sendTelegramNotification(telegramUserId: string, text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();

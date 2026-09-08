@@ -10,7 +10,8 @@ import {
   X,
   Sparkle,
 } from '@phosphor-icons/react';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { hasIdentity } from '../utils/api';
+import { useMyOrders } from '../hooks/useMyOrders';
 import { SignInPrompt } from './SignInPrompt';
 import { useOnlinePaymentState } from '../utils/onlinePayment';
 import { formatCurrency } from '../utils/format';
@@ -85,8 +86,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
   // Payments and history belong to one account, so a guest has nothing here.
   const signedIn = hasIdentity();
   const khqrOffered = useOnlinePaymentState() === 'available';
-  const [orders, setOrders] = useState<PaymentOrder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, ordersLoading: loading, mutateOrders } = useMyOrders({ poll: true });
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [paidCode, setPaidCode] = useState<string | null>(null);
   const [defaultMethod, setMethod] = useState<PaymentMethod>(() => getDefaultPaymentMethod());
@@ -95,39 +95,13 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
   const panelOpenRef = useRef(false);
   panelOpenRef.current = selectedOrderId !== null;
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await apiFetch(ME.orders());
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setLoading(false);
-      return;
-    }
-    fetchOrders();
-    const interval = setInterval(() => {
-      if (!panelOpenRef.current) fetchOrders();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchOrders, signedIn]);
-
   const handlePaid = useCallback(
     (pickupCode: string) => {
       setSelectedOrderId(null);
       setPaidCode(pickupCode);
-      fetchOrders();
+      mutateOrders();
     },
-    [fetchOrders]
+    [mutateOrders]
   );
 
   // Keep the saved preference honest: KHQR cannot be the default while the
@@ -365,7 +339,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                   </div>
                 ) : (
                   (order.pointsEarned ?? 0) > 0 && (() => {
-                    const totalQty = order.items?.reduce((sum, i) => sum + (i.quantity || 1), 0) ?? 0;
+                    const totalQty = order.items?.reduce((sum: number, i: any) => sum + (i.quantity || 1), 0) ?? 0;
                     const stamps = totalQty > 0 ? totalQty : Math.max(1, Math.floor((order.pointsEarned ?? 0) / 10));
                     return (
                       <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-lg">
@@ -458,7 +432,7 @@ export function PaymentView({ onBrowseMenu }: PaymentViewProps) {
                 totalAmount={orders.find(o => o.id === selectedOrderId)?.totalAmount}
                 onPaid={handlePaid}
                 onCancel={() => setSelectedOrderId(null)}
-                onUseCash={() => setSelectedOrderId(null)}
+                onExpired={() => setSelectedOrderId(null)}
               />
             </motion.div>
           </motion.div>

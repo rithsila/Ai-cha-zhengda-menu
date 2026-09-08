@@ -28,6 +28,7 @@ export interface StoreStatus {
   currentTime: string;
   reason: 'manual_open' | 'manual_closed' | 'schedule_open' | 'schedule_closed';
   menuBannerUrl: string;
+  menuBannerUrls: string;
   menuTabsConfig: string;
   shopName: string;
   shopAddress: string;
@@ -55,6 +56,7 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
   luckyTicketsCostPerSpin: 5,
   luckyWheelPrizes: '[]',
   menuBannerUrl: '/banner.webp',
+  menuBannerUrls: JSON.stringify(['/banner.webp']),
   menuTabsConfig: JSON.stringify([
     { id: 'ai-cha', label: 'Ai-Cha', icon: '/images/aicha-logo.webp', enabled: true },
     { id: 'zhengda', label: 'Zhengda', icon: '/images/zhengda_logo_cropped.webp', enabled: true },
@@ -72,6 +74,14 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
     { id: 'maps', label: 'Google Maps', url: '', enabled: false },
     { id: 'phone', label: 'Phone', url: '', enabled: false },
   ]),
+  orderWarnPendingMins: 5,
+  orderLatePendingMins: 10,
+  orderWarnPreparingMins: 8,
+  orderLatePreparingMins: 15,
+  orderWarnReadyMins: 10,
+  orderLateReadyMins: 20,
+  orderReminderSeconds: 60,
+  orderAlertSoundEnabled: '1',
 };
 
 /**
@@ -89,6 +99,48 @@ export function getCambodiaTime(date: Date = new Date()): { hour: number; minute
   const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
   const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   return { hour, minute, timeStr };
+}
+
+/**
+ * Returns current calendar date formatted as "YYYY-MM-DD" in Cambodia timezone (UTC+7).
+ */
+export function getCambodiaDateKey(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Phnom_Penh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/**
+ * Generates sequential pickup code from AI-01 to AI-99.
+ * Resets back to AI-01 on a new calendar day (Cambodia time) or after reaching AI-99.
+ */
+export function calculateNextPickupCode(
+  lastPickupCode: string | null | undefined,
+  lastCreatedAt: Date | null | undefined,
+  now: Date = new Date()
+): string {
+  if (!lastPickupCode) {
+    return 'AI-01';
+  }
+
+  const match = lastPickupCode.match(/^AI-(\d+)$/);
+  if (!match) {
+    return 'AI-01';
+  }
+
+  if (lastCreatedAt) {
+    const isSameDay = getCambodiaDateKey(lastCreatedAt) === getCambodiaDateKey(now);
+    if (!isSameDay) {
+      return 'AI-01';
+    }
+  }
+
+  const prevNum = parseInt(match[1], 10);
+  const nextNum = (prevNum % 99) + 1;
+  return `AI-${String(nextNum).padStart(2, '0')}`;
 }
 
 /**
@@ -164,6 +216,32 @@ export async function getStoreStatus(prisma: PrismaClient, now: Date = new Date(
   }
 
   const menuBannerUrl = configMap.get('menuBannerUrl') ?? (CONFIG_DEFAULTS.menuBannerUrl as string);
+  const rawMenuBannerUrls = configMap.get('menuBannerUrls');
+  let menuBannerUrls = CONFIG_DEFAULTS.menuBannerUrls as string;
+
+  if (rawMenuBannerUrls) {
+    try {
+      const parsed = JSON.parse(rawMenuBannerUrls);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        menuBannerUrls = JSON.stringify(parsed);
+      } else {
+        menuBannerUrls = JSON.stringify([menuBannerUrl]);
+      }
+    } catch {
+      menuBannerUrls = JSON.stringify([menuBannerUrl]);
+    }
+  } else {
+    menuBannerUrls = JSON.stringify([menuBannerUrl]);
+  }
+
+  let effectiveBannerUrl = menuBannerUrl;
+  try {
+    const parsed = JSON.parse(menuBannerUrls);
+    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+      effectiveBannerUrl = parsed[0];
+    }
+  } catch {}
+
   const menuTabsConfig = configMap.get('menuTabsConfig') ?? (CONFIG_DEFAULTS.menuTabsConfig as string);
   const shopName = configMap.get('shopName') ?? (CONFIG_DEFAULTS.shopName as string);
   const shopAddress = configMap.get('shopAddress') ?? (CONFIG_DEFAULTS.shopAddress as string);
@@ -182,7 +260,8 @@ export async function getStoreStatus(prisma: PrismaClient, now: Date = new Date(
     enableKhqr,
     currentTime,
     reason,
-    menuBannerUrl,
+    menuBannerUrl: effectiveBannerUrl,
+    menuBannerUrls,
     menuTabsConfig,
     shopName,
     shopAddress,
@@ -213,15 +292,28 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
     key === 'goldMinOrdersThreshold' ||
     key === 'luckyTicketsPerGoldOrder' ||
     key === 'luckyTicketsPerStandardOrder' ||
-    key === 'luckyTicketsCostPerSpin'
+    key === 'luckyTicketsCostPerSpin' ||
+    key === 'orderWarnPendingMins' ||
+    key === 'orderLatePendingMins' ||
+    key === 'orderWarnPreparingMins' ||
+    key === 'orderLatePreparingMins' ||
+    key === 'orderWarnReadyMins' ||
+    key === 'orderLateReadyMins' ||
+    key === 'orderReminderSeconds'
   ) {
     const num = Number(strVal);
-    const nonNegativeKeys = ['deliveryFee', 'goldMinOrdersThreshold', 'luckyTicketsPerGoldOrder', 'luckyTicketsPerStandardOrder'];
+    const nonNegativeKeys = [
+      'deliveryFee',
+      'goldMinOrdersThreshold',
+      'luckyTicketsPerGoldOrder',
+      'luckyTicketsPerStandardOrder',
+      'orderReminderSeconds',
+    ];
     const min = nonNegativeKeys.includes(key) ? 0 : 1;
     if (!Number.isFinite(num) || num < min) {
       return { valid: false, normalizedValue: '', error: `${key} must be a number of at least ${min}` };
     }
-    return { valid: true, normalizedValue: String(num) };
+    return { valid: true, normalizedValue: String(Math.round(num)) };
   }
 
   // Store status mode
@@ -249,7 +341,8 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
     key === 'enableKhqr' ||
     key === 'allowCashForStandard' ||
     key === 'luckyDrawEnabled' ||
-    key === 'shopSocialsEnabled'
+    key === 'shopSocialsEnabled' ||
+    key === 'orderAlertSoundEnabled'
   ) {
     if (strVal === '1' || strVal === 'true' || value === true) {
       return { valid: true, normalizedValue: '1' };
@@ -284,6 +377,24 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
       return { valid: false, normalizedValue: '', error: 'menuBannerUrl cannot be empty' };
     }
     return { valid: true, normalizedValue: strVal };
+  }
+
+  // Menu banner multiple images list (1 to 5 images)
+  if (key === 'menuBannerUrls') {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 5) {
+        return { valid: false, normalizedValue: '', error: 'menuBannerUrls must be an array of 1 to 5 image URLs' };
+      }
+      for (const url of parsed) {
+        if (!url || typeof url !== 'string' || !url.trim()) {
+          return { valid: false, normalizedValue: '', error: 'Each banner URL must be a non-empty string' };
+        }
+      }
+      return { valid: true, normalizedValue: JSON.stringify(parsed.map((u: string) => u.trim())) };
+    } catch {
+      return { valid: false, normalizedValue: '', error: 'menuBannerUrls must be valid JSON array' };
+    }
   }
 
   // Menu tabs configuration (1 to 3 tabs)

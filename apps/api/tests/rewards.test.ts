@@ -47,7 +47,10 @@ describe('rewards API', () => {
     const publicList = await request(app).get('/api/rewards');
     expect(publicList.body.find((r: any) => r.id === id)).toBeUndefined();
 
-    const managerList = await request(app).get('/api/rewards?includeInactive=1');
+    const unauthInactive = await request(app).get('/api/rewards?includeInactive=1');
+    expect(unauthInactive.body.find((r: any) => r.id === id)).toBeUndefined();
+
+    const managerList = await auth(request(app).get('/api/rewards?includeInactive=1'));
     expect(managerList.body.find((r: any) => r.id === id)?.isActive).toBe(false);
 
     // Reactivate reward

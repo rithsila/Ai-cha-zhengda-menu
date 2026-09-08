@@ -28,6 +28,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
   const { toast } = useToast();
   const onSummaryChangeRef = useRef(onSummaryChange);
   onSummaryChangeRef.current = onSummaryChange;
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Search & Filter state
   const [searchInput, setSearchInput] = useState('');
@@ -55,6 +56,10 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
   }, [searchInput]);
 
   const fetchCustomers = useCallback(async () => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
@@ -65,12 +70,15 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
         limit: '50',
       });
 
-      const data = await apiFetch<CustomersResponse>(`/api/customers?${queryParams.toString()}`);
+      const data = await apiFetch<CustomersResponse>(`/api/customers?${queryParams.toString()}`, {
+        signal: controller.signal,
+      });
       setCustomers(data.customers);
       setSummary(data.summary);
       setPagination(data.pagination);
       onSummaryChangeRef.current?.(data.summary.totalCustomers);
     } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       setError(err.message || "Couldn't load customer CRM data");
       toast({
         title: "Couldn't load customer CRM data",
@@ -78,7 +86,9 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
         variant: 'error',
       });
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, [debouncedSearch, tierFilter, page, toast]);
 
@@ -369,9 +379,14 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                     >
                       {/* Customer Info */}
                       <td className="py-3.5 pl-5 pr-3">
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCustomerId(c.telegramUserId)}
+                          className="group flex items-center gap-3 text-left focus:outline-none cursor-pointer"
+                          title="Click to view and edit customer"
+                        >
                           <div
-                            className={`flex size-9 shrink-0 items-center justify-center rounded-none font-bold shadow-xs ${
+                            className={`flex size-9 shrink-0 items-center justify-center rounded-none font-bold shadow-xs transition-transform group-hover:scale-105 ${
                               isGold
                                 ? 'bg-amber-500 text-white ring-1 ring-amber-400'
                                 : 'bg-surface-sunken text-ink ring-1 ring-border'
@@ -380,7 +395,9 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                             {(c.firstName?.[0] || c.contactName?.[0] || 'U').toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-bold text-ink text-xs">{nameDisplay}</p>
+                            <p className="truncate font-bold text-ink text-xs group-hover:text-accent group-hover:underline">
+                              {nameDisplay}
+                            </p>
                             <div className="flex items-center gap-2 text-[11px] text-ink-faint">
                               <span className="font-mono">ID: {c.telegramUserId}</span>
                               {c.username && <span className="font-mono text-accent">@{c.username}</span>}
@@ -391,7 +408,7 @@ export function CustomerCrm({ onSummaryChange }: CustomerCrmProps) {
                               </p>
                             )}
                           </div>
-                        </div>
+                        </button>
                       </td>
 
                       {/* Phone */}

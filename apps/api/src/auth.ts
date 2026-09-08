@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, randomInt, timingSafeEqual } from 'crypto';
 import type { RequestHandler } from 'express';
 
 export type StaffRole = 'staff' | 'manager';
@@ -193,7 +193,7 @@ export function createStaffOtp(rawPhone: string): { code: string; allowed: boole
     return { code: '', allowed: false, waitSeconds };
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const code = randomInt(100000, 1000000).toString();
   phoneOtps.set(phone, {
     code,
     expiresAt: now + OTP_TTL_MS,
@@ -227,7 +227,12 @@ export function verifyStaffOtpCode(
 
   entry.attempts += 1;
 
-  if (entry.code === inputCode.trim()) {
+  const trimmed = inputCode.trim();
+  const isMatch =
+    entry.code.length === trimmed.length &&
+    timingSafeEqual(Buffer.from(entry.code), Buffer.from(trimmed));
+
+  if (isMatch) {
     phoneOtps.delete(phone);
     return { valid: true };
   }
@@ -344,4 +349,48 @@ export function clearFailedLogins(req: { ip?: string; socket?: { remoteAddress?:
 export function clearLoginAttempts() {
   loginAttempts.clear();
 }
+
+/** General IP sliding window rate limiter */
+export function createRateLimiter(options: { windowMs: number; max: number; message: string }): RequestHandler {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+
+  return (req, res, next) => {
+    // In test environment, skip unless testing rate limiting explicitly
+    if (process.env.NODE_ENV === 'test' && !req.headers['x-test-rate-limit']) {
+      return next();
+    }
+
+    const key = clientKey(req);
+    const now = Date.now();
+    const record = hits.get(key);
+
+    if (!record || now > record.resetAt) {
+      hits.set(key, { count: 1, resetAt: now + options.windowMs });
+      return next();
+    }
+
+    if (record.count >= options.max) {
+      const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: options.message, retryAfter });
+    }
+
+    record.count += 1;
+    next();
+  };
+}
+
+/** Order creation rate limiter: max 15 orders per minute per IP */
+export const orderRateLimit = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 15,
+  message: 'Too many orders created from your connection. Please wait a minute before placing another order.',
+});
+
+/** Feedback submission rate limiter: max 5 messages per 5 minutes per IP */
+export const feedbackRateLimit = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 5,
+  message: 'Too many feedback messages submitted. Please wait 5 minutes before sending another report.',
+});
 

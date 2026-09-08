@@ -12,6 +12,7 @@ import {
   getStoreStatus,
   validateConfig,
   CONFIG_DEFAULTS,
+  calculateNextPickupCode,
 } from './loyalty';
 import { verifyTelegramLogin, isLoginFresh } from './telegram-auth';
 import {
@@ -22,6 +23,7 @@ import {
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
   roleForTelegramId, resolveStaffAccount, adminTelegramIds, adminTelegramUsernames,
   resolveStaffByPhone, createStaffOtp, verifyStaffOtpCode, canonicalPhone, adminPhoneNumbers,
+  orderRateLimit, feedbackRateLimit,
 } from './auth';
 import { sendOtpSms } from './sms';
 import {
@@ -29,7 +31,7 @@ import {
   verifyInitData, devIdentityAllowed, TelegramInitDataUser,
 } from './telegram-initdata';
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
-import { sendTelegramNotification } from './bot';
+import { sendTelegramNotification, escapeTelegramHtml } from './bot';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -39,6 +41,49 @@ import { uploadToR2, isR2Configured } from './r2';
 // The tuned SQLite client lives in db.ts; re-exported here because every
 // caller (and every test) already imports it from this module.
 export { prisma };
+
+export const ABA_NOT_CONFIGURED =
+  'ABA PayWay is not configured. Set ABA_MERCHANT_ID and ABA_API_KEY in apps/api/.env.';
+
+// ABA PayWay client. Built per call, not once at startup, so the server picks
+// up credentials without a restart and tests can vary the environment.
+// Returns null when unconfigured -- never fall back to fake credentials, which
+// only turns a missing-config problem into an unreadable "wrong hash" error.
+export function getAbaClient(): ABAPayWay | null {
+  const merchantId = process.env.ABA_MERCHANT_ID || '';
+  const apiKey = process.env.ABA_API_KEY || '';
+  if (!merchantId || !apiKey) return null;
+  return new ABAPayWay({
+    merchantId,
+    apiKey,
+    baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
+    webhookSecret: process.env.ABA_WEBHOOK_SECRET || undefined,
+  });
+}
+
+/**
+ * Close a transaction with ABA PayWay before payment completes.
+ * Once closed, PayWay will reject or reverse any incoming payment,
+ * preventing late payments from going through.
+ * See: https://developer.payway.com.kh/close-transaction-14530822e0.md
+ */
+export async function closeAbaTransaction(tranId: string): Promise<{ success: boolean; code?: string; message?: string }> {
+  const aba = getAbaClient();
+  if (!aba || !tranId) {
+    return { success: false, message: 'Missing credentials or transaction ID' };
+  }
+
+  try {
+    const res = await aba.closeTransaction(tranId);
+    return {
+      success: res.success || res.code === '5',
+      code: res.code,
+      message: res.message || res.error,
+    };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Network error' };
+  }
+}
 
 /** The only statuses an order may hold. */
 const ORDER_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled', 'paid'];
@@ -55,13 +100,23 @@ function isOriginAllowed(origin?: string): boolean {
   if (list.includes(origin) || list.includes('*')) return true;
   try {
     const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+
+    // Localhost in development
     if (
-      parsed.hostname === 'localhost' ||
-      parsed.hostname === '127.0.0.1' ||
-      parsed.hostname.endsWith('.localhost') ||
-      parsed.hostname.endsWith('.workers.dev') ||
-      parsed.hostname.endsWith('.pages.dev') ||
-      parsed.hostname.includes('aichazhengdaarakawa.com')
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.localhost')
+    ) {
+      return true;
+    }
+
+    // Official store domains and verified Cloudflare Pages
+    if (
+      host === 'aichazhengdaarakawa.com' ||
+      host.endsWith('.aichazhengdaarakawa.com') ||
+      host === 'ai-cha-menu.pages.dev' ||
+      host === 'ai-cha-staff.pages.dev'
     ) {
       return true;
     }
@@ -73,6 +128,8 @@ function isOriginAllowed(origin?: string): boolean {
 
 export function createApp() {
   const app = express();
+
+  app.set('trust proxy', 1);
 
   app.use(helmet());
 
@@ -222,10 +279,15 @@ export function createApp() {
       let verifiedTelegramId: string | null = null;
 
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      let authUsername: string | undefined;
+
       if (initData && botToken) {
         const { verifyInitData } = await import('./telegram-initdata');
         const verified = verifyInitData(initData, botToken);
-        if (verified) verifiedTelegramId = String(verified.id);
+        if (verified) {
+          verifiedTelegramId = String(verified.id);
+          if (verified.username) authUsername = String(verified.username);
+        }
       }
 
       if (telegramAuth && typeof telegramAuth === 'object' && botToken && !verifiedTelegramId) {
@@ -233,24 +295,25 @@ export function createApp() {
         for (const [k, v] of Object.entries(telegramAuth)) {
           strFields[k] = String(v);
         }
-        if (verifyTelegramLogin(strFields, botToken)) {
+        if (verifyTelegramLogin(strFields, botToken) && isLoginFresh(strFields.auth_date)) {
           verifiedTelegramId = String(strFields.id);
+          if (strFields.username) authUsername = String(strFields.username);
         }
       }
 
-      // If user provided Telegram User ID directly from browser
-      if (!verifiedTelegramId && telegramUserId) {
-        verifiedTelegramId = String(telegramUserId).trim();
+      // Local development only: allow explicit dev_manager or dev_staff test accounts
+      if (
+        !verifiedTelegramId &&
+        process.env.NODE_ENV !== 'production' &&
+        typeof telegramUserId === 'string' &&
+        (telegramUserId === 'dev_manager' || telegramUserId === 'dev_staff')
+      ) {
+        verifiedTelegramId = telegramUserId;
       }
 
       if (!verifiedTelegramId) {
         recordFailedLogin(req);
-        return res.status(401).json({ error: 'Please provide a valid Telegram User ID' });
-      }
-
-      let authUsername: string | undefined;
-      if (telegramAuth && typeof telegramAuth === 'object') {
-        authUsername = (telegramAuth as any).username;
+        return res.status(401).json({ error: 'Valid Telegram sign-in is required' });
       }
 
       let account = await resolveStaffAccount(verifiedTelegramId, prisma, authUsername);
@@ -388,24 +451,6 @@ export function createApp() {
     }
   });
 
-  // ABA PayWay client. Built per call, not once at startup, so the server picks
-  // up credentials without a restart and tests can vary the environment.
-  // Returns null when unconfigured -- never fall back to fake credentials, which
-  // only turns a missing-config problem into an unreadable "wrong hash" error.
-  function getAbaClient(): ABAPayWay | null {
-    const merchantId = process.env.ABA_MERCHANT_ID || '';
-    const apiKey = process.env.ABA_API_KEY || '';
-    if (!merchantId || !apiKey) return null;
-    return new ABAPayWay({
-      merchantId,
-      apiKey,
-      baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
-    });
-  }
-
-  const ABA_NOT_CONFIGURED =
-    'ABA PayWay is not configured. Set ABA_MERCHANT_ID and ABA_API_KEY in apps/api/.env.';
-
   app.get('/', (req, res) => {
     res.json({ status: 'ok', message: 'Ai-Cha & Zhengda API is running' });
   });
@@ -468,7 +513,8 @@ export function createApp() {
           lastName: initDataUser?.last_name || null,
         }
       });
-      res.json(user);
+      const { trustNotes: _notes, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch user' });
@@ -521,7 +567,8 @@ export function createApp() {
         update: data,
         create: { telegramUserId, loyaltyPoints: 0, ...data }
       });
-      res.json(user);
+      const { trustNotes: _notes, ...sanitizedUser } = user;
+      res.json(sanitizedUser);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to save profile' });
@@ -574,7 +621,9 @@ export function createApp() {
 
   app.get('/api/catalog', async (req, res) => {
     try {
-      const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const wantsInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const isStaff = Boolean(staffRoleOf(req as any));
+      const includeInactive = wantsInactive && isStaff;
       const catalog = await prisma.menuItem.findMany({
         where: includeInactive ? undefined : { isActive: true },
         include: {
@@ -595,8 +644,8 @@ export function createApp() {
   app.post('/api/catalog', requireManager, async (req, res) => {
     try {
       const { brand, category, name, description, basePrice, image, modifiers, earnsStamp, canClaim } = req.body || {};
-      if (!name || typeof name !== 'string' || !brand || typeof brand !== 'string' || !category || typeof category !== 'string') {
-        return res.status(400).json({ error: 'Name, brand, and category are required' });
+      if (!name || typeof name !== 'string' || !category || typeof category !== 'string') {
+        return res.status(400).json({ error: 'Name and category are required' });
       }
       const parsedPrice = Number(basePrice);
       if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
@@ -605,7 +654,7 @@ export function createApp() {
 
       const item = await prisma.menuItem.create({
         data: {
-          brand: brand.trim().toLowerCase(),
+          brand: typeof brand === 'string' && brand.trim() ? brand.trim().toLowerCase() : 'default',
           category: category.trim(),
           name: name.trim(),
           description: typeof description === 'string' ? description.trim() : null,
@@ -792,9 +841,193 @@ export function createApp() {
     }
   });
 
-  app.post('/api/orders', resolveCustomer, async (req, res) => {
+  app.get('/api/categories', async (req, res) => {
     try {
-      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward } = req.body;
+      const brand = typeof req.query.brand === 'string' && req.query.brand.trim()
+        ? req.query.brand.trim().toLowerCase()
+        : undefined;
+      const where: any = {};
+      if (brand) {
+        where.brand = brand;
+      }
+      const categories = await prisma.category.findMany({
+        where,
+        orderBy: { sortOrder: 'asc' },
+      });
+      res.json(categories);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to fetch categories' });
+    }
+  });
+
+  app.post('/api/categories', requireManager, async (req, res) => {
+    try {
+      const { brand, name, sortOrder } = req.body || {};
+      if (!name || typeof name !== 'string') {
+        return res.status(400).json({ error: 'Name is required' });
+      }
+      const normalizedBrand = typeof brand === 'string' && brand.trim() ? brand.trim().toLowerCase() : 'default';
+      const normalizedName = name.trim();
+      if (!normalizedName) {
+        return res.status(400).json({ error: 'Name must not be empty' });
+      }
+
+      let order: number;
+      if (sortOrder !== undefined && Number.isFinite(Number(sortOrder))) {
+        order = Number(sortOrder);
+      } else {
+        const maxCategory = await prisma.category.findFirst({
+          orderBy: { sortOrder: 'desc' },
+        });
+        order = maxCategory ? maxCategory.sortOrder + 1 : 0;
+      }
+
+      const category = await prisma.category.create({
+        data: {
+          brand: normalizedBrand,
+          name: normalizedName,
+          sortOrder: order,
+        },
+      });
+      res.status(201).json(category);
+    } catch (error: any) {
+      console.error(error);
+      if (error?.code === 'P2002') {
+        return res.status(400).json({ error: 'Category with this name already exists' });
+      }
+      res.status(500).json({ error: 'Failed to create category' });
+    }
+  });
+
+  app.put('/api/categories/reorder', requireManager, async (req, res) => {
+    try {
+      const { items } = req.body || {};
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: 'items array is required' });
+      }
+      await prisma.$transaction(async (tx) => {
+        for (const item of items) {
+          if (item && item.id && Number.isFinite(Number(item.sortOrder))) {
+            await tx.category.update({
+              where: { id: String(item.id) },
+              data: { sortOrder: Number(item.sortOrder) },
+            });
+          }
+        }
+      }, WRITE_TX_OPTIONS);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to reorder categories' });
+    }
+  });
+
+  app.put('/api/categories/:id', requireManager, async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const { name, sortOrder, isActive } = req.body || {};
+
+      const existing = await prisma.category.findUnique({
+        where: { id },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+
+      const updateData: any = {};
+      let newName: string | undefined;
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim()) {
+          return res.status(400).json({ error: 'Valid category name is required' });
+        }
+        newName = name.trim();
+        updateData.name = newName;
+      }
+      if (sortOrder !== undefined) {
+        const parsed = Number(sortOrder);
+        if (!Number.isNaN(parsed)) {
+          updateData.sortOrder = parsed;
+        }
+      }
+      if (isActive !== undefined) {
+        updateData.isActive = Boolean(isActive);
+      }
+
+      let updated;
+      if (newName && newName !== existing.name) {
+        updated = await prisma.$transaction(async (tx) => {
+          const updatedCat = await tx.category.update({
+            where: { id },
+            data: updateData,
+          });
+          await tx.menuItem.updateMany({
+            where: {
+              brand: existing.brand,
+              category: existing.name,
+            },
+            data: {
+              category: newName,
+            },
+          });
+          return updatedCat;
+        }, WRITE_TX_OPTIONS);
+      } else {
+        updated = await prisma.category.update({
+          where: { id },
+          data: updateData,
+        });
+      }
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error(error);
+      if (error?.code === 'P2002') {
+        return res.status(400).json({ error: 'Category with this name already exists for this brand' });
+      }
+      res.status(500).json({ error: 'Failed to update category' });
+    }
+  });
+
+  app.delete('/api/categories/:id', requireManager, async (req, res) => {
+    try {
+      const id = String(req.params.id);
+      const category = await prisma.category.findUnique({
+        where: { id },
+      });
+      if (!category) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+
+      const activeItemCount = await prisma.menuItem.count({
+        where: {
+          brand: category.brand,
+          category: category.name,
+          isActive: true,
+        },
+      });
+
+      if (activeItemCount > 0) {
+        return res.status(400).json({
+          error: `Cannot delete category: ${activeItemCount} items are assigned to it`,
+        });
+      }
+
+      await prisma.category.delete({
+        where: { id },
+      });
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to delete category' });
+    }
+  });
+
+  app.post('/api/orders', orderRateLimit, resolveCustomer, async (req, res) => {
+    try {
+      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward, prizeClaimCode } = req.body;
 
       // The owner of an order is the verified caller, never a body field —
       // a body field let anyone attach an order to a stranger and spend their
@@ -937,11 +1170,43 @@ export function createApp() {
       }
       const maxByTotal = Math.floor(serverTotal * POINTS_PER_DOLLAR);
 
-      // Make sure the customer row exists *before* the transaction. Creating it
-      // is not something that has to be atomic with the order, and SQLite has a
-      // single writer, so every statement kept out of the transaction is lock
-      // time given back to the next checkout. Everything above (menu lookup,
-      // pricing, address validation, config reads) is outside for the same reason.
+      // Validate prize voucher if provided
+      let validatedClaim: any = null;
+      if (prizeClaimCode && typeof prizeClaimCode === 'string' && prizeClaimCode.trim()) {
+        let normalizedCode = prizeClaimCode.trim().toUpperCase();
+        if (!normalizedCode.startsWith('LUCKY-') && normalizedCode.length <= 8) {
+          normalizedCode = `LUCKY-${normalizedCode}`;
+        }
+
+        const claim = await prisma.prizeClaim.findUnique({
+          where: { code: normalizedCode },
+        });
+
+        if (!claim) {
+          return res.status(400).json({ error: 'Invalid prize voucher code.' });
+        }
+
+        if (claim.status !== 'pending') {
+          return res.status(400).json({ error: `This prize voucher has already been ${claim.status}.` });
+        }
+
+        if (claim.telegramUserId !== telegramUserId) {
+          return res.status(400).json({ error: 'This prize voucher does not belong to your account.' });
+        }
+
+        const now = new Date();
+        if (claim.expiresAt && claim.expiresAt < now) {
+          await prisma.prizeClaim.update({
+            where: { id: claim.id },
+            data: { status: 'expired' },
+          });
+          return res.status(400).json({ error: 'This prize voucher has expired.' });
+        }
+
+        validatedClaim = claim;
+      }
+
+      // Make sure the customer row exists *before* the transaction.
       if (telegramUserId) {
         await withWriteRetry(() => prisma.user.upsert({
           where: { telegramUserId },
@@ -950,17 +1215,9 @@ export function createApp() {
         }));
       }
 
-      // The id is minted here, before the first attempt, so that every attempt
-      // writes the same row. That is what makes the retry below safe: a lock
-      // timeout can in principle fire on a transaction that did commit, and if
-      // it does, the next attempt finds the order already there and returns it
-      // instead of creating a second one and spending the points twice. When
-      // the transaction really was rolled back nothing exists under this id, so
-      // the balance is re-read and the points are reserved exactly once.
       const orderId = randomUUID();
 
-      // Points are reserved (deducted) the moment the order is created, inside one
-      // transaction. Otherwise two pending orders could each redeem the same balance.
+      // Points and prize claims are reserved the moment the order is created, inside one transaction.
       const order = await withWriteRetry(async (attempt) => {
         if (attempt > 0) {
           const existing = await prisma.order.findUnique({ where: { id: orderId } });
@@ -1011,7 +1268,25 @@ export function createApp() {
             discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
           }
 
-          const finalAmount = Math.round((serverTotal - discountApplied) * 100) / 100;
+          // Apply prize voucher discount if valid
+          if (validatedClaim) {
+            const freshClaim = await tx.prizeClaim.findUnique({
+              where: { id: validatedClaim.id },
+            });
+            if (!freshClaim || freshClaim.status !== 'pending') {
+              throw new Error('This prize voucher has already been claimed');
+            }
+
+            const highestPricedUnit = pricedItems.reduce((max, p) => {
+              const unitPrice = Math.round((p.price / p.quantity) * 100) / 100;
+              return Math.max(max, unitPrice);
+            }, 0);
+
+            const voucherDiscount = Math.min(highestPricedUnit, Math.max(0, serverTotal - discountApplied));
+            discountApplied += voucherDiscount;
+          }
+
+          const finalAmount = Math.round(Math.max(0, serverTotal - discountApplied) * 100) / 100;
 
           // Stamps earned: 1 stamp (10 points) per paid eligible item (earnsStamp !== false)
           const eligibleItemsCount = pricedItems.reduce((sum, p) => {
@@ -1030,6 +1305,33 @@ export function createApp() {
             });
           }
 
+          const latestOrder = await tx.order.findFirst({
+            where: {
+              pickupCode: { startsWith: 'AI-' },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { pickupCode: true, createdAt: true },
+          });
+
+          const pickupCode = calculateNextPickupCode(
+            latestOrder?.pickupCode,
+            latestOrder?.createdAt,
+            new Date()
+          );
+
+          // Mark prize claim as redeemed online
+          if (validatedClaim) {
+            await tx.prizeClaim.update({
+              where: { id: validatedClaim.id },
+              data: {
+                status: 'claimed',
+                claimedAt: new Date(),
+                claimedByStaffName: 'Online Order',
+                notes: `Redeemed online on order #${pickupCode || orderId}`,
+              },
+            });
+          }
+
           return tx.order.create({
             data: {
               id: orderId,
@@ -1037,7 +1339,7 @@ export function createApp() {
               paymentMethod,
               telegramUserId,
               status: 'pending',
-              pickupCode: `A-${Math.floor(100 + Math.random() * 900)}`,
+              pickupCode,
               orderType: orderType || 'pickup',
               deliveryAddress: delivery ? formatAddress(delivery.building, delivery.room) : null,
               deliveryBuilding: orderBuilding,
@@ -1056,8 +1358,11 @@ export function createApp() {
       });
 
       res.json(order);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      if (error?.message && (error.message.includes('voucher') || error.message.includes('claimed'))) {
+        return res.status(400).json({ error: error.message });
+      }
       res.status(500).json({ error: 'Failed to create order' });
     }
   });
@@ -1131,6 +1436,22 @@ export function createApp() {
     }
   });
 
+  function maskPhone(phone?: string | null): string | null {
+    if (!phone) return null;
+    const clean = phone.trim();
+    if (clean.length <= 4) return '***';
+    return `${clean.slice(0, 4)}****${clean.slice(-2)}`;
+  }
+
+  function sanitizeOrderForGuest(order: any) {
+    return {
+      ...order,
+      contactPhone: maskPhone(order.contactPhone),
+      deliveryRoom: order.deliveryRoom ? '****' : null,
+      deliveryAddress: order.deliveryBuilding ? `Building ${order.deliveryBuilding}, Room ****` : null,
+    };
+  }
+
   app.get('/api/orders/:id', resolveCustomer, async (req, res) => {
     try {
       const id = String(req.params.id);
@@ -1147,12 +1468,17 @@ export function createApp() {
       // Readable by the customer who placed it, or by staff working the board.
       // A guest order (telegramUserId null) stays readable by whoever holds its
       // id: there is no account to check it against, and the guest needs the
-      // receipt. Accepted trade-off — the id is a random uuid, not a counter.
+      // receipt. PII (phone, room) is masked for unauthenticated guest lookups.
       const caller = (req as any).telegramUserId as string | null;
+      const isStaff = Boolean(staffRoleOf(req as any));
       const isOwner = order.telegramUserId != null && order.telegramUserId === caller;
       const isGuestOrder = order.telegramUserId == null;
-      if (!isOwner && !isGuestOrder && !staffRoleOf(req as any)) {
+      if (!isOwner && !isGuestOrder && !isStaff) {
         return res.status(403).json({ error: 'This order belongs to someone else' });
+      }
+
+      if (!isOwner && !isStaff) {
+        return res.json(sanitizeOrderForGuest(order));
       }
 
       res.json(order);
@@ -1257,12 +1583,9 @@ export function createApp() {
     if (order.status === 'paid') {
       return { ok: true as const, status: 'APPROVED', orderStatus: order.status, order };
     }
-    // A cancelled order has already had its reserved points handed back, so a
-    // late payment must not quietly revive it. Do not test pointsSettled here:
-    // refundOrderPoints sets that flag too, and treating it as "already paid"
-    // would report a cancelled order as APPROVED.
-    if (order.status === 'cancelled') {
-      return { ok: false as const, code: 409, body: { error: 'This order was cancelled' } };
+
+    if (order.transactionId && transactionId && transactionId !== order.transactionId) {
+      return { ok: false as const, code: 400, body: { error: 'Transaction reference mismatch' } };
     }
 
     let result = await aba.checkStatus(transactionId);
@@ -1275,13 +1598,49 @@ export function createApp() {
     if (!result.success) {
       return { ok: false as const, code: 502, body: { error: result.error || 'Could not reach ABA PayWay' } };
     }
+
+    // A cancelled order has already had its reserved points handed back.
+    // Explicitly handle late approvals so a charged customer's payment is not silently lost.
+    if (order.status === 'cancelled') {
+      if (result.status === 'APPROVED') {
+        const lateNote = order.cancelReason && !order.cancelReason.includes('Late payment')
+          ? `${order.cancelReason} [Late payment approved: customer was charged]`
+          : (order.cancelReason || 'Late payment approved: customer was charged');
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { cancelReason: lateNote },
+        });
+        return {
+          ok: false as const,
+          code: 409,
+          body: {
+            error: 'This order was cancelled before payment was confirmed. Customer was charged.',
+            status: 'LATE_APPROVED',
+            lateApproved: true,
+            pickupCode: order.pickupCode,
+            orderStatus: order.status,
+          },
+        };
+      }
+      return { ok: false as const, code: 409, body: { error: 'This order was cancelled' } };
+    }
+
     if (result.status !== 'APPROVED') {
       return { ok: true as const, status: result.status, orderStatus: order.status, order };
     }
 
-    // ABA says approved -- but for how much? A short payment must not settle
-    // the order.
-    if (result.amount != null && Math.abs(result.amount - order.totalAmount) > AMOUNT_TOLERANCE) {
+    // ABA says approved -- strictly verify amount and currency.
+    // Do not accept a missing or invalid amount as successful verification.
+    if (result.amount == null || typeof result.amount !== 'number' || Number.isNaN(result.amount)) {
+      console.error(`ABA amount missing or invalid on order ${order.id}: received ${result.amount}`);
+      return {
+        ok: false as const,
+        code: 400,
+        body: { error: 'Paid amount missing or invalid from payment gateway' },
+      };
+    }
+
+    if (Math.abs(result.amount - order.totalAmount) > AMOUNT_TOLERANCE) {
       console.error(
         `ABA amount mismatch on order ${order.id}: paid ${result.amount}, expected ${order.totalAmount}`
       );
@@ -1292,9 +1651,27 @@ export function createApp() {
       };
     }
 
-    const updated = await prisma.order.update({ where: { id: order.id }, data: { status: 'paid' } });
-    await settleOrderPoints(prisma, order.id);
-    return { ok: true as const, status: 'APPROVED', orderStatus: updated.status, order: updated };
+    if (result.currency && result.currency.toUpperCase() !== 'USD') {
+      console.error(`ABA currency mismatch on order ${order.id}: received ${result.currency}, expected USD`);
+      return {
+        ok: false as const,
+        code: 400,
+        body: { error: 'Paid currency does not match the order currency' },
+      };
+    }
+
+    // Atomic update for idempotency under concurrent polling, callbacks, and expiry sweeps
+    const updateResult = await prisma.order.updateMany({
+      where: { id: order.id, status: 'pending' },
+      data: { status: 'paid' },
+    });
+
+    if (updateResult.count > 0) {
+      await settleOrderPoints(prisma, order.id);
+    }
+
+    const finalOrder = (await prisma.order.findUnique({ where: { id: order.id } }))!;
+    return { ok: true as const, status: 'APPROVED', orderStatus: finalOrder.status, order: finalOrder };
   }
 
   /**
@@ -1342,11 +1719,32 @@ export function createApp() {
       const denied = denyPaymentAccess(req, order);
       if (denied) return res.status(denied.code).json(denied.body);
 
+      // Restrict payment creation to eligible orders
+      if (order.paymentMethod !== 'khqr') {
+        return res.status(400).json({ error: 'Cannot initiate ABA payment for a non-KHQR order' });
+      }
       if (order.status === 'paid') {
         return res.status(409).json({ error: 'This order is already paid' });
       }
+      if (order.status === 'cancelled') {
+        return res.status(409).json({ error: 'This order was cancelled' });
+      }
+      if (order.status !== 'pending') {
+        return res.status(409).json({ error: `Cannot initiate payment for order with status: ${order.status}` });
+      }
       if (order.totalAmount <= 0) {
         return res.status(409).json({ error: 'Order total must be greater than zero' });
+      }
+
+      // Verify previous attempt before creating or retrying
+      if (order.transactionId) {
+        const prevCheck = await confirmAbaPayment(aba, order.id, order.transactionId);
+        if (prevCheck.ok && prevCheck.status === 'APPROVED') {
+          return res.status(409).json({
+            error: 'This order is already paid',
+            pickupCode: order.pickupCode,
+          });
+        }
       }
 
       // Reuse the transaction id if one exists, so refreshing the checkout page
@@ -1444,12 +1842,25 @@ export function createApp() {
       if (!order.transactionId) {
         return res.status(409).json({ error: 'No ABA payment has been started for this order' });
       }
-      if (order.paymentExpiresAt && order.paymentExpiresAt.getTime() < Date.now()) {
-        return res.json({ status: 'EXPIRED', ...base });
-      }
 
       const result = await confirmAbaPayment(aba, order.id, order.transactionId);
-      if (!result.ok) return res.status(result.code).json(result.body);
+      if (!result.ok) {
+        return res.status(result.code).json(result.body);
+      }
+
+      // If ABA reports PENDING and payment deadline has passed, report EXPIRED
+      if (
+        result.status === 'PENDING' &&
+        order.paymentExpiresAt &&
+        order.paymentExpiresAt.getTime() < Date.now()
+      ) {
+        return res.json({
+          status: 'EXPIRED',
+          orderStatus: result.orderStatus,
+          pickupCode: result.order.pickupCode,
+          expiresAt: result.order.paymentExpiresAt?.toISOString() ?? null,
+        });
+      }
 
       res.json({
         status: result.status,
@@ -1463,11 +1874,136 @@ export function createApp() {
     }
   });
 
+  // Background payment confirmation: official ABA PayWay pushback callback
+  app.post('/api/payment/aba/callback', async (req, res) => {
+    try {
+      const aba = getAbaClient();
+      if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
+
+      const signature = (req.header('X-PayWay-HMAC-SHA512') || req.header('x-payway-hmac-sha512') || '').trim();
+      const isValid = await aba.verifyWebhook(req.body, signature);
+      if (!isValid) {
+        console.warn('ABA callback rejected: invalid webhook signature');
+        return res.status(401).json({ error: 'Invalid webhook signature' });
+      }
+
+      const body = req.body || {};
+      const tranId = typeof body.tran_id === 'string' ? body.tran_id : '';
+      const orderId = typeof body.return_params === 'string' ? body.return_params : '';
+
+      const order = await prisma.order.findFirst({
+        where: {
+          OR: [
+            ...(orderId ? [{ id: orderId }] : []),
+            ...(tranId ? [{ transactionId: tranId }] : []),
+          ],
+        },
+      });
+
+      if (!order) {
+        console.warn(`ABA callback: order not found (tran_id=${tranId}, return_params=${orderId})`);
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Treat callback as untrusted until verified using server-side transaction checks
+      const result = await confirmAbaPayment(aba, order.id, tranId || order.transactionId || '');
+      if (!result.ok) {
+        return res.status(result.code).json(result.body);
+      }
+
+      res.json({ success: true, status: result.status });
+    } catch (error) {
+      console.error('Error handling ABA callback:', error);
+      res.status(500).json({ error: 'Failed to process payment callback' });
+    }
+  });
+
+  // Customer cancellation of unpaid order with server reconciliation
+  app.post('/api/payment/aba/cancel', resolveCustomer, async (req, res) => {
+    try {
+      const { orderId } = req.body || {};
+      if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+
+      const order = await prisma.order.findUnique({ where: { id: String(orderId) } });
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+
+      const denied = denyPaymentAccess(req, order);
+      if (denied) return res.status(denied.code).json(denied.body);
+
+      if (order.status === 'paid') {
+        return res.status(409).json({ error: 'Cannot cancel an order that is already paid', pickupCode: order.pickupCode });
+      }
+      if (order.status === 'cancelled') {
+        return res.json({ status: 'cancelled', orderStatus: 'cancelled' });
+      }
+      if (order.status !== 'pending') {
+        return res.status(409).json({ error: `Cannot cancel order with status ${order.status}` });
+      }
+
+      const aba = getAbaClient();
+      // If payment was initiated, verify with ABA that customer did not already pay
+      if (order.transactionId && aba) {
+        let checkResult;
+        try {
+          checkResult = await aba.checkStatus(order.transactionId);
+        } catch {
+          return res.status(502).json({ error: 'Cannot verify payment status with ABA PayWay' });
+        }
+
+        if (!checkResult.success && checkResult.errorCode !== '6') {
+          return res.status(502).json({ error: 'ABA verification unavailable. Preserving unresolved state.' });
+        }
+
+        if (checkResult.status === 'APPROVED') {
+          const confirmRes = await confirmAbaPayment(aba, order.id, order.transactionId);
+          if (confirmRes.ok) {
+            return res.status(409).json({
+              error: 'Payment was already approved by ABA PayWay',
+              status: 'APPROVED',
+              pickupCode: order.pickupCode,
+            });
+          }
+        }
+
+        // Close the transaction with ABA PayWay so no incoming payment can be accepted
+        await closeAbaTransaction(order.transactionId).catch((err) => {
+          console.warn(`ABA close-transaction failed for order ${order.id}:`, err);
+        });
+      }
+
+      const updated = await prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'cancelled', cancelReason: 'Cancelled by customer' },
+      });
+      await refundOrderPoints(prisma, order.id);
+
+      res.json({ status: 'cancelled', orderStatus: updated.status });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to cancel order' });
+    }
+  });
+
+  const INTERNAL_CONFIG_KEYS = new Set([
+    'orderWarnPendingMins',
+    'orderLatePendingMins',
+    'orderWarnPreparingMins',
+    'orderLatePreparingMins',
+    'orderWarnReadyMins',
+    'orderLateReadyMins',
+    'orderReminderSeconds',
+    'orderAlertSoundEnabled',
+  ]);
+
   // Loyalty & Rewards API
   app.get('/api/config', async (req, res) => {
     try {
       const configs = await prisma.systemConfig.findMany();
-      res.json(configs);
+      const isStaff = Boolean(staffRoleOf(req as any));
+      const filtered = isStaff
+        ? configs
+        : configs.filter((c) => !INTERNAL_CONFIG_KEYS.has(c.key));
+      res.json(filtered);
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch config' });
     }
@@ -1493,7 +2029,9 @@ export function createApp() {
 
   app.get('/api/rewards', async (req, res) => {
     try {
-      const where = req.query.includeInactive === '1' ? {} : { isActive: true };
+      const wantsInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const isStaff = Boolean(staffRoleOf(req as any));
+      const where = wantsInactive && isStaff ? {} : { isActive: true };
       const rewards = await prisma.reward.findMany({ where, orderBy: { pointsCost: 'asc' } });
       res.json(rewards);
     } catch (err) {
@@ -1639,35 +2177,43 @@ export function createApp() {
         ];
       }
 
-      const totalMatching = await prisma.user.count({ where });
+      const [totalMatching, users, tierCounts, pointsAndTickets] = await Promise.all([
+        prisma.user.count({ where }),
+        prisma.user.findMany({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.user.groupBy({ by: ['tier'], _count: { _all: true } }),
+        prisma.user.aggregate({
+          _sum: { loyaltyPoints: true, luckyTickets: true },
+        }),
+      ]);
 
-      const users = await prisma.user.findMany({
-        where,
-        include: {
-          orders: {
-            select: { totalAmount: true, status: true, createdAt: true },
-            orderBy: { createdAt: 'desc' },
-          },
-        },
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      });
+      // Order totals for just the users on this page, aggregated in the DB.
+      const pageUserIds = users.map((u) => u.telegramUserId);
+      const orderTotals =
+        pageUserIds.length > 0
+          ? await prisma.order.groupBy({
+              by: ['telegramUserId'],
+              where: { telegramUserId: { in: pageUserIds }, status: { in: ['paid', 'completed'] } },
+              _count: { _all: true },
+              _sum: { totalAmount: true },
+              _max: { createdAt: true },
+            })
+          : [];
+      const orderTotalsByUserId = new Map(orderTotals.map((o) => [o.telegramUserId, o]));
 
-      // Global summary across all users
-      const allUsers = await prisma.user.findMany({
-        select: { tier: true, loyaltyPoints: true, luckyTickets: true },
-      });
-      const totalCustomers = allUsers.length;
-      const standardCount = allUsers.filter((u) => u.tier === 'standard').length;
-      const goldCount = allUsers.filter((u) => u.tier === 'gold').length;
-      const totalStamps = allUsers.reduce((sum, u) => sum + Math.floor((u.loyaltyPoints || 0) / 10), 0);
-      const totalLuckyTickets = allUsers.reduce((sum, u) => sum + (u.luckyTickets || 0), 0);
+      const standardCount = tierCounts.find((t) => t.tier === 'standard')?._count._all || 0;
+      const goldCount = tierCounts.find((t) => t.tier === 'gold')?._count._all || 0;
+      const totalCustomers = standardCount + goldCount;
+      const totalStamps = Math.floor((pointsAndTickets._sum.loyaltyPoints || 0) / 10);
+      const totalLuckyTickets = pointsAndTickets._sum.luckyTickets || 0;
 
       const customers = users.map((u) => {
-        const paidOrders = u.orders.filter((o) => o.status === 'paid' || o.status === 'completed');
-        const totalSpent = Math.round(paidOrders.reduce((sum, o) => sum + o.totalAmount, 0) * 100) / 100;
-        const lastOrderDate = u.orders.length > 0 ? u.orders[0].createdAt : null;
+        const totals = orderTotalsByUserId.get(u.telegramUserId);
+        const totalSpent = Math.round((totals?._sum.totalAmount || 0) * 100) / 100;
         return {
           telegramUserId: u.telegramUserId,
           phoneNumber: u.phoneNumber,
@@ -1683,9 +2229,9 @@ export function createApp() {
           trustNotes: u.trustNotes,
           createdAt: u.createdAt,
           updatedAt: u.updatedAt,
-          totalOrders: paidOrders.length,
+          totalOrders: totals?._count._all || 0,
           totalSpent,
-          lastOrderDate,
+          lastOrderDate: totals?._max.createdAt || null,
         };
       });
 
@@ -2408,18 +2954,21 @@ export function createApp() {
     }
   });
 
-  app.post('/api/feedback', async (req, res) => {
+  app.post('/api/feedback', feedbackRateLimit, resolveCustomer, async (req, res) => {
     try {
-      const { message, telegramUserId, userName, userPhone } = req.body || {};
+      const { message, telegramUserId: rawTelegramUserId, userName, userPhone } = req.body || {};
       const cleanMessage = typeof message === 'string' ? message.trim() : '';
       if (!cleanMessage) {
         return res.status(400).json({ error: 'Message is required' });
       }
 
+      const verifiedCallerId = (req as any).telegramUserId as string | null;
+      const effectiveTelegramId = verifiedCallerId || (rawTelegramUserId ? String(rawTelegramUserId).trim() : null);
+
       const report = await prisma.feedbackReport.create({
         data: {
           message: cleanMessage,
-          telegramUserId: telegramUserId ? String(telegramUserId) : null,
+          telegramUserId: effectiveTelegramId,
           userName: userName ? String(userName) : null,
           userPhone: userPhone ? String(userPhone) : null,
           status: 'new',
@@ -2428,14 +2977,17 @@ export function createApp() {
 
       // Send Telegram alert to managers / admins if configured
       try {
-        const { sendTelegramNotification } = await import('./bot');
         const envAdmins = adminTelegramIds();
         const dbManagers = await prisma.staffAccount.findMany({
           where: { role: 'manager', isActive: true },
           select: { telegramUserId: true },
         });
         const allManagerIds = Array.from(new Set([...envAdmins, ...dbManagers.map((m) => m.telegramUserId).filter((id): id is string => Boolean(id))]));
-        const alertText = `🚨 <b>New Customer Report / Feedback</b>\n\n<b>From:</b> ${report.userName || 'Customer'}${report.telegramUserId ? ` (<code>${report.telegramUserId}</code>)` : ''}\n<b>Phone:</b> ${report.userPhone || 'Not provided'}\n\n<b>Message:</b>\n${report.message}`;
+        const fromName = escapeTelegramHtml(report.userName || 'Customer');
+        const fromId = report.telegramUserId ? ` (<code>${escapeTelegramHtml(report.telegramUserId)}</code>)` : '';
+        const fromPhone = escapeTelegramHtml(report.userPhone || 'Not provided');
+        const safeMsg = escapeTelegramHtml(report.message);
+        const alertText = `🚨 <b>New Customer Report / Feedback</b>\n\n<b>From:</b> ${fromName}${fromId}\n<b>Phone:</b> ${fromPhone}\n\n<b>Message:</b>\n${safeMsg}`;
         for (const managerId of allManagerIds) {
           await sendTelegramNotification(managerId, alertText);
         }

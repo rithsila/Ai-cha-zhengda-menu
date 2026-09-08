@@ -20,6 +20,7 @@ export interface StoreStatusData {
   currentTime?: string;
   reason?: string;
   menuBannerUrl?: string;
+  menuBannerUrls?: string;
   menuTabsConfig?: string;
   shopName?: string;
   shopAddress?: string;
@@ -38,6 +39,7 @@ const DEFAULT_STORE_STATUS: StoreStatusData = {
   enableCash: true,
   enableKhqr: true,
   menuBannerUrl: '/banner.webp',
+  menuBannerUrls: JSON.stringify(['/banner.webp']),
   shopName: 'Our shop',
   shopAddress: 'J03, Ground Floor, Arakawa',
   shopDeliveryNote: 'Delivery inside Arakawa is free',
@@ -56,18 +58,36 @@ export function getStoreStatusSnapshot(): StoreStatusData {
   return currentStatus;
 }
 
-export async function refreshStoreStatus(): Promise<StoreStatusData> {
-  try {
-    const res = await fetch(`${API_BASE}/api/store/status`);
-    if (res.ok) {
-      const data = await res.json();
-      setStatus(data);
-      return data;
-    }
-  } catch {
-    // Network offline or server down - retain last known status
+let inflightRefresh: Promise<StoreStatusData> | null = null;
+let lastRefreshTime = 0;
+
+export function refreshStoreStatus(force = false): Promise<StoreStatusData> {
+  // If recently refreshed (within 15s) and not forced, return cached status immediately
+  if (!force && Date.now() - lastRefreshTime < 15_000) {
+    return Promise.resolve(currentStatus);
   }
-  return currentStatus;
+
+  // If a refresh is already in-flight, join it instead of firing a duplicate.
+  if (inflightRefresh) return inflightRefresh;
+
+  inflightRefresh = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/store/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setStatus(data);
+        lastRefreshTime = Date.now();
+        return data;
+      }
+    } catch {
+      // Network offline or server down - retain last known status
+    }
+    return currentStatus;
+  })().finally(() => {
+    inflightRefresh = null;
+  });
+
+  return inflightRefresh;
 }
 
 function subscribe(listener: () => void): () => void {

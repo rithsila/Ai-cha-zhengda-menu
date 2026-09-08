@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import type { MenuItem, ModifierGroup, ModifierOption } from '../types';
 import { Button } from './ui/Button';
 import { useState, useEffect } from 'react';
@@ -17,6 +17,7 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
   const { t } = useTranslation();
   const [selected, setSelected] = useState<Record<string, ModifierOption[]>>(initialSelected || {});
   const [attempted, setAttempted] = useState(false);
+  const dragControls = useDragControls();
 
   useEffect(() => {
     if (initialSelected) {
@@ -90,17 +91,36 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="bg-tg-bg/75 backdrop-blur-lg backdrop-brightness-200 w-full rounded-t-3xl max-h-[85vh] overflow-y-auto pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
+          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+          drag="y"
+          dragControls={dragControls}
+          dragListener={false}
+          dragConstraints={{ top: 0 }}
+          dragElastic={{ top: 0, bottom: 0.6 }}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 80 || info.velocity.y > 400) {
+              onClose();
+            }
+          }}
+          className="bg-tg-bg w-full rounded-t-3xl max-h-[85vh] overflow-y-auto pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
           onClick={e => e.stopPropagation()}
         >
-          <div className="p-4 border-b border-tg-hint/20 sticky top-0 bg-tg-bg/90 backdrop-blur-md z-10">
-            <div className="flex justify-between items-start">
+          <div 
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement).closest('button')) return;
+              dragControls.start(e);
+            }}
+            className="border-b border-tg-hint/20 sticky top-0 bg-tg-bg z-10 touch-none select-none cursor-grab active:cursor-grabbing"
+          >
+            <div className="w-full pt-2.5 pb-1 flex justify-center">
+              <div className="w-10 h-1.5 bg-tg-hint/30 rounded-full" />
+            </div>
+            <div className="px-4 pb-3 pt-1 flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold">{t(item.name)}</h2>
                 {item.description && <p className="text-sm text-tg-hint">{t(item.description)}</p>}
               </div>
-              <button onClick={onClose} className="p-2 bg-tg-secondary-bg rounded-full text-tg-hint">
+              <button onClick={onClose} className="p-2 bg-tg-secondary-bg rounded-full text-tg-hint cursor-pointer">
                 ✕
               </button>
             </div>
@@ -148,7 +168,7 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
             ))}
           </div>
 
-          <div className="sticky bottom-0 bg-tg-bg/90 backdrop-blur-md p-4 border-t border-tg-hint/20 pb-8">
+          <div className="sticky bottom-0 bg-tg-bg p-4 border-t border-tg-hint/20 pb-8">
             {attempted && !isValid && (
               <p className="text-xs text-[#E53935] text-center mb-3">
                 {t('selectRequiredOptions')}

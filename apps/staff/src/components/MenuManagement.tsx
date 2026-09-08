@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, CornerDownLeft, Edit, Plus, Search, X } from 'lucide-react';
+import { CircleAlert, CornerDownLeft, Edit, Layers, Plus, Search, X } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import {
   Badge,
@@ -11,9 +11,9 @@ import {
   useToast,
 } from './ui';
 import { MenuItemEditModal, type MenuItemFull } from './MenuItemEditModal';
+import { CategoryManagementModal } from './CategoryManagementModal';
 
 type AvailabilityFilter = 'all' | 'available' | 'soldout';
-type BrandFilter = 'all' | 'ai-cha' | 'zhengda';
 
 export function MenuManagement() {
   const { toast } = useToast();
@@ -22,13 +22,13 @@ export function MenuManagement() {
   const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState('');
   const [availability, setAvailability] = useState<AvailabilityFilter>('all');
-  const [brand, setBrand] = useState<BrandFilter>('all');
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItemFull | null>(null);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
 
   const fetchCatalog = async () => {
     setLoading(true);
@@ -103,7 +103,7 @@ export function MenuManagement() {
       (item) =>
         item.name.toLowerCase().includes(q) ||
         item.category.toLowerCase().includes(q) ||
-        item.brand.toLowerCase().includes(q),
+        (item.brand?.toLowerCase().includes(q) ?? false),
     );
   }, [items, search]);
 
@@ -114,18 +114,16 @@ export function MenuManagement() {
           availability === 'all' ||
           (availability === 'available' && !item.isSoldOut) ||
           (availability === 'soldout' && item.isSoldOut);
-        const matchesBrand = brand === 'all' || item.brand.toLowerCase() === brand;
-        return matchesAvailability && matchesBrand;
+        return matchesAvailability;
       }),
-    [searched, availability, brand],
+    [searched, availability],
   );
 
   const soldOutCount = items.filter((i) => i.isSoldOut).length;
-  const isFiltered = search !== '' || availability !== 'all' || brand !== 'all';
+  const isFiltered = search !== '' || availability !== 'all';
   const clearFilters = () => {
     setSearch('');
     setAvailability('all');
-    setBrand('all');
     searchRef.current?.focus();
   };
 
@@ -149,7 +147,7 @@ export function MenuManagement() {
             ref={searchRef}
             id="menu-search"
             type="search"
-            placeholder="Search items, categories, brands…"
+            placeholder="Search items, categories…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
@@ -174,31 +172,36 @@ export function MenuManagement() {
           ariaLabel="Filter by availability"
         />
 
-        <Segmented
-          options={[
-            { id: 'all', label: 'Both' },
-            { id: 'ai-cha', label: 'Ai-Cha' },
-            { id: 'zhengda', label: 'Zhengda' },
-          ]}
-          value={brand}
-          onChange={setBrand}
-          ariaLabel="Filter by brand"
-        />
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setCategoryModalOpen(true)}
+          className="font-medium text-xs rounded-none"
+        >
+          <Layers className="size-4" />
+          Manage Categories
+        </Button>
 
         <Button
           variant="primary"
+          size="sm"
           onClick={() => {
             setEditingItem(null);
             setModalOpen(true);
           }}
-          className="font-medium text-xs h-10"
+          className="font-medium text-xs rounded-none"
         >
           <Plus className="size-4" />
           Add Item
         </Button>
 
         {isFiltered ? (
-          <Button variant="ghost" onClick={clearFilters} className="h-10 text-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="text-xs rounded-none"
+          >
             <X className="size-4" aria-hidden="true" />
             Clear
           </Button>
@@ -279,7 +282,6 @@ export function MenuManagement() {
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredItems.map((item) => {
-                  const zhengda = item.brand.toLowerCase() === 'zhengda';
                   const busy = pendingIds.has(item.id!);
                   return (
                     <tr
@@ -293,18 +295,13 @@ export function MenuManagement() {
                           <span className="flex items-center gap-2.5">
                             <span
                               aria-hidden="true"
-                              className={`size-2 shrink-0 rounded-none ${
-                                zhengda ? 'bg-zhengda shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 'bg-accent shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                              }`}
+                              className="size-2 shrink-0 rounded-none bg-accent shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                             />
                             <span
                               className={`font-medium text-sm ${
                                 item.isSoldOut ? 'text-ink-faint line-through' : 'text-ink'
                               }`}
                             >
-                              <span className="sr-only">
-                                {zhengda ? 'Zhengda' : 'Ai-Cha'}:{' '}
-                              </span>
                               {item.name}
                             </span>
                           </span>
@@ -381,6 +378,17 @@ export function MenuManagement() {
           setEditingItem(null);
         }}
         onSaved={fetchCatalog}
+      />
+
+      {/* Category Management Modal */}
+      <CategoryManagementModal
+        isOpen={categoryModalOpen}
+        onClose={() => {
+          setCategoryModalOpen(false);
+          fetchCatalog();
+        }}
+        items={items}
+        onUpdated={fetchCatalog}
       />
     </div>
   );

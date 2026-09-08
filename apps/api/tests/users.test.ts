@@ -3,6 +3,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { issueToken } from '../src/auth';
+import { asCustomer } from './helpers/customer';
 
 const app = createApp();
 const uid = `test-${randomUUID()}`;
@@ -50,5 +51,20 @@ describe('PUT /api/users/:id/points validation', () => {
     const res = await put({ points: 120 });
     expect(res.status).toBe(200);
     expect(res.body.loyaltyPoints).toBe(120);
+  });
+});
+
+describe('Customer profile privacy', () => {
+  it('does not expose internal trustNotes to customer', async () => {
+    await prisma.user.update({
+      where: { telegramUserId: uid },
+      data: { trustNotes: 'Internal manager note: VIP customer' },
+    });
+
+    const res = await request(app)
+      .get(`/api/user/${uid}`)
+      .set(asCustomer(uid));
+    expect(res.status).toBe(200);
+    expect(res.body.trustNotes).toBeUndefined();
   });
 });

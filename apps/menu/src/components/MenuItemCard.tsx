@@ -4,23 +4,34 @@ import type { MenuItem } from '../types';
 import { Button } from './ui/Button';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '../utils/format';
+import { useLongPress } from '../hooks/useLongPress';
 
 interface MenuItemCardProps {
   item: MenuItem;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string) => void;
   onAdd: (item: MenuItem) => void;
+  onPreview?: (item: MenuItem) => void;
 }
 
-export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: MenuItemCardProps) {
+export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPreview }: MenuItemCardProps) {
   const { t } = useTranslation();
   const isAiCha = item.brand === 'ai-cha';
   const brandBg = isAiCha ? 'bg-brand-primary/10' : 'bg-brand-zhengda/10';
 
+  const longPressProps = useLongPress({
+    onLongPress: () => onPreview?.(item),
+    onClick: () => onPreview?.(item),
+    delay: 450,
+  });
+
   return (
     <motion.div 
+      {...longPressProps}
       whileTap={{ scale: item.isSoldOut ? 1 : 0.98 }}
-      className={`bg-tg-secondary-bg rounded-2xl overflow-hidden shadow-sm flex flex-col ${item.isSoldOut ? 'opacity-60 grayscale-[0.5]' : ''}`}
+      className={`bg-tg-secondary-bg rounded-2xl overflow-hidden shadow-sm flex flex-col cursor-pointer select-none touch-manipulation [-webkit-touch-callout:none] ${
+        item.isSoldOut ? 'opacity-60 grayscale-[0.5]' : ''
+      }`}
     >
       <div className={`h-32 flex items-center justify-center relative ${item.imageFallback ? 'bg-tg-hint/10' : brandBg}`}>
          {item.imageFallback ? (
@@ -29,10 +40,10 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
              alt={t(item.name)} 
              loading="lazy"
              decoding="async"
-             className="w-full h-full object-contain p-2" 
+             className="w-full h-full object-contain p-2 pointer-events-none" 
            />
          ) : (
-           <div className="p-2.5 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-white/50 ring-1 ring-black/5">
+           <div className="p-2.5 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-white/50 ring-1 ring-black/5 pointer-events-none">
              {isAiCha ? (
                <img src="/images/aicha-icon-cropped.webp" alt="Ai-Cha" className="h-10 w-auto object-contain drop-shadow-sm" />
              ) : (
@@ -57,6 +68,7 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
          )}
           {onToggleFavorite && (
             <button 
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
               className={`absolute top-2 left-2 p-1.5 rounded-full bg-white/95 shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 ${isFavorite ? 'text-brand-primary' : 'text-slate-400 hover:text-slate-700'}`}
             >
@@ -73,14 +85,19 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd }: Menu
           </p>
         )}
         </div>
-        <Button 
-          brand={item.brand}
-          onClick={() => !item.isSoldOut && onAdd(item)}
-          className={`py-2 ${item.isSoldOut ? 'opacity-50 cursor-not-allowed' : ''}`}
-          disabled={item.isSoldOut}
-        >
-          {item.isSoldOut ? t('soldOut', 'Sold Out') : t('add', 'ADD')}
-        </Button>
+        <div onPointerDown={(e) => e.stopPropagation()}>
+          <Button 
+            brand={item.brand}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!item.isSoldOut) onAdd(item);
+            }}
+            className={`w-full py-2 ${item.isSoldOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={item.isSoldOut}
+          >
+            {item.isSoldOut ? t('soldOut', 'Sold Out') : t('add', 'ADD')}
+          </Button>
+        </div>
       </div>
     </motion.div>
   );

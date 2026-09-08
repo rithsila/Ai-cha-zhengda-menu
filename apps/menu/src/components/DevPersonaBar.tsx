@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sparkle, User, Star, ShieldCheck, SignOut } from '@phosphor-icons/react';
-import { apiFetch, hasIdentity, ME } from '../utils/api';
+import { useProfile } from '../hooks/useProfile';
 import {
   loginAsDevCustomer,
   setDevUserId,
@@ -8,41 +8,8 @@ import {
 } from '../utils/telegramUser';
 
 export function DevPersonaBar() {
-  const [profile, setProfile] = useState<{
-    tier?: string;
-    firstName?: string;
-    loyaltyPoints?: number;
-    luckyTickets?: number;
-  } | null>(null);
+  const { profile, signedIn } = useProfile();
   const [loading, setLoading] = useState(false);
-  const signedIn = hasIdentity();
-
-  useEffect(() => {
-    if (!signedIn) {
-      setProfile(null);
-      return;
-    }
-    apiFetch(ME.profile())
-      .then(async (res) => {
-        if (res.ok) {
-          setProfile(await res.json());
-        } else if (res.status === 401 && import.meta.env.DEV) {
-          await loginAsDevCustomer({
-            telegramUserId: 'dev_standard_user',
-            firstName: 'Bob',
-            lastName: 'Sok',
-            tier: 'standard',
-            loyaltyPoints: 20,
-            luckyTickets: 5,
-            phoneNumber: '+85598765432',
-            building: 'B',
-            roomNumber: '0512',
-          });
-          window.location.reload();
-        }
-      })
-      .catch(() => {});
-  }, [signedIn]);
 
   if (!import.meta.env.DEV) return null;
 

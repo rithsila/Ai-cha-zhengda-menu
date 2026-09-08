@@ -20,11 +20,10 @@ import {
   formatCountdown,
   formatElapsed,
   isAwaitingPayment,
-  isZhengda,
   parseModifiers,
   paymentExpiryAt,
 } from '../lib/orders';
-import type { Tone } from '../lib/orders';
+import type { ThresholdConfig, Tone } from '../lib/orders';
 import type { Order } from '../types';
 
 /* -------------------------------------------------------------------------- */
@@ -83,9 +82,11 @@ function PaymentTag({ order }: { order: Order }) {
 function ElapsedTag({
   order,
   now,
+  thresholds,
 }: {
   order: Order;
   now: number;
+  thresholds?: Partial<ThresholdConfig> | null;
 }) {
   const { label, stale } = formatElapsed(order.createdAt, now);
   // An unpaid order is not "late for the kitchen" — nothing is owed until the
@@ -93,7 +94,7 @@ function ElapsedTag({
   // for the wrong reason and dilute the red that means "do not make this".
   const tone = isAwaitingPayment(order)
     ? 'normal'
-    : elapsedTone(order.status, order.createdAt, now);
+    : elapsedTone(order.status, order.createdAt, now, thresholds);
   const spoken = stale
     ? `Placed ${label}, earlier shift`
     : tone === 'late'
@@ -210,6 +211,7 @@ export interface OrderCardProps {
   isNew: boolean;
   /** True while the board shows more than one branch, so each card must name its own. */
   showBranch: boolean;
+  thresholds?: Partial<ThresholdConfig> | null;
   onAction: (id: string, status: string) => void;
   onCancel: (order: Order) => void;
   /** Escape hatch: the customer paid at the counter instead of scanning. */
@@ -223,6 +225,7 @@ function OrderCardImpl({
   updating,
   isNew,
   showBranch,
+  thresholds,
   onAction,
   onCancel,
   onMarkPaid,
@@ -231,6 +234,9 @@ function OrderCardImpl({
   const awaitingPayment = isAwaitingPayment(order);
   // No "Start preparing" while nobody has paid — see the footer below.
   const config = awaitingPayment ? undefined : STATUS_CONFIG[order.status];
+  const currentTone = awaitingPayment
+    ? 'normal'
+    : elapsedTone(order.status, order.createdAt, now, thresholds);
 
   const paidConfirm = useTapConfirm(
     useCallback(() => onMarkPaid(order.id), [onMarkPaid, order.id]),
@@ -249,7 +255,15 @@ function OrderCardImpl({
       // The unpaid ring outranks the new-order ring: "do not make this" matters
       // more than "you have not looked at this yet".
       className={`shrink-0 overflow-hidden transition-all ${
-        awaitingPayment ? 'border-danger ring-2 ring-danger' : ''
+        awaitingPayment
+          ? 'border-danger ring-2 ring-danger'
+          : currentTone === 'late'
+            ? 'border-danger ring-2 ring-danger/80 shadow-md shadow-danger/10 motion-safe:animate-pulse'
+            : currentTone === 'warn'
+              ? 'border-status-pending ring-1 ring-status-pending/60'
+              : isNew
+                ? 'border-accent ring-2 ring-accent'
+                : ''
       }`}
       onPointerDown={isNew ? () => onSeen(order.id) : undefined}
     >
@@ -284,7 +298,7 @@ function OrderCardImpl({
               Cancel
             </button>
           ) : null}
-          <ElapsedTag order={order} now={now} />
+          <ElapsedTag order={order} now={now} thresholds={thresholds} />
         </div>
       </div>
 
@@ -359,7 +373,6 @@ function OrderCardImpl({
 
       <ul className="mt-3 space-y-2.5 px-4">
         {order.items.map((item) => {
-          const zhengda = isZhengda(item.menuItem.brand);
           const mods = item.modifiers ? parseModifiers(item.modifiers) : [];
           return (
             <li key={item.id} className="flex items-start gap-2.5">
@@ -370,16 +383,11 @@ function OrderCardImpl({
                */}
               <span
                 aria-hidden="true"
-                className={`mt-2 size-2.5 shrink-0 rounded-none ${
-                  zhengda ? 'bg-zhengda' : 'bg-accent'
-                }`}
+                className="mt-2 size-2.5 shrink-0 rounded-none bg-accent"
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-base leading-snug font-semibold text-ink">
-                    <span className="sr-only">
-                      {zhengda ? 'Zhengda' : 'Ai-Cha'}:{' '}
-                    </span>
                     {item.quantity}× {item.menuItem.name}
                   </span>
                   <span className="shrink-0 text-sm tabular-nums text-ink-faint">

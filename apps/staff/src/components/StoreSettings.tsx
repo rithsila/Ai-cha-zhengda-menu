@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
+  Bell,
   Clock,
   Truck,
   ShoppingBag,
   Coins,
   QrCode,
   Sliders,
-  RotateCcw,
   Image as ImageIcon,
   Upload,
   Link,
@@ -14,11 +14,21 @@ import {
   Store,
   MapPin,
   Phone,
+  Play,
   Share2,
   Globe,
+  AlertTriangle,
+  Check,
+  Save,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Eye,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
+import { testAlertSound } from '../lib/alert';
 
 export interface MenuTabItem {
   id: string;
@@ -47,12 +57,21 @@ export interface StoreConfigState {
   currentTime: string;
   reason: string;
   menuBannerUrl: string;
+  menuBannerUrls: string[];
   menuTabsConfig: MenuTabItem[];
   shopName: string;
   shopAddress: string;
   shopDeliveryNote: string;
   shopSocialsEnabled: boolean;
   shopSocialLinks: SocialBadgeItem[];
+  orderWarnPendingMins: number;
+  orderLatePendingMins: number;
+  orderWarnPreparingMins: number;
+  orderLatePreparingMins: number;
+  orderWarnReadyMins: number;
+  orderLateReadyMins: number;
+  orderReminderSeconds: number;
+  orderAlertSoundEnabled: boolean;
 }
 
 const DEFAULT_TABS: MenuTabItem[] = [
@@ -83,12 +102,21 @@ const DEFAULT_CONFIG: StoreConfigState = {
   currentTime: '',
   reason: 'schedule_open',
   menuBannerUrl: '/banner.webp',
+  menuBannerUrls: ['/banner.webp'],
   menuTabsConfig: DEFAULT_TABS,
   shopName: 'Our shop',
   shopAddress: 'J03, Ground Floor, Arakawa',
   shopDeliveryNote: 'Delivery inside Arakawa is free',
   shopSocialsEnabled: true,
   shopSocialLinks: DEFAULT_SOCIALS,
+  orderWarnPendingMins: 5,
+  orderLatePendingMins: 10,
+  orderWarnPreparingMins: 8,
+  orderLatePreparingMins: 15,
+  orderWarnReadyMins: 10,
+  orderLateReadyMins: 20,
+  orderReminderSeconds: 60,
+  orderAlertSoundEnabled: true,
 };
 
 function renderSocialIcon(id: string) {
@@ -126,20 +154,285 @@ function renderSocialIcon(id: string) {
   }
 }
 
+export interface ConfigChange {
+  key: string;
+  label: string;
+  oldDisplay: string;
+  newDisplay: string;
+  rawNewValue: string;
+}
+
+function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState): ConfigChange[] {
+  const changes: ConfigChange[] = [];
+
+  if (draft.storeStatus !== saved.storeStatus) {
+    const formatMode = (m: string) =>
+      m === 'auto' ? 'Automatic (Schedule)' : m === 'open' ? 'Force Open' : 'Force Closed';
+    changes.push({
+      key: 'storeStatus',
+      label: 'Store Operating Mode',
+      oldDisplay: formatMode(saved.storeStatus),
+      newDisplay: formatMode(draft.storeStatus),
+      rawNewValue: draft.storeStatus,
+    });
+  }
+
+  if (draft.openTime !== saved.openTime) {
+    changes.push({
+      key: 'openTime',
+      label: 'Opening Time',
+      oldDisplay: saved.openTime,
+      newDisplay: draft.openTime,
+      rawNewValue: draft.openTime,
+    });
+  }
+
+  if (draft.closeTime !== saved.closeTime) {
+    changes.push({
+      key: 'closeTime',
+      label: 'Closing Time',
+      oldDisplay: saved.closeTime,
+      newDisplay: draft.closeTime,
+      rawNewValue: draft.closeTime,
+    });
+  }
+
+  if (draft.enablePickup !== saved.enablePickup) {
+    changes.push({
+      key: 'enablePickup',
+      label: 'Pickup Orders',
+      oldDisplay: saved.enablePickup ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enablePickup ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enablePickup ? '1' : '0',
+    });
+  }
+
+  if (draft.enableDelivery !== saved.enableDelivery) {
+    changes.push({
+      key: 'enableDelivery',
+      label: 'Delivery Orders',
+      oldDisplay: saved.enableDelivery ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enableDelivery ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enableDelivery ? '1' : '0',
+    });
+  }
+
+  if (draft.enableCash !== saved.enableCash) {
+    changes.push({
+      key: 'enableCash',
+      label: 'Cash Payment',
+      oldDisplay: saved.enableCash ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enableCash ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enableCash ? '1' : '0',
+    });
+  }
+
+  if (draft.enableKhqr !== saved.enableKhqr) {
+    changes.push({
+      key: 'enableKhqr',
+      label: 'KHQR Payment',
+      oldDisplay: saved.enableKhqr ? 'Enabled' : 'Disabled',
+      newDisplay: draft.enableKhqr ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.enableKhqr ? '1' : '0',
+    });
+  }
+
+  if (draft.deliveryFee !== saved.deliveryFee) {
+    changes.push({
+      key: 'deliveryFee',
+      label: 'Delivery Fee',
+      oldDisplay: `$${saved.deliveryFee}`,
+      newDisplay: `$${draft.deliveryFee}`,
+      rawNewValue: String(draft.deliveryFee),
+    });
+  }
+
+  const draftBanners = draft.menuBannerUrls && draft.menuBannerUrls.length > 0 ? draft.menuBannerUrls : [draft.menuBannerUrl || '/banner.webp'];
+  const savedBanners = saved.menuBannerUrls && saved.menuBannerUrls.length > 0 ? saved.menuBannerUrls : [saved.menuBannerUrl || '/banner.webp'];
+  const bannersChanged = JSON.stringify(draftBanners) !== JSON.stringify(savedBanners);
+  const primaryBannerChanged = draft.menuBannerUrl !== saved.menuBannerUrl;
+
+  if (bannersChanged) {
+    changes.push({
+      key: 'menuBannerUrls',
+      label: 'Top Banner Photos (Carousel)',
+      oldDisplay: `${savedBanners.length} photo${savedBanners.length > 1 ? 's' : ''}`,
+      newDisplay: `${draftBanners.length} photo${draftBanners.length > 1 ? 's' : ''}`,
+      rawNewValue: JSON.stringify(draftBanners),
+    });
+  }
+
+  if (primaryBannerChanged || bannersChanged) {
+    const effectiveDraftPrimary = draftBanners[0] || draft.menuBannerUrl || '/banner.webp';
+    const effectiveSavedPrimary = savedBanners[0] || saved.menuBannerUrl || '/banner.webp';
+    if (effectiveDraftPrimary !== effectiveSavedPrimary) {
+      changes.push({
+        key: 'menuBannerUrl',
+        label: 'Primary Banner Photo',
+        oldDisplay: effectiveSavedPrimary.length > 25 ? `...${effectiveSavedPrimary.slice(-22)}` : effectiveSavedPrimary,
+        newDisplay: effectiveDraftPrimary.length > 25 ? `...${effectiveDraftPrimary.slice(-22)}` : effectiveDraftPrimary,
+        rawNewValue: effectiveDraftPrimary,
+      });
+    }
+  }
+
+  if (JSON.stringify(draft.menuTabsConfig) !== JSON.stringify(saved.menuTabsConfig)) {
+    const activeDraftCount = draft.menuTabsConfig.filter((t) => t.enabled).length;
+    const activeSavedCount = saved.menuTabsConfig.filter((t) => t.enabled).length;
+    changes.push({
+      key: 'menuTabsConfig',
+      label: 'Brand Tabs Configuration',
+      oldDisplay: `${activeSavedCount} active tab${activeSavedCount > 1 ? 's' : ''}`,
+      newDisplay: `${activeDraftCount} active tab${activeDraftCount > 1 ? 's' : ''}`,
+      rawNewValue: JSON.stringify(draft.menuTabsConfig),
+    });
+  }
+
+  if (draft.shopName !== saved.shopName) {
+    changes.push({
+      key: 'shopName',
+      label: 'Shop Title',
+      oldDisplay: saved.shopName,
+      newDisplay: draft.shopName,
+      rawNewValue: draft.shopName,
+    });
+  }
+
+  if (draft.shopAddress !== saved.shopAddress) {
+    changes.push({
+      key: 'shopAddress',
+      label: 'Shop Address',
+      oldDisplay: saved.shopAddress,
+      newDisplay: draft.shopAddress,
+      rawNewValue: draft.shopAddress,
+    });
+  }
+
+  if (draft.shopDeliveryNote !== saved.shopDeliveryNote) {
+    changes.push({
+      key: 'shopDeliveryNote',
+      label: 'Delivery Note',
+      oldDisplay: saved.shopDeliveryNote || '(none)',
+      newDisplay: draft.shopDeliveryNote || '(none)',
+      rawNewValue: draft.shopDeliveryNote,
+    });
+  }
+
+  if (draft.shopSocialsEnabled !== saved.shopSocialsEnabled) {
+    changes.push({
+      key: 'shopSocialsEnabled',
+      label: 'Social Badges Section',
+      oldDisplay: saved.shopSocialsEnabled ? 'Enabled' : 'Disabled',
+      newDisplay: draft.shopSocialsEnabled ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.shopSocialsEnabled ? '1' : '0',
+    });
+  }
+
+  if (JSON.stringify(draft.shopSocialLinks) !== JSON.stringify(saved.shopSocialLinks)) {
+    const activeDraft = draft.shopSocialLinks.filter((s) => s.enabled).length;
+    const activeSaved = saved.shopSocialLinks.filter((s) => s.enabled).length;
+    changes.push({
+      key: 'shopSocialLinks',
+      label: 'Social Media Links',
+      oldDisplay: `${activeSaved} active link${activeSaved > 1 ? 's' : ''}`,
+      newDisplay: `${activeDraft} active link${activeDraft > 1 ? 's' : ''}`,
+      rawNewValue: JSON.stringify(draft.shopSocialLinks),
+    });
+  }
+
+  if (draft.orderWarnPendingMins !== saved.orderWarnPendingMins) {
+    changes.push({
+      key: 'orderWarnPendingMins',
+      label: 'Pending Warn Time',
+      oldDisplay: `${saved.orderWarnPendingMins}m`,
+      newDisplay: `${draft.orderWarnPendingMins}m`,
+      rawNewValue: String(draft.orderWarnPendingMins),
+    });
+  }
+
+  if (draft.orderLatePendingMins !== saved.orderLatePendingMins) {
+    changes.push({
+      key: 'orderLatePendingMins',
+      label: 'Pending Overdue Time',
+      oldDisplay: `${saved.orderLatePendingMins}m`,
+      newDisplay: `${draft.orderLatePendingMins}m`,
+      rawNewValue: String(draft.orderLatePendingMins),
+    });
+  }
+
+  if (draft.orderWarnPreparingMins !== saved.orderWarnPreparingMins) {
+    changes.push({
+      key: 'orderWarnPreparingMins',
+      label: 'Preparing Warn Time',
+      oldDisplay: `${saved.orderWarnPreparingMins}m`,
+      newDisplay: `${draft.orderWarnPreparingMins}m`,
+      rawNewValue: String(draft.orderWarnPreparingMins),
+    });
+  }
+
+  if (draft.orderLatePreparingMins !== saved.orderLatePreparingMins) {
+    changes.push({
+      key: 'orderLatePreparingMins',
+      label: 'Preparing Overdue Time',
+      oldDisplay: `${saved.orderLatePreparingMins}m`,
+      newDisplay: `${draft.orderLatePreparingMins}m`,
+      rawNewValue: String(draft.orderLatePreparingMins),
+    });
+  }
+
+  if (draft.orderWarnReadyMins !== saved.orderWarnReadyMins) {
+    changes.push({
+      key: 'orderWarnReadyMins',
+      label: 'Ready Warn Time',
+      oldDisplay: `${saved.orderWarnReadyMins}m`,
+      newDisplay: `${draft.orderWarnReadyMins}m`,
+      rawNewValue: String(draft.orderWarnReadyMins),
+    });
+  }
+
+  if (draft.orderLateReadyMins !== saved.orderLateReadyMins) {
+    changes.push({
+      key: 'orderLateReadyMins',
+      label: 'Ready Overdue Time',
+      oldDisplay: `${saved.orderLateReadyMins}m`,
+      newDisplay: `${draft.orderLateReadyMins}m`,
+      rawNewValue: String(draft.orderLateReadyMins),
+    });
+  }
+
+  if (draft.orderReminderSeconds !== saved.orderReminderSeconds) {
+    changes.push({
+      key: 'orderReminderSeconds',
+      label: 'Reminder Interval',
+      oldDisplay: `${saved.orderReminderSeconds}s`,
+      newDisplay: `${draft.orderReminderSeconds}s`,
+      rawNewValue: String(draft.orderReminderSeconds),
+    });
+  }
+
+  return changes;
+}
+
 export function StoreSettings() {
   const { toast } = useToast();
+  const [savedConfig, setSavedConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [config, setConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
-  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingTabIdx, setUploadingTabIdx] = useState<number | null>(null);
   const [showManualUrls, setShowManualUrls] = useState(false);
+  const [previewSlideIdx, setPreviewSlideIdx] = useState(0);
 
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const tabLogoInput0Ref = useRef<HTMLInputElement>(null);
   const tabLogoInput1Ref = useRef<HTMLInputElement>(null);
   const tabLogoInput2Ref = useRef<HTMLInputElement>(null);
   const tabLogoInputRefs = [tabLogoInput0Ref, tabLogoInput1Ref, tabLogoInput2Ref];
+
+  const changes = getStoreConfigChanges(savedConfig, config);
+  const isDirty = changes.length > 0;
 
   const fetchConfig = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -176,7 +469,20 @@ export function StoreSettings() {
         } catch {}
       }
 
-      setConfig({
+      let parsedBanners = ['/banner.webp'];
+      const rawBanners = statusRes.menuBannerUrls || configMap.get('menuBannerUrls');
+      if (rawBanners) {
+        try {
+          const parsed = typeof rawBanners === 'string' ? JSON.parse(rawBanners) : rawBanners;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsedBanners = parsed.filter((u: any): u is string => typeof u === 'string' && u.trim().length > 0);
+          }
+        } catch {}
+      } else if (statusRes.menuBannerUrl || configMap.get('menuBannerUrl')) {
+        parsedBanners = [statusRes.menuBannerUrl || configMap.get('menuBannerUrl') || '/banner.webp'];
+      }
+
+      const loadedConfig: StoreConfigState = {
         storeStatus: (statusRes.storeStatus || 'auto') as 'auto' | 'open' | 'closed',
         openTime: statusRes.openTime || configMap.get('openTime') || '08:00',
         closeTime: statusRes.closeTime || configMap.get('closeTime') || '21:00',
@@ -188,14 +494,26 @@ export function StoreSettings() {
         isOpen: !!statusRes.isOpen,
         currentTime: statusRes.currentTime || '',
         reason: statusRes.reason || '',
-        menuBannerUrl: statusRes.menuBannerUrl || configMap.get('menuBannerUrl') || '/banner.webp',
+        menuBannerUrl: parsedBanners[0] || '/banner.webp',
+        menuBannerUrls: parsedBanners,
         menuTabsConfig: parsedTabs,
         shopName: statusRes.shopName ?? configMap.get('shopName') ?? 'Our shop',
         shopAddress: statusRes.shopAddress ?? configMap.get('shopAddress') ?? 'J03, Ground Floor, Arakawa',
         shopDeliveryNote: statusRes.shopDeliveryNote ?? configMap.get('shopDeliveryNote') ?? 'Delivery inside Arakawa is free',
         shopSocialsEnabled: statusRes.shopSocialsEnabled ?? (configMap.get('shopSocialsEnabled') !== '0'),
         shopSocialLinks: parsedSocials,
-      });
+        orderWarnPendingMins: Number(configMap.get('orderWarnPendingMins') ?? 5),
+        orderLatePendingMins: Number(configMap.get('orderLatePendingMins') ?? 10),
+        orderWarnPreparingMins: Number(configMap.get('orderWarnPreparingMins') ?? 8),
+        orderLatePreparingMins: Number(configMap.get('orderLatePreparingMins') ?? 15),
+        orderWarnReadyMins: Number(configMap.get('orderWarnReadyMins') ?? 10),
+        orderLateReadyMins: Number(configMap.get('orderLateReadyMins') ?? 20),
+        orderReminderSeconds: Number(configMap.get('orderReminderSeconds') ?? 60),
+        orderAlertSoundEnabled: (configMap.get('orderAlertSoundEnabled') ?? '1') !== '0',
+      };
+
+      setSavedConfig(loadedConfig);
+      setConfig(loadedConfig);
     } catch {
       toast({
         title: "Couldn't load store settings",
@@ -211,34 +529,51 @@ export function StoreSettings() {
     fetchConfig();
   }, [fetchConfig]);
 
-  const updateSetting = async (key: string, value: string | number | boolean, label: string) => {
-    setUpdatingKey(key);
-    try {
-      let strVal = String(value);
-      if (typeof value === 'boolean') {
-        strVal = value ? '1' : '0';
-      }
-      await apiFetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value: strVal }),
-      });
+  const handleCancelChanges = () => {
+    setConfig({ ...savedConfig });
+    toast({
+      title: 'Changes discarded',
+      description: 'Reverted back to current live settings.',
+      variant: 'info',
+    });
+  };
 
+  const handleConfirmSave = async () => {
+    setSaving(true);
+    try {
+      const changesToApply = getStoreConfigChanges(savedConfig, config);
+      if (changesToApply.length === 0) {
+        setShowConfirmModal(false);
+        return;
+      }
+
+      await Promise.all(
+        changesToApply.map(async (c) => {
+          await apiFetch('/api/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: c.key, value: c.rawNewValue }),
+          });
+        })
+      );
+
+      setSavedConfig({ ...config });
+      setShowConfirmModal(false);
       toast({
-        title: `${label} updated`,
+        title: 'Settings applied to live menu',
+        description: `${changesToApply.length} change${changesToApply.length > 1 ? 's' : ''} now live for customers.`,
         variant: 'success',
       });
 
-      // Refresh store status silently without flashing skeletons
       await fetchConfig(true);
     } catch (err: any) {
       toast({
-        title: `Failed to update ${label}`,
+        title: 'Failed to apply settings',
         description: err?.message || 'Please check value and try again.',
         variant: 'error',
       });
     } finally {
-      setUpdatingKey(null);
+      setSaving(false);
     }
   };
 
@@ -258,11 +593,23 @@ export function StoreSettings() {
     { id: 'closed', label: 'Force Closed' },
   ];
 
+  const currentBannerList = config.menuBannerUrls && config.menuBannerUrls.length > 0
+    ? config.menuBannerUrls
+    : [config.menuBannerUrl || '/banner.webp'];
+
   const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: 'File too large', description: 'Banner image must be under 5MB', variant: 'error' });
+      return;
+    }
+    if (currentBannerList.length >= 5) {
+      toast({
+        title: 'Maximum 5 photos reached',
+        description: 'Best practice is 3 to 4 photos. Remove one before adding more.',
+        variant: 'info',
+      });
       return;
     }
     setUploadingBanner(true);
@@ -280,8 +627,18 @@ export function StoreSettings() {
       }
       const data = await res.json();
       if (data.url) {
-        setConfig((prev) => ({ ...prev, menuBannerUrl: data.url }));
-        await updateSetting('menuBannerUrl', data.url, 'Top Banner Photo');
+        const nextList = [...currentBannerList, data.url];
+        setConfig((prev) => ({
+          ...prev,
+          menuBannerUrls: nextList,
+          menuBannerUrl: nextList[0],
+        }));
+        setPreviewSlideIdx(nextList.length - 1);
+        toast({
+          title: 'Banner added to draft',
+          description: `Photo ${nextList.length} of 5 added. Click Save Changes to apply to live menu.`,
+          variant: 'info',
+        });
       }
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message, variant: 'error' });
@@ -291,10 +648,77 @@ export function StoreSettings() {
     }
   };
 
-  const handleTabUpdate = async (index: number, partial: Partial<MenuTabItem>) => {
-    const nextTabs = config.menuTabsConfig.map((t, i) => (i === index ? { ...t, ...partial } : t));
-    setConfig((prev) => ({ ...prev, menuTabsConfig: nextTabs }));
-    await updateSetting('menuTabsConfig', JSON.stringify(nextTabs), `Menu Tab ${index + 1}`);
+  const handleMoveBanner = (index: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= currentBannerList.length) return;
+    const nextList = [...currentBannerList];
+    const temp = nextList[index];
+    nextList[index] = nextList[targetIndex];
+    nextList[targetIndex] = temp;
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: nextList,
+      menuBannerUrl: nextList[0],
+    }));
+    setPreviewSlideIdx(targetIndex);
+  };
+
+  const handleRemoveBanner = (index: number) => {
+    if (currentBannerList.length <= 1) {
+      toast({
+        title: 'Cannot remove last photo',
+        description: 'Customer menu requires at least 1 banner photo.',
+        variant: 'info',
+      });
+      return;
+    }
+    const nextList = currentBannerList.filter((_, i) => i !== index);
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: nextList,
+      menuBannerUrl: nextList[0],
+    }));
+    setPreviewSlideIdx((prev) => Math.min(prev, nextList.length - 1));
+    toast({
+      title: 'Photo removed from draft',
+      description: 'Click Save Changes to update live menu.',
+      variant: 'info',
+    });
+  };
+
+  const handleAddPresetBanner = (url: string) => {
+    if (currentBannerList.includes(url)) {
+      toast({ title: 'Already in list', description: 'This banner is already in your slide list.', variant: 'info' });
+      return;
+    }
+    if (currentBannerList.length >= 5) {
+      toast({ title: 'Maximum 5 photos reached', description: 'Remove a photo first before adding more.', variant: 'info' });
+      return;
+    }
+    const nextList = [...currentBannerList, url];
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: nextList,
+      menuBannerUrl: nextList[0],
+    }));
+    setPreviewSlideIdx(nextList.length - 1);
+  };
+
+  const handleResetBanners = (urls: string[]) => {
+    setConfig((prev) => ({
+      ...prev,
+      menuBannerUrls: urls,
+      menuBannerUrl: urls[0],
+    }));
+    setPreviewSlideIdx(0);
+    toast({ title: 'Presets updated in draft', description: 'Click Save Changes to apply to live menu.', variant: 'info' });
+  };
+
+  const handleTabUpdate = (index: number, partial: Partial<MenuTabItem>) => {
+    setConfig((prev) => ({
+      ...prev,
+      menuTabsConfig: prev.menuTabsConfig.map((t, i) => (i === index ? { ...t, ...partial } : t)),
+    }));
   };
 
   const handleTabLogoUpload = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -319,8 +743,12 @@ export function StoreSettings() {
       }
       const data = await res.json();
       if (data.url) {
-        await handleTabUpdate(idx, { icon: data.url });
-        toast({ title: `Tab ${idx + 1} Logo uploaded`, variant: 'success' });
+        handleTabUpdate(idx, { icon: data.url });
+        toast({
+          title: `Tab ${idx + 1} logo uploaded to draft`,
+          description: 'Click Save Changes to apply it to live menu.',
+          variant: 'info',
+        });
       }
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message, variant: 'error' });
@@ -331,19 +759,21 @@ export function StoreSettings() {
     }
   };
 
-  const handleSocialUpdate = async (index: number, partial: Partial<SocialBadgeItem>) => {
-    const nextSocials = config.shopSocialLinks.map((s, i) => (i === index ? { ...s, ...partial } : s));
-    setConfig((prev) => ({ ...prev, shopSocialLinks: nextSocials }));
-    await updateSetting('shopSocialLinks', JSON.stringify(nextSocials), `${nextSocials[index].label} Link`);
+  const handleSocialUpdate = (index: number, partial: Partial<SocialBadgeItem>) => {
+    setConfig((prev) => ({
+      ...prev,
+      shopSocialLinks: prev.shopSocialLinks.map((s, i) => (i === index ? { ...s, ...partial } : s)),
+    }));
   };
 
-  const handleTabCountPreset = async (count: 1 | 2 | 3) => {
-    const nextTabs = config.menuTabsConfig.map((t, i) => ({
-      ...t,
-      enabled: i < count,
+  const handleTabCountPreset = (count: 1 | 2 | 3) => {
+    setConfig((prev) => ({
+      ...prev,
+      menuTabsConfig: prev.menuTabsConfig.map((t, i) => ({
+        ...t,
+        enabled: i < count,
+      })),
     }));
-    setConfig((prev) => ({ ...prev, menuTabsConfig: nextTabs }));
-    await updateSetting('menuTabsConfig', JSON.stringify(nextTabs), `${count} Menu Tabs`);
   };
 
   const activeTabsCount = config.menuTabsConfig.filter((t) => t.enabled).length;
@@ -364,6 +794,11 @@ export function StoreSettings() {
                   <span className="inline-block size-2 rounded-none bg-current mr-1.5 animate-pulse" />
                   {config.isOpen ? 'OPEN FOR ORDERS' : 'CURRENTLY CLOSED'}
                 </Badge>
+                {isDirty && (
+                  <Badge variant="pending" className="border border-status-pending">
+                    UNSAVED DRAFT ({changes.length})
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-ink-soft mt-0.5">
                 {config.storeStatus === 'auto' && (
@@ -389,16 +824,6 @@ export function StoreSettings() {
               </p>
             </div>
           </div>
-
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => fetchConfig()}
-            className="shrink-0 gap-2 text-xs"
-          >
-            <RotateCcw className="size-3.5" />
-            Refresh
-          </Button>
         </div>
 
         {/* Mode Selector */}
@@ -409,7 +834,7 @@ export function StoreSettings() {
           <Segmented
             ariaLabel="Store Operating Mode"
             value={config.storeStatus}
-            onChange={(val) => updateSetting('storeStatus', val as any, 'Store Mode')}
+            onChange={(val) => setConfig((prev) => ({ ...prev, storeStatus: val as any }))}
             options={modeOptions}
           />
         </div>
@@ -426,7 +851,6 @@ export function StoreSettings() {
                 type="time"
                 value={config.openTime}
                 onChange={(e) => setConfig((prev) => ({ ...prev, openTime: e.target.value }))}
-                onBlur={(e) => updateSetting('openTime', e.target.value, 'Opening Time')}
                 className="h-11 flex-1 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
               />
             </div>
@@ -443,7 +867,6 @@ export function StoreSettings() {
                 type="time"
                 value={config.closeTime}
                 onChange={(e) => setConfig((prev) => ({ ...prev, closeTime: e.target.value }))}
-                onBlur={(e) => updateSetting('closeTime', e.target.value, 'Closing Time')}
                 className="h-11 flex-1 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
               />
             </div>
@@ -456,30 +879,21 @@ export function StoreSettings() {
           <span className="text-xs text-ink-faint mr-1 font-medium">Quick Hours:</span>
           <button
             type="button"
-            onClick={async () => {
-              await updateSetting('openTime', '08:00', 'Opening Time');
-              await updateSetting('closeTime', '21:00', 'Closing Time');
-            }}
+            onClick={() => setConfig((prev) => ({ ...prev, openTime: '08:00', closeTime: '21:00' }))}
             className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             08:00 – 21:00 (Standard)
           </button>
           <button
             type="button"
-            onClick={async () => {
-              await updateSetting('openTime', '07:30', 'Opening Time');
-              await updateSetting('closeTime', '22:00', 'Closing Time');
-            }}
+            onClick={() => setConfig((prev) => ({ ...prev, openTime: '07:30', closeTime: '22:00' }))}
             className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             07:30 – 22:00 (Extended)
           </button>
           <button
             type="button"
-            onClick={async () => {
-              await updateSetting('openTime', '09:00', 'Opening Time');
-              await updateSetting('closeTime', '23:00', 'Closing Time');
-            }}
+            onClick={() => setConfig((prev) => ({ ...prev, openTime: '09:00', closeTime: '23:00' }))}
             className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
           >
             09:00 – 23:00 (Late Night)
@@ -503,29 +917,86 @@ export function StoreSettings() {
 
         {/* Banner Section */}
         <div className="flex flex-col gap-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-ink-faint">
-            Top Header Background Photo
-          </label>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-ink-faint block">
+                Customer Menu Banner Photos (1 to 5 Photos)
+              </label>
+              <span className="text-xs text-ink-soft">
+                Multiple photos will slide automatically in customer menu. Best practice: <strong>3 to 4 photos</strong>.
+              </span>
+            </div>
+            <Badge
+              variant={currentBannerList.length >= 3 && currentBannerList.length <= 4 ? 'success' : 'neutral'}
+              className="text-[11px] font-mono font-bold"
+            >
+              {currentBannerList.length} / 5 Photos
+            </Badge>
+          </div>
 
-          {/* Banner Preview */}
-          <div className="relative h-36 w-full rounded-none overflow-hidden border border-border bg-black/40 shadow-inner flex items-end p-4">
+          {/* Banner Preview Box (Carousel) */}
+          <div className="relative h-40 w-full rounded-none overflow-hidden border border-border bg-black/40 shadow-inner flex items-end p-4">
             <img
-              src={resolveImageUrl(config.menuBannerUrl)}
-              alt="Menu Background Preview"
-              className="absolute inset-0 h-full w-full object-cover opacity-85"
+              src={resolveImageUrl(currentBannerList[previewSlideIdx] || config.menuBannerUrl || '/banner.webp')}
+              alt={`Menu Background Preview Slide ${previewSlideIdx + 1}`}
+              className="absolute inset-0 h-full w-full object-cover opacity-85 transition-opacity duration-300"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/banner.webp';
               }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
-            <div className="relative z-10 text-white flex items-center justify-between w-full">
+
+            {/* Slide Navigation Arrows on Preview */}
+            {currentBannerList.length > 1 && (
+              <div className="absolute inset-y-0 left-2 right-2 flex items-center justify-between pointer-events-none">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewSlideIdx((prev) => (prev - 1 + currentBannerList.length) % currentBannerList.length)
+                  }
+                  aria-label="Previous preview slide"
+                  className="pointer-events-auto size-8 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 transition-transform active:scale-95"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewSlideIdx((prev) => (prev + 1) % currentBannerList.length)}
+                  aria-label="Next preview slide"
+                  className="pointer-events-auto size-8 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 transition-transform active:scale-95"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="relative z-10 text-white flex items-end justify-between w-full">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider opacity-80 block">Customer Menu Preview</span>
-                <span className="text-base font-extrabold drop-shadow">Top Background Photo</span>
+                <span className="text-base font-extrabold drop-shadow">
+                  Slide {previewSlideIdx + 1} of {currentBannerList.length}
+                </span>
               </div>
-              <Badge variant="neutral" className="bg-black/60 backdrop-blur-md text-white border-white/20 text-[10px]">
-                Active Banner
-              </Badge>
+              <div className="flex flex-col items-end gap-1.5">
+                <Badge variant="neutral" className="bg-black/60 backdrop-blur-md text-white border-white/20 text-[10px]">
+                  {previewSlideIdx === 0 ? 'Cover (First Photo)' : `Slide #${previewSlideIdx + 1}`}
+                </Badge>
+                {/* Dots */}
+                {currentBannerList.length > 1 && (
+                  <div className="flex items-center gap-1">
+                    {currentBannerList.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setPreviewSlideIdx(i)}
+                        className={`h-1.5 rounded-full transition-all ${
+                          i === previewSlideIdx ? 'w-4 bg-white' : 'w-1.5 bg-white/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -553,47 +1024,145 @@ export function StoreSettings() {
                 type="button"
                 variant="primary"
                 size="md"
-                disabled={uploadingBanner}
+                disabled={uploadingBanner || currentBannerList.length >= 5}
                 onClick={() => bannerInputRef.current?.click()}
                 className="gap-2 text-xs shrink-0"
               >
                 <Upload className="size-4" />
-                {uploadingBanner ? 'Uploading...' : 'Upload Banner Photo'}
+                {uploadingBanner
+                  ? 'Uploading...'
+                  : currentBannerList.length >= 5
+                  ? 'Max 5 Photos Reached'
+                  : `Upload Photo (${currentBannerList.length}/5)`}
               </Button>
             </div>
           </div>
 
+          {/* Photo Slides List / Order Management */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold text-ink flex items-center justify-between">
+              <span>Photo Slides Order ({currentBannerList.length}):</span>
+              <span className="text-[11px] font-normal text-ink-soft">Use arrows to change slide order</span>
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {currentBannerList.map((url, idx) => (
+                <div
+                  key={`${url}-${idx}`}
+                  className={`p-2.5 rounded-none border flex items-center justify-between gap-2.5 transition-colors ${
+                    idx === previewSlideIdx
+                      ? 'border-accent bg-accent/5'
+                      : 'border-border bg-surface hover:bg-surface-sunken'
+                  }`}
+                >
+                  {/* Thumbnail & Title */}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span className="size-5 rounded-full bg-ink/10 text-ink text-[10px] font-bold flex items-center justify-center shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div className="relative h-12 w-20 shrink-0 overflow-hidden border border-border bg-black/20">
+                      <img
+                        src={resolveImageUrl(url)}
+                        alt={`Slide ${idx + 1}`}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/banner.webp';
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold text-ink truncate">
+                        {idx === 0 ? 'Cover Slide' : `Slide #${idx + 1}`}
+                      </span>
+                      <span className="text-[10px] text-ink-soft font-mono truncate">
+                        {url.length > 20 ? `...${url.slice(-17)}` : url}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions: Preview, Left, Right, Delete */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      title="Preview this slide"
+                      onClick={() => setPreviewSlideIdx(idx)}
+                      className={`p-1.5 rounded-none border transition-colors ${
+                        idx === previewSlideIdx
+                          ? 'border-accent bg-accent text-white'
+                          : 'border-border text-ink-soft hover:text-ink hover:bg-surface-sunken'
+                      }`}
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Move slide left"
+                      disabled={idx === 0}
+                      onClick={() => handleMoveBanner(idx, 'left')}
+                      className="p-1.5 rounded-none border border-border text-ink-soft hover:text-ink hover:bg-surface-sunken disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Move slide right"
+                      disabled={idx === currentBannerList.length - 1}
+                      onClick={() => handleMoveBanner(idx, 'right')}
+                      className="p-1.5 rounded-none border border-border text-ink-soft hover:text-ink hover:bg-surface-sunken disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Remove this slide"
+                      disabled={currentBannerList.length <= 1}
+                      onClick={() => handleRemoveBanner(idx)}
+                      className="p-1.5 rounded-none border border-border text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Quick Banner Presets & Advanced Toggle */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border mt-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-ink-faint font-medium">Quick Presets:</span>
               <button
                 type="button"
-                onClick={() => updateSetting('menuBannerUrl', '/banner.webp', 'Menu Banner Photo')}
-                className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  config.menuBannerUrl === '/banner.webp'
-                    ? 'border-accent bg-accent/10 text-accent font-bold'
-                    : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
+                onClick={() => handleAddPresetBanner('/banner.webp')}
+                className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink flex items-center gap-1"
               >
-                Default (Ai-Cha &amp; Zhengda)
+                <Plus className="size-3" /> Add Ai-Cha Banner
+              </button>
+              <button
+                type="button"
+                onClick={() => handleAddPresetBanner('/images/zhengda_downloads/web-banner-zhengda_1_.webp')}
+                className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink flex items-center gap-1"
+              >
+                <Plus className="size-3" /> Add Zhengda Banner
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  updateSetting(
-                    'menuBannerUrl',
+                  handleResetBanners([
+                    '/banner.webp',
                     '/images/zhengda_downloads/web-banner-zhengda_1_.webp',
-                    'Menu Banner Photo'
-                  )
+                  ])
                 }
-                className={`rounded-none border px-2.5 py-1 text-xs font-semibold transition-colors ${
-                  config.menuBannerUrl === '/images/zhengda_downloads/web-banner-zhengda_1_.webp'
-                    ? 'border-accent bg-accent/10 text-accent font-bold'
-                    : 'border-border bg-surface text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
+                className="rounded-none border border-border bg-surface px-2.5 py-1 text-xs font-semibold text-ink-soft hover:bg-surface-sunken hover:text-ink"
               >
-                Zhengda Banner
+                Set Combo (Ai-Cha + Zhengda)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleResetBanners(['/banner.webp'])}
+                className="rounded-none border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-ink-faint hover:text-ink"
+              >
+                Reset to Default
               </button>
             </div>
 
@@ -603,19 +1172,32 @@ export function StoreSettings() {
               className="text-[11px] font-medium text-ink-faint hover:text-ink transition-colors flex items-center gap-1"
             >
               <Link className="size-3" />
-              {showManualUrls ? 'Hide URL inputs' : 'Advanced: Edit URL directly'}
+              {showManualUrls ? 'Hide URL inputs' : 'Advanced: Edit URLs directly'}
             </button>
           </div>
 
           {showManualUrls && (
-            <div className="flex gap-2 pt-1 animate-fade-in">
-              <input
-                type="text"
-                placeholder="e.g. /banner.webp or https://..."
-                value={config.menuBannerUrl}
-                onChange={(e) => setConfig((prev) => ({ ...prev, menuBannerUrl: e.target.value }))}
-                onBlur={(e) => updateSetting('menuBannerUrl', e.target.value, 'Menu Banner Photo')}
-                className="h-10 flex-1 rounded-none border border-border bg-surface px-3 text-xs font-mono text-ink focus:border-accent focus:outline-none"
+            <div className="flex flex-col gap-2 pt-1 animate-fade-in bg-surface-raised p-3 border border-border">
+              <span className="text-xs font-bold text-ink">Direct Image URLs (one per line, up to 5):</span>
+              <textarea
+                rows={3}
+                placeholder="e.g.&#10;/banner.webp&#10;/images/zhengda_downloads/web-banner-zhengda_1_.webp"
+                value={currentBannerList.join('\n')}
+                onChange={(e) => {
+                  const lines = e.target.value
+                    .split('\n')
+                    .map((l) => l.trim())
+                    .filter((l) => l.length > 0)
+                    .slice(0, 5);
+                  if (lines.length > 0) {
+                    setConfig((prev) => ({
+                      ...prev,
+                      menuBannerUrls: lines,
+                      menuBannerUrl: lines[0],
+                    }));
+                  }
+                }}
+                className="w-full rounded-none border border-border bg-surface p-2 text-xs font-mono text-ink focus:border-accent focus:outline-none"
               />
             </div>
           )}
@@ -707,7 +1289,6 @@ export function StoreSettings() {
                       );
                       setConfig((prev) => ({ ...prev, menuTabsConfig: next }));
                     }}
-                    onBlur={(e) => handleTabUpdate(idx, { label: e.target.value })}
                     placeholder={`e.g. Tab ${idx + 1}`}
                     className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-bold text-ink focus:border-accent focus:outline-none"
                   />
@@ -724,7 +1305,6 @@ export function StoreSettings() {
                       );
                       setConfig((prev) => ({ ...prev, menuTabsConfig: next }));
                     }}
-                    onBlur={(e) => handleTabUpdate(idx, { id: e.target.value })}
                     placeholder="e.g. ai-cha, zhengda"
                     className="h-9 w-full rounded-none border border-border bg-surface px-2.5 text-xs font-mono text-ink focus:border-accent focus:outline-none"
                   />
@@ -822,7 +1402,6 @@ export function StoreSettings() {
                         );
                         setConfig((prev) => ({ ...prev, menuTabsConfig: next }));
                       }}
-                      onBlur={(e) => handleTabUpdate(idx, { icon: e.target.value })}
                       placeholder="Custom image URL"
                       className="h-8 w-full rounded-none border border-border bg-surface px-2 text-[11px] font-mono text-ink mt-1"
                     />
@@ -858,7 +1437,6 @@ export function StoreSettings() {
               type="text"
               value={config.shopName}
               onChange={(e) => setConfig((prev) => ({ ...prev, shopName: e.target.value }))}
-              onBlur={(e) => updateSetting('shopName', e.target.value, 'Shop Title')}
               placeholder="e.g. Our shop"
               className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
@@ -873,7 +1451,6 @@ export function StoreSettings() {
               type="text"
               value={config.shopAddress}
               onChange={(e) => setConfig((prev) => ({ ...prev, shopAddress: e.target.value }))}
-              onBlur={(e) => updateSetting('shopAddress', e.target.value, 'Shop Address')}
               placeholder="e.g. J03, Ground Floor, Arakawa"
               className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
@@ -888,7 +1465,6 @@ export function StoreSettings() {
               type="text"
               value={config.shopDeliveryNote}
               onChange={(e) => setConfig((prev) => ({ ...prev, shopDeliveryNote: e.target.value }))}
-              onBlur={(e) => updateSetting('shopDeliveryNote', e.target.value, 'Delivery Note')}
               placeholder="e.g. Delivery inside Arakawa is free"
               className="h-11 rounded-none border border-border bg-surface px-3 text-xs font-semibold text-ink focus:border-accent focus:outline-none"
             />
@@ -912,7 +1488,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.shopSocialsEnabled}
-              onChange={(checked) => updateSetting('shopSocialsEnabled', checked, 'Social Badges Section')}
+              onChange={(checked) => setConfig((prev) => ({ ...prev, shopSocialsEnabled: checked }))}
               srLabel="Enable social media badges"
             />
           </div>
@@ -949,7 +1525,6 @@ export function StoreSettings() {
                       );
                       setConfig((prev) => ({ ...prev, shopSocialLinks: next }));
                     }}
-                    onBlur={(e) => handleSocialUpdate(idx, { url: e.target.value })}
                     placeholder={
                       social.id === 'telegram'
                         ? 'https://t.me/iLoveAiChaZhengDaArakawa'
@@ -1038,8 +1613,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enablePickup}
-              onChange={(next) => updateSetting('enablePickup', next, 'Pickup Orders')}
-              disabled={updatingKey === 'enablePickup'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enablePickup: next }))}
               srLabel="Enable or disable pickup orders"
             />
           </div>
@@ -1057,8 +1631,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enableDelivery}
-              onChange={(next) => updateSetting('enableDelivery', next, 'Delivery Orders')}
-              disabled={updatingKey === 'enableDelivery'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableDelivery: next }))}
               srLabel="Enable or disable delivery orders"
             />
           </div>
@@ -1093,8 +1666,7 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enableCash}
-              onChange={(next) => updateSetting('enableCash', next, 'Cash Payment')}
-              disabled={updatingKey === 'enableCash'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableCash: next }))}
               srLabel="Enable or disable cash payment"
             />
           </div>
@@ -1112,15 +1684,221 @@ export function StoreSettings() {
             </div>
             <Switch
               checked={config.enableKhqr}
-              onChange={(next) => updateSetting('enableKhqr', next, 'KHQR Payment')}
-              disabled={updatingKey === 'enableKhqr'}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableKhqr: next }))}
               srLabel="Enable or disable KHQR payment"
             />
           </div>
         </div>
       </Card>
 
-      {/* 5. Delivery Fee */}
+      {/* 5. Kitchen Alert Sounds & Timers */}
+      <Card className="p-5 flex flex-col gap-5">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
+              <Bell className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-ink">Kitchen Alert Sounds &amp; Timers</h3>
+              <p className="text-xs text-ink-soft">
+                Adjust wait-time warning &amp; overdue minutes, repeat reminder interval, and test alert sounds.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Audio Sound Testers */}
+        <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-sunken/40 p-4">
+          <label className="text-xs font-bold uppercase tracking-wider text-ink-faint">
+            Audio Chime Test (Check Tablet Speaker)
+          </label>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => testAlertSound('newOrder')}
+              className="gap-2 text-xs font-bold"
+            >
+              <Play className="size-3.5 text-accent" />
+              <span>Test New Order Chime</span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => testAlertSound('reminder')}
+              className="gap-2 text-xs font-bold"
+            >
+              <Play className="size-3.5 text-status-pending" />
+              <span>Test Reminder Chime</span>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => testAlertSound('overdue')}
+              className="gap-2 text-xs font-bold"
+            >
+              <Play className="size-3.5 text-danger" />
+              <span>Test Overdue Alarm</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Lane Thresholds Configuration */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Pending / Paid Lane */}
+          <div className="flex flex-col gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Pending Orders</span>
+              <span className="rounded-none bg-status-pending-soft px-1.5 py-0.5 text-[10px] font-bold text-status-pending">
+                Waiting Start
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Warning (Amber):</span>
+                <span className="font-bold text-ink">{config.orderWarnPendingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={config.orderWarnPendingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderWarnPendingMins: Number(e.target.value) }))
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Overdue (Red):</span>
+                <span className="font-bold text-danger">{config.orderLatePendingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={config.orderLatePendingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderLatePendingMins: Number(e.target.value) }))
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+          </div>
+
+          {/* Preparing Lane */}
+          <div className="flex flex-col gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Preparing Orders</span>
+              <span className="rounded-none bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                Kitchen Cooking
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Warning (Amber):</span>
+                <span className="font-bold text-ink">{config.orderWarnPreparingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={config.orderWarnPreparingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderWarnPreparingMins: Number(e.target.value) }))
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Overdue (Red):</span>
+                <span className="font-bold text-danger">{config.orderLatePreparingMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={config.orderLatePreparingMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderLatePreparingMins: Number(e.target.value) }))
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+          </div>
+
+          {/* Ready Lane */}
+          <div className="flex flex-col gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-ink uppercase tracking-wider">Ready for Pickup</span>
+              <span className="rounded-none bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600">
+                Counter Pickup
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Warning (Amber):</span>
+                <span className="font-bold text-ink">{config.orderWarnReadyMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="60"
+                value={config.orderWarnReadyMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderWarnReadyMins: Number(e.target.value) }))
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-ink-soft flex items-center justify-between">
+                <span>Overdue (Red):</span>
+                <span className="font-bold text-danger">{config.orderLateReadyMins}m</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={config.orderLateReadyMins}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, orderLateReadyMins: Number(e.target.value) }))
+                }
+                className="h-9 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Untouched Reminder Interval */}
+        <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4 sm:max-w-md">
+          <label className="text-xs font-bold text-ink flex items-center justify-between">
+            <span>Untouched Order Reminder Interval:</span>
+            <span className="font-mono text-accent">{config.orderReminderSeconds}s</span>
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="15"
+              max="600"
+              step="15"
+              value={config.orderReminderSeconds}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, orderReminderSeconds: Number(e.target.value) }))
+              }
+              className="h-9 w-28 rounded-none border border-border bg-surface px-3 font-mono text-xs font-bold text-ink"
+            />
+            <span className="text-xs text-ink-soft">seconds before repeating chime for untouched orders</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* 6. Delivery Fee */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
           <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
@@ -1142,12 +1920,136 @@ export function StoreSettings() {
             min="0"
             value={config.deliveryFee}
             onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
-            onBlur={(e) => updateSetting('deliveryFee', Number(e.target.value), 'Delivery Fee')}
             className="h-11 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
           />
           <span className="text-[11px] text-ink-faint">0 = Free delivery for customers</span>
         </div>
       </Card>
+
+      {/* Sticky Bottom Action Bar for Unsaved Changes */}
+      {isDirty && (
+        <div className="sticky bottom-4 z-40 flex flex-wrap items-center justify-between gap-3 rounded-none border-2 border-accent bg-surface p-4 shadow-2xl animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="size-3 rounded-none bg-accent animate-pulse" />
+            <div>
+              <div className="text-sm font-bold text-ink">
+                You have {changes.length} unsaved change{changes.length > 1 ? 's' : ''}
+              </div>
+              <div className="text-xs text-ink-soft">
+                Not yet applied to customer menu. Save will ask confirmation first.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={handleCancelChanges}
+              disabled={saving}
+              className="gap-1.5 text-xs font-bold"
+            >
+              <X className="size-4" />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => setShowConfirmModal(true)}
+              disabled={saving}
+              className="gap-1.5 text-xs font-bold"
+            >
+              <Save className="size-4" />
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Strict Confirmation Modal before Applying to Live Menu */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={saving ? undefined : () => setShowConfirmModal(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-none border-2 border-accent bg-surface p-5 shadow-2xl z-10 space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2.5 text-accent">
+                <AlertTriangle className="size-5 shrink-0 text-status-pending" />
+                <h3 className="text-base font-extrabold text-ink">
+                  Apply Changes to Live Menu?
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setShowConfirmModal(false)}
+                className="rounded-none p-1 text-ink-faint hover:bg-surface-sunken hover:text-ink disabled:opacity-50"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="rounded-none border border-status-pending/40 bg-status-pending-soft/40 p-3 text-xs text-ink space-y-1">
+              <div className="font-bold text-status-pending flex items-center gap-1.5">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>Immediate Customer Impact</span>
+              </div>
+              <p className="text-ink-soft">
+                These settings will apply to the Telegram customer menu immediately for all active users.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-bold uppercase tracking-wider text-ink-faint">
+                Review Modified Settings ({changes.length})
+              </div>
+              <div className="max-h-60 overflow-y-auto divide-y divide-border border border-border bg-surface-sunken/30">
+                {changes.slice(0, 5).map((c) => (
+                  <div key={c.key} className="p-2.5 text-xs flex flex-col gap-1">
+                    <div className="font-bold text-ink">{c.label}</div>
+                    <div className="flex items-center gap-2 text-ink-soft">
+                      <span className="line-through opacity-70">{c.oldDisplay}</span>
+                      <span className="text-ink-faint">&rarr;</span>
+                      <span className="font-semibold text-accent">{c.newDisplay}</span>
+                    </div>
+                  </div>
+                ))}
+                {changes.length > 5 && (
+                  <div className="p-2.5 text-xs font-semibold text-ink-soft bg-surface-sunken/60 text-center">
+                    +{changes.length - 5} more setting{changes.length - 5 > 1 ? 's' : ''} modified
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                disabled={saving}
+                onClick={() => setShowConfirmModal(false)}
+              >
+                Keep Editing
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                disabled={saving}
+                onClick={handleConfirmSave}
+                className="gap-2 font-bold"
+              >
+                <Check className="size-4" />
+                {saving ? 'Applying...' : 'Confirm & Apply to Menu'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
