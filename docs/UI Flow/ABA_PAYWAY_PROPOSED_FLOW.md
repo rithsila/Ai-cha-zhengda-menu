@@ -26,7 +26,7 @@ flowchart TD
     K -->|Declined| M[Payment declined — retry or pay with cash]
     K -->|Expired| N[QR expired — retry with fresh code]
     K -->|Awaiting| O[Awaiting payment confirmation — live status & recovery]
-    G -->|Customer cancels| P[Server verifies unpaid then marks cancelled]
+    G -->|Customer cancels| P[Server verifies unpaid, closes transaction, marks cancelled]
     O --> K
 ```
 
@@ -81,13 +81,22 @@ sequenceDiagram
         M-->>C: Payment successful (pickup code shown)
     else Payment Declined
         M-->>C: Payment declined (retry or cash)
-    else QR Expired
-        M-->>C: QR expired (reconciles with PayWay before expiring)
+    else QR Expired / Sweep
+        S->>P: Check transaction status (check-transaction-2)
+        alt If unpaid
+            S->>P: Close transaction (POST /close-transaction)
+            S->>S: Mark order expired & refund reserved points
+            M-->>C: QR expired (retry with fresh code)
+        else If already paid
+            S->>S: Settle order as paid
+            M-->>C: Payment successful (pickup code shown)
+        end
     else Customer Cancellation
         C->>M: Cancel payment
         M->>S: POST /api/payment/aba/cancel
-        S->>P: Check transaction status with PayWay
-        alt If not paid
+        S->>P: Check transaction status (check-transaction-2)
+        alt If unpaid
+            S->>P: Close transaction (POST /close-transaction)
             S->>S: Cancel order & refund reserved loyalty points
             S-->>M: Cancelled confirmed
             M-->>C: Payment cancelled
@@ -118,17 +127,25 @@ sequenceDiagram
 | Payment cancelled (`KhqrPaymentPanel`, `OrdersView`) | `/`, cancel confirmation | Cancel order confirmed with server; points refunded | Menu / Checkout |
 | Orders (`OrdersView`) | `/`, orders tab | View active/past orders; Pay now for unpaid orders | KhqrPaymentPanel sheet |
 
-## 4. Implementation status vs remaining external setup
+## 4. Previous audit findings & resolution status
 
-| Area | Implemented in Codebase | Remaining External Setup (ABA / Ops) |
+| # | Previous Audit Finding | Resolution Status | Implementation Details |
+|---|---|---|---|
+| 1 | **Missing payment result screens** | **Resolved** | Added distinct states in `KhqrPaymentPanel` and `App` for `Payment successful`, `Payment declined`, `QR expired`, `Awaiting payment confirmation`, and `Payment cancelled`. |
+| 2 | **Unverified client-side settlement** | **Resolved** | Client never updates order to paid. Server validates transaction ID, matching amount, and USD currency via `/check-transaction-2` before marking order paid. |
+| 3 | **Missing pushback webhook** | **Resolved** | Implemented `POST /api/payment/aba/callback` with `X-PayWay-HMAC-SHA512` signature verification and independent status re-check before atomic DB settlement. |
+| 4 | **Risk of late charges after cancel/expiry** | **Resolved** | Both customer cancellation (`POST /api/payment/aba/cancel`) and background expiry worker call ABA PayWay Close Transaction API (`/api/payment-gateway/v1/payments/close-transaction`) to reject subsequent incoming payments. |
+| 5 | **State loss on app reload or return from ABA Mobile** | **Resolved** | Stored active payment ID in `sessionStorage`; auto-restored on focus/reload; added top recovery banner ("You have an order awaiting payment confirmation") in `App`. |
+
+## 5. Remaining external setup (ABA / Ops)
+
+| Area | Requirement | Action Needed |
 |---|---|---|
-| **Payment Results** | Distinct screens for Successful ("Payment successful"), Declined ("Payment declined"), Expired ("QR expired"), Pending ("Awaiting payment confirmation" with "Check status"), and Cancelled ("Payment cancelled"). | Capture final production screenshots for ABA submission. |
-| **Server Verification** | Strict amount matching, USD currency verification, transaction reference matching, atomic settlement, and late approval handling on cancelled orders. | None (handled entirely on server). |
-| **Pushback Callback** | `POST /api/payment/aba/callback` with `X-PayWay-HMAC-SHA512` signature verification via official SDK + independent server transaction check. | Configure pushback URL in ABA Merchant Portal: `https://<domain>/api/payment/aba/callback`. |
-| **Safe Expiry & Cancellation** | Customer cancellation via `POST /api/payment/aba/cancel` checks PayWay first. Background worker reconciles with PayWay before expiring; preserves pending state on network failure. | Ensure background sweep cron is running (`SWEEP_INTERVAL_MS`). |
-| **Recovery & Consistency** | Active payment stored in session storage; auto-resumes on app reload or return from ABA Mobile; top recovery banner guides customer back to payment status. | Test deep link round-trip on physical iOS and Android devices with ABA Mobile app installed. |
+| **Pushback Webhook** | Register public webhook URL with ABA PayWay | Enter `https://<api-domain>/api/payment/aba/callback` in ABA Merchant Portal. |
+| **Screenshot Submission** | Provide 12 screenshots of live payment flow | Capture updated screenshots from `https://staging-menu.aichazhengdaarakawa.com` for ABA compliance review. |
+| **Background Cron** | Run periodic expiry sweep | Ensure API server background sweep (`SWEEP_INTERVAL_MS=30000`) is active. |
 
-## 5. Screenshot submission checklist
+## 6. Screenshot submission checklist
 
 1. `1 Start.jpg` — Telegram Open Menu.
 2. `2 Select Item.jpg` — Menu and ADD actions with drink selections.
@@ -142,4 +159,3 @@ sequenceDiagram
 10. `10 Payment Declined.jpg` — "Payment declined" screen showing bank decline advice.
 11. `11 Payment Cancelled.jpg` — "Payment cancelled" screen confirmed by server.
 12. `12 Orders Active.jpg` — Orders view showing pending and verified completed orders.
-
