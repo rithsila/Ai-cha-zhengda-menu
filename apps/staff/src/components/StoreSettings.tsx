@@ -1206,49 +1206,7 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 6. Customer VIP & Trust Rules */}
-      <Card className="p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
-            <Sparkles className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Customer VIP &amp; Trust Rules</h3>
-            <p className="text-xs text-ink-soft">
-              Configure order rules for customer VIP tiers and privileges.
-            </p>
-          </div>
-        </div>
-
-        <div className="max-w-md flex flex-col gap-2">
-          <label htmlFor="gold-min-orders-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
-            <Sparkles className="size-3.5 text-amber-500" />
-            Orders for Gold VIP Promotion
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              id="gold-min-orders-input"
-              type="number"
-              min={1}
-              max={100}
-              value={config.goldMinOrdersThreshold}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  goldMinOrdersThreshold: Math.max(1, Number(e.target.value) || 1),
-                }))
-              }
-              className="h-11 w-28 rounded-none border border-border bg-surface px-3 font-mono text-sm font-bold text-ink focus:border-accent focus:outline-none text-center"
-            />
-            <span className="text-xs font-semibold text-ink-soft">paid orders</span>
-          </div>
-          <p className="text-[11px] text-ink-faint">
-            Number of completed/paid orders needed to auto-promote customer to Gold VIP.
-          </p>
-        </div>
-      </Card>
-
-      {/* 7. Lucky Draw & Ticket Rules */}
+      {/* 4. Lucky Draw & Ticket Rules */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center gap-3 border-b border-border pb-3">
           <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
@@ -1257,7 +1215,7 @@ export function StoreSettings() {
           <div>
             <h3 className="text-base font-bold text-ink">Lucky Draw &amp; Ticket Rules</h3>
             <p className="text-xs text-ink-soft">
-              Configure lucky draw feature status and ticket rewards per order.
+              Configure lucky draw feature status, ticket rewards, and Gold VIP qualification.
             </p>
           </div>
         </div>
@@ -1277,8 +1235,34 @@ export function StoreSettings() {
           />
         </div>
 
-        {/* Ticket Rates and Spin Cost Grid */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* Ticket Rates, Spin Cost and Gold VIP Grid */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Orders for Gold VIP Promotion */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="gold-min-orders-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-amber-500" />
+              Orders for Gold VIP Promotion
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="gold-min-orders-input"
+                type="number"
+                min={1}
+                max={100}
+                value={config.goldMinOrdersThreshold}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    goldMinOrdersThreshold: Math.max(1, Number(e.target.value) || 1),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">paid orders</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Paid orders needed to auto-promote customer to Gold VIP.</p>
+          </div>
+
           {/* Gold VIP Ticket Rate */}
           <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
             <label htmlFor="gold-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
