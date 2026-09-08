@@ -363,4 +363,38 @@ describe('StoreSettings strict layer', () => {
       expect(putRequests).toContainEqual({ key: 'luckyTicketsCostPerSpin', value: '10' });
     });
   });
+
+  it('filters sections with category navigation and updates delivery fee', async () => {
+    render(
+      <ToastProvider>
+        <StoreSettings />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Operating Mode & Hours')).toBeDefined();
+    });
+
+    // Switch to Orders & Payments category
+    const ordersTabBtn = screen.getByRole('button', { name: /Orders & Payments/i });
+    fireEvent.click(ordersTabBtn);
+
+    // Operating hours is now hidden, but Order Types is visible
+    expect(screen.queryByText('Operating Mode & Hours')).toBeNull();
+    expect(screen.getByText('Order Types & Delivery Fee')).toBeDefined();
+
+    // Update Delivery Fee
+    const feeInput = screen.getByLabelText(/Delivery Fee/i);
+    fireEvent.change(feeInput, { target: { value: '1.5' } });
+
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm & Apply to Menu/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(putRequests).toContainEqual({ key: 'deliveryFee', value: '1.5' });
+    });
+  });
 });
