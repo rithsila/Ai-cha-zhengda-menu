@@ -443,7 +443,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 </div>
               </div>
 
-              <div className="p-4 overflow-y-auto flex-1">
+              <div className="p-4 overflow-y-auto flex-1 flex flex-col">
                 <KhqrPaymentPanel
                   orderId={selectedOrderId}
                   onPaid={handlePaid}

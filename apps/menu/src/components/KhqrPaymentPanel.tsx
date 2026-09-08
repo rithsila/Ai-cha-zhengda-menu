@@ -792,7 +792,7 @@ export function KhqrPaymentPanel({
 
   // View 1: Main payment options view
   return (
-    <div className="flex flex-col items-center w-full min-h-[380px] animate-in fade-in duration-200">
+    <div className="flex flex-col justify-between flex-1 w-full min-h-[440px] animate-in fade-in duration-200">
       <div className="w-full flex flex-col items-center">
 
 
@@ -858,7 +858,7 @@ export function KhqrPaymentPanel({
       </div>
 
       {/* Bottom Footer links: ABA Mobile is not installed? & Cancel */}
-      <div className="w-full flex flex-col items-center gap-3 mt-auto pt-6">
+      <div className="w-full flex flex-col items-center gap-3 mt-auto pt-14 pb-2">
         {(payment.playStoreUrl || payment.appStoreUrl) && (
           <div className="text-center text-xs text-tg-hint">
             <p>{t('abaNotInstalled', 'ABA Mobile is not installed?')}</p>
