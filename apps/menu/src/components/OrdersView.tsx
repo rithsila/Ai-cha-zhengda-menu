@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { useCallback, useState } from 'react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import {
   Package,
@@ -81,19 +81,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [paidCode, setPaidCode] = useState<string | null>(null);
 
-  // Restore pending payment panel if an active session payment exists
-  useEffect(() => {
-    const activeOrderId = sessionStorage.getItem('ai_cha_active_payment');
-    if (activeOrderId && !selectedOrderId && orders.length > 0) {
-      const match = orders.find(o => o.id === activeOrderId);
-      if (match && match.status === 'pending') {
-        setSelectedOrderId(activeOrderId);
-      }
-    }
-  }, [orders, selectedOrderId]);
-
-  const panelOpenRef = useRef(false);
-  panelOpenRef.current = selectedOrderId !== null;
+  const dragControls = useDragControls();
 
   const handlePaid = useCallback(
     (pickupCode: string) => {
@@ -417,29 +405,52 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
             onClick={() => setSelectedOrderId(null)}
           >
             <motion.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              drag="y"
+              dragControls={dragControls}
+              dragListener={false}
+              dragConstraints={{ top: 0 }}
+              dragElastic={{ top: 0, bottom: 0.6 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 80 || info.velocity.y > 400) {
+                  setSelectedOrderId(null);
+                }
+              }}
               onClick={e => e.stopPropagation()}
-              className="w-full sm:max-w-md bg-tg-bg rounded-t-3xl sm:rounded-3xl p-4 max-h-[90vh] overflow-y-auto"
+              className="w-full sm:max-w-md bg-tg-bg rounded-t-3xl sm:rounded-3xl max-h-[90vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-tg-text">{t('payWithKhqr', 'Pay with KHQR')}</h3>
-                <button
-                  onClick={() => setSelectedOrderId(null)}
-                  aria-label={t('close', 'Close')}
-                  className="p-2 rounded-full text-tg-hint active:scale-90 transition-transform"
-                >
-                  <X size={20} />
-                </button>
+              <div
+                onPointerDown={(e) => {
+                  if ((e.target as HTMLElement).closest('button')) return;
+                  dragControls.start(e);
+                }}
+                className="border-b border-tg-hint/20 sticky top-0 bg-tg-bg z-10 touch-none select-none cursor-grab active:cursor-grabbing rounded-t-3xl"
+              >
+                <div className="w-12 h-1 bg-tg-hint/30 rounded-full mx-auto mt-3 mb-1" />
+                <div className="flex items-center justify-between px-4 pb-3">
+                  <h3 className="font-bold text-tg-text">{t('payWithKhqr', 'Pay with KHQR')}</h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrderId(null)}
+                    aria-label={t('close', 'Close')}
+                    className="p-2 rounded-full text-tg-hint hover:text-tg-text active:scale-90 transition-transform"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
-              <KhqrPaymentPanel
-                orderId={selectedOrderId}
-                onPaid={handlePaid}
-                onCancel={() => setSelectedOrderId(null)}
-                onExpired={() => setSelectedOrderId(null)}
-              />
+              <div className="p-4 overflow-y-auto flex-1">
+                <KhqrPaymentPanel
+                  orderId={selectedOrderId}
+                  onPaid={handlePaid}
+                  onCancel={() => setSelectedOrderId(null)}
+                  onExpired={() => setSelectedOrderId(null)}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}
