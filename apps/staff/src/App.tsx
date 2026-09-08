@@ -739,29 +739,50 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
         }`}
       >
         {/* Sidebar Brand Header */}
-        <div className="flex h-18 items-center justify-between border-b border-border px-5">
-          <div className="flex items-center gap-3">
+        <div className="flex h-18 items-center justify-between border-b border-border px-4">
+          <div className="flex items-center gap-2.5 min-w-0">
             <img
               src="/images/zhengda_logo_cropped.webp"
               alt="Zhengda Mascot"
-              className="size-9 shrink-0 object-contain drop-shadow-xs"
+              className="size-8 shrink-0 object-contain drop-shadow-xs"
             />
-            <div>
-              <h1 className="text-sm font-black tracking-tight text-ink">
+            <div className="min-w-0">
+              <h1 className="text-sm font-black tracking-tight text-ink truncate">
                 Ai-Cha <span className="text-zhengda">&amp;</span> Zhengda
               </h1>
-              <p className="text-[10px] font-semibold tracking-wider uppercase text-ink-faint">
+              <p className="text-[10px] font-semibold tracking-wider uppercase text-ink-faint truncate">
                 Staff &amp; Admin Hub
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(false)}
-            className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
-          >
-            <X className="size-5" />
-          </button>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              aria-label={muted ? 'Unmute chime' : 'Mute chime'}
+              title={muted ? 'Chime is muted (click to unmute)' : 'Chime is on (click to mute)'}
+              className="size-8 text-ink-soft hover:text-ink"
+            >
+              {muted ? (
+                <BellOff className="size-4 text-ink-faint" />
+              ) : (
+                <Bell className="size-4 text-accent" />
+              )}
+            </Button>
+
+            <ThemeToggle className="size-8 text-ink-soft hover:text-ink" />
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
+              aria-label="Close sidebar"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
         </div>
 
         {/* Branch Selector Card */}
@@ -1077,29 +1098,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             </button>
           </div>
 
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={toggleMute}
-              className="flex-1 justify-start gap-2 text-xs font-bold"
-              aria-label={muted ? 'Unmute chime' : 'Mute chime'}
-            >
-              {muted ? (
-                <>
-                  <BellOff className="size-4 text-ink-faint" />
-                  <span>Muted</span>
-                </>
-              ) : (
-                <>
-                  <Bell className="size-4 text-accent" />
-                  <span>Chime On</span>
-                </>
-              )}
-            </Button>
-
-            <ThemeToggle />
-          </div>
 
           <Button
             variant="ghost"
