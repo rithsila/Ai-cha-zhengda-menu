@@ -838,34 +838,6 @@ export default function App() {
       )}
       </div>
 
-      {/* Pending Payment Recovery Floating Pill */}
-      <AnimatePresence>
-        {activePendingOrderId && activeTab !== 'orders' && !isCheckoutOpen && !isSuccessOpen && (
-          <motion.div
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 50, opacity: 0 }}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 w-[92%] max-w-sm z-30"
-          >
-            <div className="bg-amber-500/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-lg border border-amber-400/40 flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-medium text-amber-100">{t('awaitingPaymentConfirmation', 'Awaiting payment confirmation')}</p>
-                <p className="text-xs font-bold truncate">{t('resumePendingPayment', 'You have an order awaiting payment confirmation')}</p>
-              </div>
-              <button
-                onClick={() => {
-                  setActiveTab('orders');
-                  window.scrollTo({ top: 0, behavior: 'instant' });
-                }}
-                className="px-2.5 py-1.5 bg-white text-amber-800 font-bold text-xs rounded-xl flex-shrink-0 active:scale-95 transition-transform"
-              >
-                {t('viewOrder', 'View order')}
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Bottom Navigation (Apple Liquid Glass Compact Dock) */}
       <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] bg-gradient-to-b from-white/30 via-white/20 to-white/10 backdrop-blur-2xl border border-white/40 shadow-[0_12px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-1 px-2 flex justify-between items-center z-20">
         {TABS.map(({ id, Icon, labelKey, labelFallback }) => {
@@ -877,13 +849,18 @@ export default function App() {
                 setActiveTab(id);
                 window.scrollTo({ top: 0, behavior: 'instant' });
               }}
-              className={`flex-1 flex flex-col items-center py-1 px-1 rounded-xl transition-all active:scale-95 ${
+              className={`flex-1 flex flex-col items-center py-1 px-1 rounded-xl transition-all active:scale-95 relative ${
                 isActive 
                   ? 'text-brand-primary font-bold drop-shadow-[0_2px_6px_rgba(229,57,53,0.35)]' 
                   : 'text-tg-hint hover:text-tg-text font-medium'
               }`}
             >
-              <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
+              <div className="relative">
+                <Icon size={20} weight={isActive ? 'fill' : 'regular'} />
+                {id === 'orders' && activePendingOrderId && (
+                  <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </div>
               <span className="text-[10px] mt-0.5 whitespace-nowrap">{t(labelKey, labelFallback)}</span>
             </button>
           );

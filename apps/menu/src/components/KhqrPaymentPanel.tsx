@@ -840,24 +840,6 @@ export function KhqrPaymentPanel({
           </p>
         </div>
 
-        {/* Status Indicator & Manual Check */}
-        <div className="flex flex-col items-center gap-1.5 mb-4">
-          <div className="flex items-center gap-1.5 text-xs text-tg-hint">
-            <span className="w-2 h-2 rounded-full bg-brand-primary animate-ping" />
-            <span>{t('awaitingPaymentConfirmation', 'Awaiting payment confirmation')}</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => checkStatusNow(true)}
-            disabled={isCheckingStatus}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary py-1 px-3 rounded-full hover:bg-brand-primary/10 transition-colors disabled:opacity-60"
-          >
-            <ArrowClockwise size={12} className={isCheckingStatus ? 'animate-spin' : ''} />
-            <span>{isCheckingStatus ? t('checkingPaymentStatus', 'Checking...') : t('checkStatus', 'Check status')}</span>
-          </button>
-        </div>
-
         {networkInterrupted && (
           <div className="w-full bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs p-2.5 rounded-xl border border-amber-500/20 text-center mb-3">
             {t('connectionInterrupted', 'Connection interrupted. Tap below to check status.')}
