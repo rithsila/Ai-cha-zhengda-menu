@@ -12,7 +12,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, Card, CustomSelect, Switch, useToast } from '../ui';
+import { Badge, Button, Card, CustomSelect, useToast } from '../ui';
 import { VerifyGiftClaimModal } from './VerifyGiftClaimModal';
 import type { CustomersResponse, PrizeClaimItem, SystemConfigItem } from './types';
 
@@ -177,39 +177,6 @@ export function LuckyDrawManagement() {
     loadData();
   }, []);
 
-  // Generic single-setting auto-save
-  const updateSetting = async (
-    key: string,
-    value: string | number | boolean,
-    label: string,
-    silent = false
-  ) => {
-    try {
-      let strVal = String(value);
-      if (typeof value === 'boolean') {
-        strVal = value ? '1' : '0';
-      }
-
-      await apiFetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value: strVal }),
-      });
-
-      if (!silent) {
-        toast({
-          title: `${label} updated`,
-          variant: 'success',
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: `Failed to update ${label}`,
-        description: err?.message || 'Please try again.',
-        variant: 'error',
-      });
-    }
-  };
 
   // Auto-save prizes to API
   const savePrizesToApi = async (prizeList: LuckyWheelPrizeItem[], silent = false) => {
@@ -415,127 +382,9 @@ export function LuckyDrawManagement() {
 
       {/* Rules & Configurations Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Rules & Lucky Draw Settings */}
-        <div className="space-y-6 lg:col-span-6">
-          {/* Section 1: Lucky Draw & Ticket Rules */}
-          <Card padding="lg" className="border-border bg-surface shadow-xs space-y-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-ink border-b border-border pb-3">
-              <Gift className="size-4 text-amber-500" />
-              <span>Lucky Draw &amp; Ticket Rules</span>
-            </div>
-
-            <div className="flex items-center justify-between rounded-none border border-border bg-surface-soft/40 p-4">
-              <div className="pr-4">
-                <p className="text-xs font-bold text-ink">Lucky Draw Feature Active</p>
-                <p className="text-[11px] text-ink-soft">
-                  Enable giving lucky draw tickets to customers on qualifying orders.
-                </p>
-              </div>
-              <Switch
-                checked={luckyDrawEnabled}
-                onChange={(checked) => {
-                  setLuckyDrawEnabled(checked);
-                  updateSetting('luckyDrawEnabled', checked, 'Lucky Draw feature');
-                }}
-                srLabel="Enable lucky draw feature"
-              />
-            </div>
-
-            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <label htmlFor="gold-tickets-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-amber-500" />
-                    Tickets per Gold VIP Order
-                  </label>
-                  <p className="text-[11px] text-ink-soft">
-                    Number of lucky draw tickets earned by Gold VIP customers per order.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <input
-                    id="gold-tickets-input"
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={luckyTicketsPerGoldOrder}
-                    onChange={(e) => setLuckyTicketsPerGoldOrder(Number(e.target.value) || 0)}
-                    onBlur={(e) => {
-                      const val = Math.max(0, Number(e.target.value) || 0);
-                      setLuckyTicketsPerGoldOrder(val);
-                      updateSetting('luckyTicketsPerGoldOrder', val, 'Gold ticket rate');
-                    }}
-                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
-                  />
-                  <span className="text-xs font-semibold text-ink-soft">tickets</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <label htmlFor="std-tickets-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
-                    <Ticket className="size-3.5 text-ink-soft" />
-                    Tickets per Standard Order
-                  </label>
-                  <p className="text-[11px] text-ink-soft">
-                    Number of lucky draw tickets earned by Standard customers per order.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <input
-                    id="std-tickets-input"
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={luckyTicketsPerStandardOrder}
-                    onChange={(e) => setLuckyTicketsPerStandardOrder(Number(e.target.value) || 0)}
-                    onBlur={(e) => {
-                      const val = Math.max(0, Number(e.target.value) || 0);
-                      setLuckyTicketsPerStandardOrder(val);
-                      updateSetting('luckyTicketsPerStandardOrder', val, 'Standard ticket rate');
-                    }}
-                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
-                  />
-                  <span className="text-xs font-semibold text-ink-soft">tickets</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <label htmlFor="spin-cost-input" className="text-xs font-bold text-ink block flex items-center gap-1.5">
-                    <Dices className="size-3.5 text-accent" />
-                    Ticket Cost Per Lucky Spin
-                  </label>
-                  <p className="text-[11px] text-ink-soft">
-                    Number of tickets customer must spend for 1 Lucky Draw spin (Default: 5).
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <input
-                    id="spin-cost-input"
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={luckyTicketsCostPerSpin}
-                    onChange={(e) => setLuckyTicketsCostPerSpin(Number(e.target.value) || 1)}
-                    onBlur={(e) => {
-                      const val = Math.max(1, Number(e.target.value) || 1);
-                      setLuckyTicketsCostPerSpin(val);
-                      updateSetting('luckyTicketsCostPerSpin', val, 'Spin ticket cost');
-                    }}
-                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
-                  />
-                  <span className="text-xs font-semibold text-ink-soft">tickets</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Section 2: Manager Raffle Draw */}
+        {/* Left Column: Manager Raffle Draw */}
+        <div className="space-y-6 lg:col-span-5">
+          {/* Manager Raffle Draw */}
           <Card padding="lg" className="border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-surface to-surface shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2 text-sm font-bold text-ink">
@@ -597,7 +446,7 @@ export function LuckyDrawManagement() {
         </div>
 
         {/* Right Column: Wheel Prize Segments */}
-        <div className="space-y-6 lg:col-span-6">
+        <div className="space-y-6 lg:col-span-7">
           <Card padding="lg" className="border-border bg-surface shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2 text-sm font-bold text-ink">
