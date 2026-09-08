@@ -23,11 +23,10 @@ export function isValidAbaMobileDeeplink(url: string): boolean {
   }
 }
 
-export function isIosTelegramMiniApp(): boolean {
+export function isTelegramMiniApp(): boolean {
   const tg = getTelegramWebApp();
   if (!tg?.openLink) return false;
-  if (tg.initData) return /ios/i.test(tg.platform || '') || /iphone|ipad|ipod/i.test(navigator.userAgent);
-  return /Telegram/i.test(navigator.userAgent) && /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return Boolean(tg.initData) || /Telegram/i.test(navigator.userAgent);
 }
 
 export function buildAbaMobileOpenUrl(deeplink: string, origin = window.location.origin): string {
@@ -55,7 +54,7 @@ export function launchAbaPayment(deeplink: string): AbaPaymentLaunchResult {
   }
 
   const tg = getTelegramWebApp();
-  if (isIosTelegramMiniApp() && tg?.openLink) {
+  if (isTelegramMiniApp() && tg?.openLink) {
     tg.openLink(buildAbaMobileOpenUrl(deeplink));
     return { ok: true, mode: 'telegram-external-browser' };
   }
