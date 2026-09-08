@@ -22,6 +22,7 @@ export type CustomerSummary = {
 
 export type CustomerDetailOrder = {
   id: string;
+  pickupCode: string | null;
   totalAmount: number;
   status: string;
   paymentMethod: string;

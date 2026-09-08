@@ -49,10 +49,6 @@ interface OrdersViewProps {
   onBrowseMenu?: () => void;
 }
 
-function shortRef(id: string): string {
-  return id.slice(0, 6).toUpperCase();
-}
-
 function shortDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -255,9 +251,11 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {getStatusBadge(order)}
-                    <span className="text-xs font-mono text-tg-hint font-medium">
-                      #{shortRef(order.id)}
-                    </span>
+                    {order.pickupCode && (
+                      <span className="font-mono font-bold text-tg-text">
+                        {order.pickupCode}
+                      </span>
+                    )}
                     {!isCancelled && (
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -308,11 +306,6 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                   >
                     {formatCurrency(order.totalAmount)}
                   </p>
-                  {!isCancelled && order.pickupCode && (
-                    <p className="text-xs font-mono font-bold mt-1 bg-tg-bg px-2 py-1 rounded">
-                      {t('code', 'Code')}: {order.pickupCode}
-                    </p>
-                  )}
                 </div>
               </div>
 
