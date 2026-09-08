@@ -263,4 +263,63 @@ describe('StoreSettings strict layer', () => {
       expect(putRequests.some((r) => r.key === 'menuBannerUrls')).toBe(true);
     });
   });
+
+  it('updates allowCashForStandard toggle and saves to /api/config', async () => {
+    render(
+      <ToastProvider>
+        <StoreSettings />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Allow Cash Pickup for Standard Customers')).toBeDefined();
+    });
+
+    const cashSwitch = screen.getByRole('switch', { name: /Allow cash pickup for standard customers/i });
+    expect(cashSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(cashSwitch);
+    expect(cashSwitch.getAttribute('aria-checked')).toBe('true');
+
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm & Apply to Menu/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(putRequests).toContainEqual({
+        key: 'allowCashForStandard',
+        value: '1',
+      });
+    });
+  });
+
+  it('updates goldMinOrdersThreshold and saves to /api/config', async () => {
+    render(
+      <ToastProvider>
+        <StoreSettings />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Orders for Gold VIP Promotion')).toBeDefined();
+    });
+
+    const thresholdInput = screen.getByLabelText(/Orders for Gold VIP Promotion/i);
+    fireEvent.change(thresholdInput, { target: { value: '5' } });
+
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm & Apply to Menu/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(putRequests).toContainEqual({
+        key: 'goldMinOrdersThreshold',
+        value: '5',
+      });
+    });
+  });
 });
