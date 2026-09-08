@@ -1,32 +1,35 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
+  AlertTriangle,
   Bell,
+  Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
-  Truck,
-  ShoppingBag,
   Coins,
-  QrCode,
-  Sliders,
+  Dices,
+  Eye,
+  Gift,
+  Globe,
   Image as ImageIcon,
-  Upload,
   Link,
-  Trash2,
-  Store,
   MapPin,
   Phone,
   Play,
-  Share2,
-  Globe,
-  AlertTriangle,
-  Check,
-  Save,
-  ShieldCheck,
-  Sparkles,
-  X,
-  ChevronLeft,
-  ChevronRight,
   Plus,
-  Eye,
+  QrCode,
+  Save,
+  Share2,
+  ShieldCheck,
+  ShoppingBag,
+  Sliders,
+  Sparkles,
+  Store,
+  Ticket,
+  Trash2,
+  Truck,
+  Upload,
+  X,
 } from 'lucide-react';
 import { apiFetch, API_BASE, authHeaders, resolveImageUrl } from '../lib/api';
 import { Badge, Button, Card, Segmented, Skeleton, Switch, useToast } from './ui';
@@ -56,6 +59,10 @@ export interface StoreConfigState {
   enableKhqr: boolean;
   allowCashForStandard: boolean;
   goldMinOrdersThreshold: number;
+  luckyDrawEnabled: boolean;
+  luckyTicketsPerGoldOrder: number;
+  luckyTicketsPerStandardOrder: number;
+  luckyTicketsCostPerSpin: number;
   deliveryFee: number;
   isOpen: boolean;
   currentTime: string;
@@ -104,6 +111,10 @@ const DEFAULT_CONFIG: StoreConfigState = {
   enableKhqr: true,
   allowCashForStandard: false,
   goldMinOrdersThreshold: 3,
+  luckyDrawEnabled: true,
+  luckyTicketsPerGoldOrder: 2,
+  luckyTicketsPerStandardOrder: 1,
+  luckyTicketsCostPerSpin: 5,
   deliveryFee: 0,
   isOpen: true,
   currentTime: '',
@@ -277,6 +288,46 @@ function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState)
       oldDisplay: `${saved.goldMinOrdersThreshold} orders`,
       newDisplay: `${draft.goldMinOrdersThreshold} orders`,
       rawNewValue: String(draft.goldMinOrdersThreshold),
+    });
+  }
+
+  if (draft.luckyDrawEnabled !== saved.luckyDrawEnabled) {
+    changes.push({
+      key: 'luckyDrawEnabled',
+      label: 'Lucky Draw Feature',
+      oldDisplay: saved.luckyDrawEnabled ? 'Enabled' : 'Disabled',
+      newDisplay: draft.luckyDrawEnabled ? 'Enabled' : 'Disabled',
+      rawNewValue: draft.luckyDrawEnabled ? '1' : '0',
+    });
+  }
+
+  if (draft.luckyTicketsPerGoldOrder !== saved.luckyTicketsPerGoldOrder) {
+    changes.push({
+      key: 'luckyTicketsPerGoldOrder',
+      label: 'Tickets per Gold VIP Order',
+      oldDisplay: `${saved.luckyTicketsPerGoldOrder} tickets`,
+      newDisplay: `${draft.luckyTicketsPerGoldOrder} tickets`,
+      rawNewValue: String(draft.luckyTicketsPerGoldOrder),
+    });
+  }
+
+  if (draft.luckyTicketsPerStandardOrder !== saved.luckyTicketsPerStandardOrder) {
+    changes.push({
+      key: 'luckyTicketsPerStandardOrder',
+      label: 'Tickets per Standard Order',
+      oldDisplay: `${saved.luckyTicketsPerStandardOrder} tickets`,
+      newDisplay: `${draft.luckyTicketsPerStandardOrder} tickets`,
+      rawNewValue: String(draft.luckyTicketsPerStandardOrder),
+    });
+  }
+
+  if (draft.luckyTicketsCostPerSpin !== saved.luckyTicketsCostPerSpin) {
+    changes.push({
+      key: 'luckyTicketsCostPerSpin',
+      label: 'Ticket Cost Per Spin',
+      oldDisplay: `${saved.luckyTicketsCostPerSpin} tickets`,
+      newDisplay: `${draft.luckyTicketsCostPerSpin} tickets`,
+      rawNewValue: String(draft.luckyTicketsCostPerSpin),
     });
   }
 
@@ -527,6 +578,10 @@ export function StoreSettings() {
         enableKhqr: statusRes.enableKhqr ?? (configMap.get('enableKhqr') !== '0'),
         allowCashForStandard: configMap.get('allowCashForStandard') === '1',
         goldMinOrdersThreshold: Number(configMap.get('goldMinOrdersThreshold') ?? 3),
+        luckyDrawEnabled: (configMap.get('luckyDrawEnabled') ?? '1') !== '0',
+        luckyTicketsPerGoldOrder: Number(configMap.get('luckyTicketsPerGoldOrder') ?? 2),
+        luckyTicketsPerStandardOrder: Number(configMap.get('luckyTicketsPerStandardOrder') ?? 1),
+        luckyTicketsCostPerSpin: Number(configMap.get('luckyTicketsCostPerSpin') ?? 5),
         deliveryFee: Number(configMap.get('deliveryFee') ?? 0),
         isOpen: !!statusRes.isOpen,
         currentTime: statusRes.currentTime || '',
@@ -1790,7 +1845,118 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 7. Kitchen Alert Sounds & Timers */}
+      {/* 7. Lucky Draw & Ticket Rules */}
+      <Card className="p-5 flex flex-col gap-5">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
+            <Gift className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">Lucky Draw &amp; Ticket Rules</h3>
+            <p className="text-xs text-ink-soft">
+              Configure lucky draw feature status and ticket rewards per order.
+            </p>
+          </div>
+        </div>
+
+        {/* Feature Toggle */}
+        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+          <div>
+            <div className="font-bold text-sm text-ink">Lucky Draw Feature Active</div>
+            <div className="text-xs text-ink-soft">
+              Enable giving lucky draw tickets to customers on qualifying orders.
+            </div>
+          </div>
+          <Switch
+            checked={config.luckyDrawEnabled}
+            onChange={(next) => setConfig((prev) => ({ ...prev, luckyDrawEnabled: next }))}
+            srLabel="Enable lucky draw feature"
+          />
+        </div>
+
+        {/* Ticket Rates and Spin Cost Grid */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Gold VIP Ticket Rate */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="gold-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-amber-500" />
+              Tickets per Gold VIP Order
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="gold-tickets-input"
+                type="number"
+                min={0}
+                max={50}
+                value={config.luckyTicketsPerGoldOrder}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    luckyTicketsPerGoldOrder: Math.max(0, Number(e.target.value) || 0),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">tickets</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Earned by Gold VIP customers per order.</p>
+          </div>
+
+          {/* Standard Ticket Rate */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="std-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Ticket className="size-3.5 text-ink-soft" />
+              Tickets per Standard Order
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="std-tickets-input"
+                type="number"
+                min={0}
+                max={50}
+                value={config.luckyTicketsPerStandardOrder}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    luckyTicketsPerStandardOrder: Math.max(0, Number(e.target.value) || 0),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">tickets</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Earned by Standard customers per order.</p>
+          </div>
+
+          {/* Ticket Cost Per Lucky Spin */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="spin-cost-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Dices className="size-3.5 text-accent" />
+              Ticket Cost Per Lucky Spin
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="spin-cost-input"
+                type="number"
+                min={1}
+                max={100}
+                value={config.luckyTicketsCostPerSpin}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    luckyTicketsCostPerSpin: Math.max(1, Number(e.target.value) || 1),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">tickets</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Tickets required for 1 spin (Default: 5).</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* 8. Kitchen Alert Sounds & Timers */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-3">
@@ -2010,7 +2176,7 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 6. Delivery Fee */}
+      {/* 9. Delivery Fee */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
           <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
