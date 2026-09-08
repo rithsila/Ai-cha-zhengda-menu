@@ -2386,16 +2386,27 @@ export function createApp() {
     try {
       const enabled = (await getConfigString(prisma, 'luckyDrawEnabled', '1')) === '1';
       const costPerSpin = await getConfigNumber(prisma, 'luckyTicketsCostPerSpin', 5);
+      const luckyTicketsPerGoldOrder = await getConfigNumber(prisma, 'luckyTicketsPerGoldOrder', 2);
+      const luckyTicketsPerStandardOrder = await getConfigNumber(prisma, 'luckyTicketsPerStandardOrder', 1);
       const prizes = await getLuckyWheelPrizes(prisma);
       res.json({
         enabled,
         costPerSpin,
+        luckyTicketsPerGoldOrder,
+        luckyTicketsPerStandardOrder,
         prizes,
       });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Failed to fetch lucky draw config' });
     }
+  });
+
+  // App launcher bridge redirect
+  app.get('/api/open-app', (req, res) => {
+    const appType = encodeURIComponent(String(req.query.app || ''));
+    const targetUrl = encodeURIComponent(String(req.query.url || ''));
+    res.redirect(`/open-app.html?app=${appType}&url=${targetUrl}`);
   });
 
   // Customer Lucky Draw Spin

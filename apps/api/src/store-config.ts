@@ -71,6 +71,7 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
     { id: 'facebook', label: 'Facebook', url: '', enabled: false },
     { id: 'instagram', label: 'Instagram', url: '', enabled: false },
     { id: 'tiktok', label: 'TikTok', url: '', enabled: false },
+    { id: 'youtube', label: 'YouTube', url: '', enabled: false },
     { id: 'maps', label: 'Google Maps', url: '', enabled: false },
     { id: 'phone', label: 'Phone', url: '', enabled: false },
   ]),
@@ -164,10 +165,19 @@ export async function getConfigValue(prisma: PrismaClient, key: string, fallback
   return row?.value ?? fallback;
 }
 
+const NON_NEGATIVE_CONFIG_KEYS = new Set([
+  'deliveryFee',
+  'goldMinOrdersThreshold',
+  'luckyTicketsPerGoldOrder',
+  'luckyTicketsPerStandardOrder',
+  'orderReminderSeconds',
+]);
+
 export async function getConfigNumber(prisma: PrismaClient, key: string, fallback: number): Promise<number> {
   const row = await prisma.systemConfig.findUnique({ where: { key } });
   const n = row ? Number(row.value) : NaN;
-  return Number.isFinite(n) && n >= (key === 'deliveryFee' ? 0 : 1) ? n : fallback;
+  const min = NON_NEGATIVE_CONFIG_KEYS.has(key) ? 0 : 1;
+  return Number.isFinite(n) && n >= min ? n : fallback;
 }
 
 /**

@@ -47,6 +47,12 @@ function renderMenuSocialIcon(id: string) {
           <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.29 0 .58.04.85.12V9.4a6.33 6.33 0 0 0-.85-.06A6.34 6.34 0 0 0 3 15.68a6.34 6.34 0 0 0 10.82 4.47c1.7-1.7 1.86-4.3 1.86-6.42a8.27 8.27 0 0 0 5.08 1.74v-3.47a4.85 4.85 0 0 1-1.17-.31z" />
         </svg>
       );
+    case 'youtube':
+      return (
+        <svg className="w-3.5 h-3.5 text-[#FF0000]" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+        </svg>
+      );
     case 'maps':
       return (
         <svg className="w-3.5 h-3.5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -93,6 +99,45 @@ function resolveSocialUrl(id: string, rawUrl: string): string {
     return `https://t.me/${trimmed}`;
   }
 
+  if (id === 'youtube') {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('@')) {
+      return `https://www.youtube.com/${trimmed}`;
+    }
+    if (trimmed.startsWith('youtube.com/') || trimmed.startsWith('youtu.be/')) {
+      return `https://${trimmed}`;
+    }
+    return `https://www.youtube.com/@${trimmed}`;
+  }
+
+  if (id === 'tiktok') {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('@')) {
+      return `https://www.tiktok.com/${trimmed}`;
+    }
+    if (trimmed.startsWith('tiktok.com/')) {
+      return `https://${trimmed}`;
+    }
+    return `https://www.tiktok.com/@${trimmed}`;
+  }
+
+  if (id === 'instagram') {
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('@')) {
+      return `https://www.instagram.com/${trimmed.slice(1)}`;
+    }
+    if (trimmed.startsWith('instagram.com/')) {
+      return `https://${trimmed}`;
+    }
+    return `https://www.instagram.com/${trimmed}`;
+  }
+
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
@@ -114,6 +159,7 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
   const loading = profileLoading || configLoading;
   const [editing, setEditing] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [phoneNotice, setPhoneNotice] = useState<string | null>(null);
   const tgUser = getTelegramDisplayUser();
 
   const userTier = profile?.tier || 'standard';
@@ -317,50 +363,67 @@ export function AccountView({ onBrowseMenu }: AccountViewProps) {
         </div>
 
         {activeSocials.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-tg-hint/10">
-            {activeSocials.map((s) => {
-              const url = resolveSocialUrl(s.id, s.url);
-              if (!url) return null;
+          <div className="flex flex-col gap-2 pt-2 border-t border-tg-hint/10">
+            <div className="flex flex-wrap items-center gap-2">
+              {activeSocials.map((s) => {
+                const url = resolveSocialUrl(s.id, s.url);
+                if (!url) return null;
 
-              const isPhone = s.id === 'phone';
-              const isTelegram = s.id === 'telegram';
+                const isPhone = s.id === 'phone';
+                const isTelegram = s.id === 'telegram';
+                const isExternalApp = ['facebook', 'instagram', 'tiktok', 'youtube', 'maps'].includes(s.id);
+                const appLauncherUrl = `${window.location.origin}/open-app.html?app=${encodeURIComponent(s.id)}&url=${encodeURIComponent(url)}`;
+                const targetHref = isPhone ? url : (isExternalApp ? appLauncherUrl : url);
 
-              const handleClick = (e: React.MouseEvent) => {
-                const globalTg = (window as any)?.Telegram?.WebApp;
+                const handleClick = (e: React.MouseEvent) => {
+                  const globalTg = (window as any)?.Telegram?.WebApp;
 
-                if (isPhone) {
-                  window.location.href = url;
-                  e.preventDefault();
-                  return;
-                }
+                  if (isPhone) {
+                    const rawDigits = url.replace(/^tel:/, '');
+                    if (navigator.clipboard?.writeText) {
+                      navigator.clipboard.writeText(rawDigits).catch(() => {});
+                    }
+                    setPhoneNotice(`Number copied: ${rawDigits}`);
+                    setTimeout(() => setPhoneNotice(null), 4000);
+                    // Do not preventDefault; let the browser attempt to open phone dialer natively
+                    return;
+                  }
 
-                if (isTelegram && globalTg?.openTelegramLink) {
-                  e.preventDefault();
-                  globalTg.openTelegramLink(url);
-                  return;
-                }
+                  if (isTelegram && globalTg?.openTelegramLink) {
+                    e.preventDefault();
+                    globalTg.openTelegramLink(url);
+                    return;
+                  }
 
-                if (globalTg?.openLink && url.startsWith('http')) {
-                  e.preventDefault();
-                  globalTg.openLink(url);
-                  return;
-                }
-              };
+                  if (globalTg?.openLink && targetHref.startsWith('http')) {
+                    e.preventDefault();
+                    globalTg.openLink(targetHref);
+                    return;
+                  }
+                };
 
-              return (
-                <a
-                  key={s.id}
-                  href={url}
-                  onClick={handleClick}
-                  target={isPhone ? undefined : '_blank'}
-                  rel={isPhone ? undefined : 'noopener noreferrer'}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-tg-bg hover:bg-brand-primary/10 text-tg-text hover:text-brand-primary border border-tg-hint/15 transition-all shadow-xs active:scale-95"
-                >
-                  {renderMenuSocialIcon(s.id)}
-                  <span>{s.label}</span>
-                </a>
-              );
-            })}
+                return (
+                  <a
+                    key={s.id}
+                    href={targetHref}
+                    onClick={handleClick}
+                    target={isPhone ? undefined : '_blank'}
+                    rel={isPhone ? undefined : 'noopener noreferrer'}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-tg-bg hover:bg-brand-primary/10 text-tg-text hover:text-brand-primary border border-tg-hint/15 transition-all shadow-xs active:scale-95"
+                  >
+                    {renderMenuSocialIcon(s.id)}
+                    <span>{s.label}</span>
+                  </a>
+                );
+              })}
+            </div>
+
+            {phoneNotice && (
+              <div className="text-xs font-semibold text-brand-primary bg-brand-primary/10 border border-brand-primary/20 rounded-xl px-3 py-2 flex items-center justify-between animate-fade-in">
+                <span>📞 {phoneNotice}</span>
+                <span className="text-[10px] text-tg-hint uppercase tracking-wider">Ready to call</span>
+              </div>
+            )}
           </div>
         )}
       </div>

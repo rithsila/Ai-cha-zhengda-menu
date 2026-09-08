@@ -12,6 +12,8 @@ export interface LuckyDrawConfig {
   enabled: boolean;
   costPerSpin?: number;
   prizes?: LuckyPrize[];
+  luckyTicketsPerGoldOrder?: number;
+  luckyTicketsPerStandardOrder?: number;
 }
 
 async function fetchLuckyDrawConfig(): Promise<LuckyDrawConfig> {
@@ -35,6 +37,8 @@ export function useLuckyDrawConfig() {
     luckyDrawEnabled: data?.enabled ?? true,
     luckyCostPerSpin: data?.costPerSpin ?? 5,
     luckyPrizes: data?.prizes ?? [],
+    luckyTicketsPerGoldOrder: data?.luckyTicketsPerGoldOrder ?? 2,
+    luckyTicketsPerStandardOrder: data?.luckyTicketsPerStandardOrder ?? 1,
     luckyDrawError: error,
     luckyDrawLoading: isLoading,
   };
