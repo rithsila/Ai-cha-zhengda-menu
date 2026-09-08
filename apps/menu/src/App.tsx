@@ -116,7 +116,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
               <img src="/images/aicha-logo.webp" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
               <span className="text-xs font-bold text-white tracking-wide">Ai-Cha</span>
             </div>
-            <span className="text-white/30 text-xs font-light">✕</span>
+            <span className="text-amber-300 font-bold text-sm">+</span>
             <div className="flex items-center gap-1.5">
               <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
               <span className="text-xs font-bold text-white tracking-wide">Zhengda</span>
@@ -153,9 +153,10 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           <button
             type="button"
             onClick={onContinueAsGuest}
-            className="mt-4 text-xs font-semibold text-rose-200/70 hover:text-white transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-white/5"
+            className="mt-3 flex items-center justify-center gap-2 w-full py-3 px-5 bg-white/10 hover:bg-white/15 text-white text-sm font-semibold rounded-2xl border border-white/15 transition-all duration-200 active:scale-[0.98]"
           >
-            Or browse as guest →
+            <span>Browse Menu as Guest</span>
+            <span>→</span>
           </button>
 
           {import.meta.env.DEV && (
