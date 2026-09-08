@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DownloadSimple, Check, CaretRight, ArrowClockwise, WarningCircle, XCircle } from '@phosphor-icons/react';
+import { DownloadSimple, Check, CaretRight, WarningCircle, XCircle } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
 import { apiFetch } from '../utils/api';
 import { launchAbaPayment } from '../utils/abaPaymentLaunch';
@@ -262,7 +262,6 @@ export function KhqrPaymentPanel({
   } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [resultState, setResultState] = useState<'pending' | 'declined' | 'expired' | 'cancelled'>('pending');
-  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const [networkInterrupted, setNetworkInterrupted] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -289,8 +288,7 @@ export function KhqrPaymentPanel({
   onExpiredRef.current = onExpired;
 
   // Check payment status with server
-  const checkStatusNow = useCallback(async (manual = false) => {
-    if (manual) setIsCheckingStatus(true);
+  const checkStatusNow = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/payment/aba/status/${orderId}`);
       setNetworkInterrupted(false);
@@ -322,8 +320,6 @@ export function KhqrPaymentPanel({
       }
     } catch {
       setNetworkInterrupted(true);
-    } finally {
-      if (manual) setIsCheckingStatus(false);
     }
   }, [orderId]);
 
@@ -386,7 +382,7 @@ export function KhqrPaymentPanel({
     if (!payment || resultState !== 'pending') return;
 
     const interval = setInterval(() => {
-      checkStatusNow(false);
+      checkStatusNow();
     }, 3000);
 
     return () => clearInterval(interval);
@@ -398,7 +394,7 @@ export function KhqrPaymentPanel({
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        checkStatusNow(false);
+        checkStatusNow();
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -418,7 +414,7 @@ export function KhqrPaymentPanel({
       setSecondsLeft(left);
       if (left === 0) {
         // Reconcile with server before claiming expired
-        checkStatusNow(false);
+        checkStatusNow();
       }
     };
     tick();
@@ -766,29 +762,7 @@ export function KhqrPaymentPanel({
           {t('scanWithMobileBankingApp', 'Scan with mobile banking app that supports KHQR')}
         </p>
 
-        {/* Status Indicator & Manual Check */}
-        <div className="flex flex-col items-center gap-1.5 w-full max-w-[220px]">
-          <div className="flex items-center gap-1.5 text-xs text-tg-hint">
-            <span className="w-2 h-2 rounded-full bg-brand-primary animate-ping" />
-            <span>{t('awaitingPaymentConfirmation', 'Awaiting payment confirmation')}</span>
-          </div>
 
-          <button
-            type="button"
-            onClick={() => checkStatusNow(true)}
-            disabled={isCheckingStatus}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary py-1 px-3 rounded-full hover:bg-brand-primary/10 transition-colors disabled:opacity-60"
-          >
-            <ArrowClockwise size={12} className={isCheckingStatus ? 'animate-spin' : ''} />
-            <span>{isCheckingStatus ? t('checkingPaymentStatus', 'Checking...') : t('checkStatus', 'Check status')}</span>
-          </button>
-        </div>
-
-        {networkInterrupted && (
-          <div className="w-full max-w-[220px] bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[11px] p-2 rounded-xl border border-amber-500/20 text-center">
-            {t('connectionInterrupted', 'Connection interrupted. Tap below to check status.')}
-          </div>
-        )}
 
         {/* Button: Save KHQR to Photos */}
         <button
@@ -820,25 +794,7 @@ export function KhqrPaymentPanel({
   return (
     <div className="flex flex-col items-center w-full min-h-[380px] animate-in fade-in duration-200">
       <div className="w-full flex flex-col items-center">
-        {/* Total Amount Badge */}
-        <div className="mb-4 text-center">
-          <span className="text-xs font-bold text-tg-hint uppercase tracking-wider">
-            {t('total', 'Total')}
-          </span>
-          <div className="text-3xl font-black text-tg-text mt-0.5">
-            {formatKhqrAmount(displayAmount)}
-          </div>
-        </div>
 
-        {/* Headline */}
-        <div className="text-center mb-5">
-          <h3 className="font-bold text-lg mb-1 text-tg-text">
-            {t('completePayment', 'Complete Payment')}
-          </h3>
-          <p className="text-sm text-tg-hint">
-            {t('completePaymentHint', 'Pay directly with ABA Mobile or save KHQR to scan in any bank app.')}
-          </p>
-        </div>
 
         {networkInterrupted && (
           <div className="w-full bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs p-2.5 rounded-xl border border-amber-500/20 text-center mb-3">
