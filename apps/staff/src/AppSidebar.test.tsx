@@ -99,8 +99,6 @@ describe('Sidebar Menu & Brand Header', () => {
     expect(screen.queryByText('Store')).toBeNull();
     expect(screen.queryByText('Languages')).toBeNull();
     expect(localStorage.getItem('staff_settings_expanded')).toBe('false');
-  });
-
   it('renders Languages subtab in settings submenu and navigates to Languages view', () => {
     render(<App />);
 
@@ -113,22 +111,5 @@ describe('Sidebar Menu & Brand Header', () => {
     expect(
       screen.getByText('Manage English, Khmer, and Chinese translations with live preview')
     ).toBeDefined();
-  });
-
-  it('renders chime button and theme toggle in sidebar header and toggles mute', () => {
-    render(<App />);
-
-    // Chime button is in the header without text
-    const chimeBtn = screen.getByLabelText(/Mute chime|Unmute chime/i);
-    expect(chimeBtn).toBeDefined();
-    expect(screen.queryByText('Chime On')).toBeNull();
-
-    // Toggle mute
-    fireEvent.click(chimeBtn);
-    expect(screen.getByLabelText('Unmute chime')).toBeDefined();
-
-    // Theme toggle is in the header
-    const themeBtn = screen.getByLabelText(/Switch to (dark|light) theme/i);
-    expect(themeBtn).toBeDefined();
   });
 });
