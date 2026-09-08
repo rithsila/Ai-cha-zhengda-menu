@@ -13,25 +13,43 @@ function formatCountdown(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-const KHQR_LOGO_PATH =
-  "m 0,0.03316065 h 130.12116 l 0.014,318.13267935 C 233.74068,213.55008 443.94173,2.5596428 444.48677,1.0664481 444.9679,-0.25167388 599.68926,-0.32516983 599.68926,0.99272374 486.57317,115.28505 371.72975,227.87418 257.21308,340.76853 c 20.97523,21.33678 282.3634,288.92492 357.65314,368.20425 0.65411,0.68876 -1.66382,0.99992 -77.17034,0.99992 H 459.73294 L 336.53629,585.72505 C 192.18995,440.14727 131.5997,379.75815 130.74116,379.75815 c -0.97346,110.06303 -0.62,220.14479 -0.62,330.21455 H 0 Z M 1208.4296,400.10055 H 842.95884 V 709.9727 H 716.79789 L 716.22858,0.03316065 H 842.95884 V 297.25838 H 1208.4296 V 0.10393571 L 1335.1563,0 v 709.9727 h -126.7267 z m 1514.243,188.60833 c -66.7198,-66.68699 -121.2089,-121.26394 -121.0692,-121.29991 0.1397,-0.036 35.4501,0.18884 78.4672,0.49963 l 78.2133,0.56505 86.4183,85.46964 c 137.7689,136.25637 155.0701,156.03188 154.7403,156.02941 -0.4084,-0.003 -103.6312,-0.51832 -155.4465,0 z M 1560.4467,709.97304 c -16.1379,-0.55379 -32.9532,-10.24556 -46.6705,-19.51539 -6.9569,-4.70134 -19.2747,-16.38202 -26.5809,-25.20617 -5.9447,-7.17977 -15.0496,-25.92873 -18.2971,-37.67776 l -3.055,-11.05251 -0.3309,-256.54041 c -0.359,-278.392633 -0.5867,-266.806561 5.6132,-285.669744 6.3968,-19.462404 20.5256,-39.027764 37.2996,-51.652247 11.1554,-8.39579 20.5183,-13.2107146 35.4908,-18.2513305 l 11.3149,-3.8092509 261.205,-0.29674884 261.205,-0.29674882 11.3309,2.86097216 c 14.8478,3.7488926 26.437,8.6527199 36.7824,15.5638289 20.3137,13.570359 35.5357,32.794807 42.7843,54.033877 6.4483,18.89392 6.1728,5.744005 6.1777,294.858942 v 266.14221 l -55.4189,-55.344 -55.4191,-55.344 -0.3093,-175.76404 c -0.291,-167.92384 -0.3987,-176.04133 -2.4096,-181.97982 -8.8441,-26.11777 -26.8665,-43.73799 -52.2413,-51.0754 l -9.0122,-2.60596 h -181.6039 -181.6039 l -7.3546,2.62867 c -12.3916,4.42895 -21.5422,10.21361 -30.5502,19.31286 -9.677,9.77482 -15.9266,19.7384 -19.5545,31.17478 l -2.5095,7.91094 v 181.38648 c 0,143.66042 0.3021,182.67929 1.4523,187.60223 0.7989,3.41864 3.6817,10.79277 6.4062,16.38694 8.578,17.61255 21.6642,29.51025 40.3928,36.72405 7.7117,2.97044 11.4807,3.67874 23.4647,4.40965 7.8524,0.47892 86.6496,0.72975 175.1047,0.55739 88.4552,-0.17235 162.086,0.0394 163.6242,0.47031 1.5395,0.43146 27.3682,25.03821 57.466,54.74757 l 54.6697,55.30949 h -264.6848 c -145.5766,0 -272.4039,0.0612 -274.1782,3.4e-4 z m 825.7135,-1.19632 c -26.9307,-3.11842 -54.2309,-19.77939 -71.1259,-41.95624 -11.6294,-15.26477 -17.997,-29.27579 -21.0351,-46.28374 -1.9276,-10.79088 -2.2975,-251.84349 -0.4287,-279.39581 3.9643,-58.45084 14.914,-100.14281 38.5348,-146.72478 23.4952,-46.33445 54.5203,-84.65461 93.8058,-115.863057 56.046,-44.522955 118.0676,-69.6753622 189.5243,-76.8600649 50.7725,-5.1049871 107.4757,2.901448 158.9994,22.4505889 18.2153,6.911221 49.0282,22.704492 65.0829,33.358531 28.5306,18.933106 61.4883,48.706502 81.5007,73.626512 34.6076,43.09443 60.4913,97.70145 71.1609,150.12886 4.2544,20.90466 9.2611,68.41547 7.4337,70.54076 -0.4059,0.47222 -25.4026,0.7265 -55.5478,0.56508 l -54.8096,-0.29351 -0.8411,-12.43146 c -1.7656,-26.10028 -7.7173,-54.37893 -14.9847,-71.19845 -0.8057,-1.86472 -3.1133,-7.20461 -5.1278,-11.86641 -18.9374,-43.82127 -52.4615,-82.6438 -93.4721,-108.24536 -72.0624,-44.98604 -158.5339,-49.629366 -235.2042,-12.62994 -60.7818,29.33194 -108.1942,85.64793 -126.5514,150.31634 -9.6873,34.12675 -8.9807,16.73362 -9.4418,231.33736 l -0.4139,192.62077 c -6.3032,-0.0934 -17.0584,-1.19598 -17.0584,-1.19598 z M 1715.9021,485.02273 c -9.8918,-3.24648 -19.6413,-11.95632 -24.217,-21.63467 l -2.9387,-6.21574 V 354.8952 252.61809 l 2.8287,-5.5517 c 4.2081,-8.259 11.6883,-15.94802 19.0063,-19.53718 l 6.4522,-3.16448 h 101.2682 101.2682 l 6.7317,2.70833 c 8.4892,3.41539 16.2362,10.59855 20.5044,19.01219 l 3.3141,6.53284 0.5658,116.21582 c 0.3111,63.9187 0.3536,116.42756 0.094,116.68633 -0.7905,0.78894 -232.4534,0.29825 -234.8781,-0.49751 z";
+const KHQR_RED = '#bc271a';
+const CARD_SHELL_PATH =
+  'M189.868 10.8675H27.8677C18.4788 10.8675 10.8677 18.4787 10.8677 27.8675V287.867C10.8677 297.256 18.4788 304.867 27.8677 304.867H189.868C199.257 304.867 206.868 297.256 206.868 287.867V27.8675C206.868 18.4787 199.257 10.8675 189.868 10.8675Z';
+const KHQR_HEADER_BACKGROUND_PATH =
+  'M178.91 0C188.299 0.00000824649 195.91 7.61117 195.91 17V36.3516H196V54L178.582 37H0V17C0.00000103088 7.61116 7.61116 0 17 0H178.91Z';
+const KHQR_HEADER_MARK_PATHS = [
+  'M104.488 17.1027V20.5948H100.95C100.596 20.5948 100.331 20.3329 100.331 19.9836V17.1027C100.331 16.7535 100.596 16.4916 100.95 16.4916H103.781C104.223 16.4043 104.488 16.7535 104.488 17.1027Z',
+  'M120.944 18.5H119.175C119.175 16.4047 117.494 14.746 115.371 14.746C113.69 14.746 112.274 15.7936 111.743 17.365C111.655 17.7143 111.566 18.1507 111.566 18.5V23.9999H111.478C110.505 23.9999 109.797 23.2142 109.797 22.3412V18.5C109.797 17.0159 110.416 15.5317 111.566 14.4841C112.628 13.5238 113.955 13 115.371 13C118.467 13 120.944 15.4444 120.944 18.5Z',
+  'M120.945 24H118.467L117.848 23.3889L116.521 22.0794L114.663 20.2461H117.14L120.945 24Z',
+  'M105.107 22.2539H99.7994C99.18 22.2539 98.6492 21.7301 98.6492 21.119V15.8809C98.6492 15.2698 99.18 14.746 99.7994 14.746H105.107C105.727 14.746 106.257 15.2698 106.257 15.8809V21.119L108.027 22.865V14.6587C108.027 13.6984 107.231 13 106.346 13H98.6492C97.6756 13 96.9683 13.7857 96.9683 14.6587V22.2539C96.9683 23.2142 97.7642 23.9126 98.6492 23.9126H106.877L105.107 22.2539Z',
+  'M83.6093 23.9999H81.1318L76.0005 18.8492V23.9999H73.9658V13H76.0005V17.8888L80.9553 13H83.3436L78.0356 18.2381L83.6093 23.9999Z',
+  'M92.898 13H94.8446V23.9999H92.898V19.1984H87.2358V23.9999H85.2012V13H87.2358V17.6269H92.898V13Z',
+];
 
-/** Official KHQR Vector Logo (from Wikimedia Commons / NBC Bakong) */
-function KhqrLogo({ className = "h-5" }: { className?: string }) {
+function formatKhqrAmount(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
+/** Official KHQR Vector Logo mark */
+function KhqrLogo({ className = 'h-5' }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 3000 710"
+      viewBox="71 11 52 15"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-label="KHQR"
     >
-      <path d={KHQR_LOGO_PATH} />
+      {KHQR_HEADER_MARK_PATHS.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
     </svg>
   );
 }
 
 /**
- * Render the authentic KHQR card template (header, logo, store name, amount, dashed separator, QR code)
+ * Render the official ABA PayWay KHQR card template
  * onto a high-resolution canvas and return a PNG Blob to save to Photos.
  */
 async function renderKhqrTemplateToBlob(params: {
@@ -44,10 +62,10 @@ async function renderKhqrTemplateToBlob(params: {
       const qrImg = new Image();
       qrImg.crossOrigin = 'anonymous';
       qrImg.onload = () => {
-        // High resolution 2x scale for sharp text and QR scanning
-        const scale = 2;
-        const logicalW = 466;
-        const logicalH = 598;
+        // High resolution 4x scale for crisp text and scan reliability (872 x 1264)
+        const scale = 4;
+        const logicalW = 218;
+        const logicalH = 316;
         const canvas = document.createElement('canvas');
         canvas.width = logicalW * scale;
         canvas.height = logicalH * scale;
@@ -59,176 +77,89 @@ async function renderKhqrTemplateToBlob(params: {
 
         ctx.scale(scale, scale);
 
-        // Leave the canvas transparent so the saved file contains only the
-        // KHQR card. The card itself is painted below with its original
-        // geometry and styling.
+        // White background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, logicalW, logicalH);
 
-        // Card geometry
-        const cx = 10;
-        const cy = 8;
-        const cw = logicalW - 20; // 446
-        const ch = logicalH - 16; // 582
-        const cr = 24;
+        const cardPath = new Path2D(CARD_SHELL_PATH);
 
-        const drawCardRoundedRect = () => {
-          ctx.beginPath();
-          if (typeof ctx.roundRect === 'function') {
-            ctx.roundRect(cx, cy, cw, ch, cr);
-          } else {
-            ctx.moveTo(cx + cr, cy);
-            ctx.lineTo(cx + cw - cr, cy);
-            ctx.quadraticCurveTo(cx + cw, cy, cx + cw, cy + cr);
-            ctx.lineTo(cx + cw, cy + ch - cr);
-            ctx.quadraticCurveTo(cx + cw, cy + ch, cx + cw - cr, cy + ch);
-            ctx.lineTo(cx + cr, cy + ch);
-            ctx.quadraticCurveTo(cx, cy + ch, cx, cy + ch - cr);
-            ctx.lineTo(cx, cy + cr);
-            ctx.quadraticCurveTo(cx, cy, cx + cr, cy);
-            ctx.closePath();
-          }
-        };
-
-        // Draw white card background
-        drawCardRoundedRect();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fill();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#E5E7EB';
-        ctx.stroke();
-
-        // Top Red Header (clipped to card rounded corners)
+        // Drop shadow under the rounded card
         ctx.save();
-        drawCardRoundedRect();
-        ctx.clip();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.16)';
+        ctx.shadowBlur = 5.43375;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.fill(cardPath);
+        ctx.restore();
 
-        const hh = 96;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + cw, cy);
-        ctx.lineTo(cx + cw, cy + hh);
-        ctx.lineTo(cx + cw * 0.84, cy + hh * 0.75);
-        ctx.lineTo(cx, cy + hh * 0.75);
-        ctx.closePath();
-        ctx.fillStyle = '#E21A1A';
-        ctx.fill();
-
-        // KHQR Logo inside red header
-        const logoW = 128;
-        const logoH = logoW * (710 / 3000);
-        const logoX = cx + (cw - logoW) / 2;
-        const logoY = cy + (hh * 0.75 - logoH) / 2 - 2;
-
+        // Clip card content strictly inside the rounded card path
         ctx.save();
-        ctx.translate(logoX, logoY);
-        ctx.scale(logoW / 3000, logoW / 3000);
-        ctx.fillStyle = '#FFFFFF';
-        try {
-          ctx.fill(new Path2D(KHQR_LOGO_PATH));
-        } catch {
-          // fallback
+        ctx.clip(cardPath);
+
+        // KHQR Header Logo & Ribbon Flap
+        ctx.save();
+        ctx.translate(11, 11);
+        ctx.fillStyle = KHQR_RED;
+        ctx.fill(new Path2D(KHQR_HEADER_BACKGROUND_PATH));
+        ctx.fillStyle = '#ffffff';
+        for (const pathStr of KHQR_HEADER_MARK_PATHS) {
+          ctx.fill(new Path2D(pathStr));
         }
         ctx.restore();
 
-        ctx.restore(); // end clip
-
-        // Store name
-        const nameY = cy + hh + 28;
-        ctx.font = '600 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillStyle = '#4B5563';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(params.merchantName || 'Ai-Cha & Zhengda', cx + cw / 2, nameY);
-
-        // Amount & currency
-        const amountY = nameY + 36;
-        const amountStr = params.amount.toFixed(2);
-        const currencyStr = 'USD';
-
-        ctx.font = '900 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        const amountW = ctx.measureText(amountStr).width;
-        ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        const currW = ctx.measureText(currencyStr).width;
-        const spacing = 6;
-        const totalW = amountW + spacing + currW;
-        const startX = cx + (cw - totalW) / 2;
-
-        ctx.font = '900 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillStyle = '#111827';
+        // Merchant Name
+        ctx.fillStyle = '#111111';
+        ctx.font = '10px Arial, Helvetica, sans-serif';
         ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(amountStr, startX, amountY);
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(params.merchantName || 'Ai-Cha & Zhengda', 51, 81);
 
-        ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillStyle = '#6B7280';
-        ctx.fillText(currencyStr, startX + amountW + spacing, amountY + 2);
-
-        // Ticket circular notches on left & right
-        const dividerY = 216;
-        const notchR = 14;
-
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.beginPath();
-        ctx.arc(cx, dividerY, notchR, -Math.PI / 2, Math.PI / 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + cw, dividerY, notchR, Math.PI / 2, -Math.PI / 2);
-        ctx.fill();
-        ctx.restore();
-
-        ctx.beginPath();
-        ctx.arc(cx, dividerY, notchR, -Math.PI / 2, Math.PI / 2);
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#E5E7EB';
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(cx + cw, dividerY, notchR, Math.PI / 2, -Math.PI / 2);
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#E5E7EB';
-        ctx.stroke();
+        // Amount
+        ctx.fillStyle = '#000000';
+        ctx.font = '500 20px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(formatKhqrAmount(params.amount), 51, 108);
 
         // Dashed line
         ctx.beginPath();
-        ctx.setLineDash([5, 5]);
-        ctx.strokeStyle = '#D1D5DB';
-        ctx.lineWidth = 1.5;
-        ctx.moveTo(cx + notchR + 10, dividerY);
-        ctx.lineTo(cx + cw - notchR - 10, dividerY);
+        ctx.setLineDash([4, 5]);
+        ctx.strokeStyle = '#8a8a8a';
+        ctx.lineWidth = 1;
+        ctx.moveTo(11, 124);
+        ctx.lineTo(207, 124);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // QR Code image
-        const qrSize = 270;
-        const qrX = cx + (cw - qrSize) / 2;
-        const qrY = dividerY + 18;
-        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+        // QR Code area
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(37, 145, 144, 144);
+        ctx.drawImage(qrImg, 37, 145, 144, 144);
 
-        // Export only the card bounds. Leaving the 10px/8px canvas padding in
-        // the saved file lets phone photo apps composite the surrounding
-        // transparent pixels with arbitrary colors, making the card appear
-        // square or surrounded by a changed background.
-        const outputCanvas = document.createElement('canvas');
-        outputCanvas.width = cw * scale;
-        outputCanvas.height = ch * scale;
-        const outputCtx = outputCanvas.getContext('2d');
-        if (!outputCtx) {
-          resolve(null);
-          return;
-        }
-        outputCtx.drawImage(
-          canvas,
-          cx * scale,
-          cy * scale,
-          cw * scale,
-          ch * scale,
-          0,
-          0,
-          cw * scale,
-          ch * scale,
-        );
+        // KHQR center brand mark
+        ctx.beginPath();
+        ctx.arc(109, 217, 17, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
 
-        outputCanvas.toBlob((blob) => {
+        ctx.beginPath();
+        ctx.arc(109, 217, 13, 0, Math.PI * 2);
+        ctx.fillStyle = KHQR_RED;
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+        ctx.lineJoin = 'round';
+        ctx.stroke(new Path2D('M102 213h3v-3h8v3h3v8h-3v3h-8v-3h-3z'));
+
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = 'round';
+        ctx.stroke(new Path2D('M109 213v8M105 217h8'));
+
+        ctx.restore(); // end card-clip
+
+        canvas.toBlob((blob) => {
           resolve(blob);
         }, 'image/png');
       };
@@ -566,46 +497,99 @@ export function KhqrPaymentPanel({
           <span>{formatCountdown(secondsLeft)}</span>
         </div>
 
-        {/* Authentic KHQR Card Template - Compact Size */}
-        <div className="w-full max-w-[220px] bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden relative text-gray-900 mt-1">
-          {/* Top Red Header with Exact Wikimedia KHQR Logo and Signature Downward Flap */}
-          <div
-            className="w-full bg-[#E21A1A] text-white pt-2.5 pb-4 px-3 flex items-center justify-center relative"
-            style={{
-              clipPath: 'polygon(0 0, 100% 0, 100% 100%, 84% 75%, 0 75%)',
-            }}
+        {/* Authentic KHQR Card Template - ABA Bank Specification */}
+        <div className="w-full max-w-[220px] flex justify-center mt-1">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 218 316"
+            className="w-full h-auto drop-shadow-md select-none rounded-2xl overflow-hidden"
+            role="img"
+            aria-label="PayWay KHQR payment card"
           >
-            <div className="pb-1.5 flex items-center justify-center w-full max-w-[68px]">
-              <KhqrLogo className="w-full h-auto text-white" />
-            </div>
-          </div>
-
-          {/* Merchant Name & Amount */}
-          <div className="pt-1.5 pb-0.5 px-3 text-center">
-            <p className="text-[11px] text-gray-600 font-semibold truncate">
-              {payment.merchantName || 'Ai-Cha & Zhengda'}
-            </p>
-            <p className="font-black text-lg text-gray-900 mt-0.5 flex items-baseline justify-center gap-1">
-              <span>{displayAmount.toFixed(2)}</span>
-              <span className="text-[10px] font-bold text-gray-500">USD</span>
-            </p>
-          </div>
-
-          {/* Dashed Line Separator with Side Circular Cutouts */}
-          <div className="relative my-1.5">
-            <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-tg-bg" />
-            <div className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-tg-bg" />
-            <div className="border-b border-dashed border-gray-300 mx-4" />
-          </div>
-
-          {/* QR Code Container */}
-          <div className="p-2 pb-3 flex items-center justify-center">
-            <img
-              src={payment.qrImage}
-              alt="KHQR"
-              className="w-full max-w-[155px] h-auto object-contain"
-            />
-          </div>
+            <defs>
+              <filter
+                id="card-shadow"
+                x="0"
+                y="0"
+                width="217.735"
+                height="315.735"
+                filterUnits="userSpaceOnUse"
+                colorInterpolationFilters="sRGB"
+              >
+                <feFlood floodOpacity="0" result="BackgroundImageFix" />
+                <feColorMatrix
+                  in="SourceAlpha"
+                  type="matrix"
+                  values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+                  result="hardAlpha"
+                />
+                <feOffset />
+                <feGaussianBlur stdDeviation="5.43375" />
+                <feComposite in2="hardAlpha" operator="out" />
+                <feColorMatrix
+                  type="matrix"
+                  values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.16 0"
+                />
+                <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
+                <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+              </filter>
+              <clipPath id="card-clip">
+                <path d={CARD_SHELL_PATH} />
+              </clipPath>
+              <clipPath id="qr-clip">
+                <rect id="qr-area" x="37" y="145" width="144" height="144" />
+              </clipPath>
+            </defs>
+            <rect width="218" height="316" fill="#ffffff" />
+            <g filter="url(#card-shadow)">
+              <path d={CARD_SHELL_PATH} fill="#ffffff" />
+            </g>
+            <g clipPath="url(#card-clip)">
+              <g id="khqr-header-logo" transform="translate(11,11)" aria-label="KHQR logo">
+                <path d={KHQR_HEADER_BACKGROUND_PATH} fill={KHQR_RED} />
+                {KHQR_HEADER_MARK_PATHS.map((d, i) => (
+                  <path key={i} d={d} fill="#ffffff" />
+                ))}
+              </g>
+              <text x="51" y="81" fill="#111111" fontFamily="Arial, Helvetica, sans-serif" fontSize="10">
+                {payment.merchantName || 'Ai-Cha & Zhengda'}
+              </text>
+              <text
+                x="51"
+                y="108"
+                fill="#000000"
+                fontFamily="Arial, Helvetica, sans-serif"
+                fontSize="20"
+                fontWeight="500"
+              >
+                {formatKhqrAmount(displayAmount)}
+              </text>
+              <line x1="11" y1="124" x2="207" y2="124" stroke="#8a8a8a" strokeWidth="1" strokeDasharray="4 5" />
+              <rect x="37" y="145" width="144" height="144" fill="#ffffff" />
+              <g clipPath="url(#qr-clip)">
+                <image
+                  href={payment.qrImage}
+                  x="37"
+                  y="145"
+                  width="144"
+                  height="144"
+                  preserveAspectRatio="none"
+                />
+              </g>
+              <g aria-label="KHQR brand mark">
+                <circle cx="109" cy="217" r="17" fill="#ffffff" />
+                <circle cx="109" cy="217" r="13" fill={KHQR_RED} />
+                <path
+                  d="M102 213h3v-3h8v3h3v8h-3v3h-8v-3h-3z"
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+                <path d="M109 213v8M105 217h8" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+              </g>
+            </g>
+          </svg>
         </div>
 
         {/* Subtitle */}
@@ -621,7 +605,7 @@ export function KhqrPaymentPanel({
           className={`w-full max-w-[220px] font-bold py-2.5 px-3 text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98 ${
             isSaved
               ? 'bg-emerald-600 text-white'
-              : 'bg-[#E21A1A] text-white hover:bg-[#D32323]'
+              : 'bg-[#bc271a] text-white hover:bg-[#a52115]'
           }`}
         >
           {isSaving ? (
@@ -692,7 +676,7 @@ export function KhqrPaymentPanel({
           >
             <div className="flex items-center gap-3 min-w-0">
               {/* Red KHQR Badge Icon */}
-              <div className="w-12 h-12 rounded-2xl bg-[#E21A1A] flex items-center justify-center shrink-0 shadow-sm p-2">
+              <div className="w-12 h-12 rounded-2xl bg-[#bc271a] flex items-center justify-center shrink-0 shadow-sm p-2">
                 <KhqrLogo className="w-full h-auto text-white" />
               </div>
               <div className="min-w-0">
