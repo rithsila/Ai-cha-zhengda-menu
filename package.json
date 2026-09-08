@@ -15,6 +15,8 @@
     "build:frontend": "npm --prefix apps/menu run build && npm --prefix apps/staff run build",
     "build:staging": "VITE_API_URL=\"https://staging-api.aichazhengdaarakawa.com\" VITE_BOT_NAME=\"AichaArakawastaging_bot\" npm run build:frontend",
     "deploy:staging": "npm run build:staging && npx wrangler deploy --config apps/menu/wrangler.json --env staging && npx wrangler deploy --config apps/staff/wrangler.json --env staging",
+    "build:prod": "VITE_API_URL=\"https://api.aichazhengdaarakawa.com\" VITE_BOT_NAME=\"aicha_zhengda_arakawa_bot\" npm run build:frontend",
+    "deploy:prod": "npm run build:prod && npx wrangler deploy --config apps/menu/wrangler.json && npx wrangler deploy --config apps/staff/wrangler.json",
     "start": "npm --prefix apps/api start",
     "test": "npm --prefix apps/staff test"
   },
