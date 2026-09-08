@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { randomUUID, createHmac } from 'crypto';
+import { randomUUID } from 'crypto';
 import { ABAPayWay, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
 import {
   settleOrderPoints,
@@ -68,39 +68,17 @@ export function getAbaClient(): ABAPayWay | null {
  * See: https://developer.payway.com.kh/close-transaction-14530822e0.md
  */
 export async function closeAbaTransaction(tranId: string): Promise<{ success: boolean; code?: string; message?: string }> {
-  const merchantId = (process.env.ABA_MERCHANT_ID || '').trim();
-  const apiKey = (process.env.ABA_API_KEY || '').trim();
-  const baseUrl = (process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh').replace(/\/+$/, '');
-
-  if (!merchantId || !apiKey || !tranId) {
+  const aba = getAbaClient();
+  if (!aba || !tranId) {
     return { success: false, message: 'Missing credentials or transaction ID' };
   }
 
-  const d = new Date();
-  const reqTime = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}${String(d.getUTCSeconds()).padStart(2, '0')}`;
-  const b4hash = reqTime + merchantId + tranId;
-  const hash = createHmac('sha512', apiKey).update(b4hash).digest('base64');
-
   try {
-    const res = await fetch(`${baseUrl}/api/payment-gateway/v1/payments/close-transaction`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        req_time: reqTime,
-        merchant_id: merchantId,
-        tran_id: tranId,
-        hash,
-      }),
-    });
-    if (!res.ok) {
-      return { success: false, message: `HTTP ${res.status}` };
-    }
-    const data = await res.json() as any;
-    const code = String(data?.status?.code ?? '');
+    const res = await aba.closeTransaction(tranId);
     return {
-      success: code === '00' || code === '5',
-      code,
-      message: data?.status?.message,
+      success: res.success || res.code === '5',
+      code: res.code,
+      message: res.message || res.error,
     };
   } catch (err: any) {
     return { success: false, message: err?.message || 'Network error' };
