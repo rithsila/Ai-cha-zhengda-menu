@@ -120,6 +120,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const userTier = userProfile?.tier || 'standard';
   const isCashUnlocked = userTier === 'gold' || allowCashForStandard;
 
+  const luckyDrawEnabled = configRows.find(r => r.key === 'luckyDrawEnabled')?.value !== '0';
+  const luckyTicketsPerGold = configNumber(configRows, 'luckyTicketsPerGoldOrder', 2);
+  const luckyTicketsPerStd = configNumber(configRows, 'luckyTicketsPerStandardOrder', 1);
+  const ticketsEarned = luckyDrawEnabled ? (userTier === 'gold' ? luckyTicketsPerGold : luckyTicketsPerStd) : 0;
+
   // Auto-select valid order type based on manager toggles
   useEffect(() => {
     if (!storeStatus.enablePickup && storeStatus.enableDelivery) {
@@ -819,13 +824,15 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                     )}
 
                     {/* Ticket Earning Transparency Badge */}
-                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-bold">
-                      <span className="flex items-center gap-1.5">
-                        <span>🎟️</span>
-                        <span>{t('luckyTicketsEarned', 'Lucky Draw Tickets Earned')}</span>
-                      </span>
-                      <span>+{userTier === 'gold' ? 2 : 1} {t('tickets', 'Tickets')}</span>
-                    </div>
+                    {luckyDrawEnabled && ticketsEarned > 0 && (
+                      <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <span>🎟️</span>
+                          <span>{t('luckyTicketsEarned', 'Lucky Draw Tickets Earned')}</span>
+                        </span>
+                        <span>+{ticketsEarned} {t('tickets', 'Tickets')}</span>
+                      </div>
+                    )}
 
                     <div className="border-t border-tg-hint/10 my-1" />
 

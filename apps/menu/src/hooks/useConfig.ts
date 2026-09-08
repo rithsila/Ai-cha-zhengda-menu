@@ -20,10 +20,21 @@ async function fetchConfig(): Promise<ConfigRow[]> {
   return Array.isArray(data) ? data : [];
 }
 
+const NON_NEGATIVE_CONFIG_KEYS = new Set([
+  'deliveryFee',
+  'goldMinOrdersThreshold',
+  'luckyTicketsPerGoldOrder',
+  'luckyTicketsPerStandardOrder',
+  'orderReminderSeconds',
+]);
+
 /** Parse one numeric config value from the rows. */
 export function configNumber(rows: ConfigRow[], key: string, fallback: number): number {
-  const n = Number(rows.find((r) => r.key === key)?.value);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
+  const row = rows.find((r) => r.key === key);
+  if (!row || row.value === undefined || row.value === null || row.value === '') return fallback;
+  const n = Number(row.value);
+  const min = NON_NEGATIVE_CONFIG_KEYS.has(key) ? 0 : 1;
+  return Number.isFinite(n) && n >= min ? n : fallback;
 }
 
 /** Parse one string config value from the rows. */

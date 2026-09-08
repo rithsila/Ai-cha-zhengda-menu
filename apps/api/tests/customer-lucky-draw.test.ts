@@ -18,30 +18,38 @@ describe('Customer Lucky Draw Spin Wheel Feature', () => {
 
   beforeEach(async () => {
     await prisma.systemConfig.deleteMany({
-      where: { key: { in: ['luckyWheelPrizes', 'luckyTicketsCostPerSpin', 'luckyDrawEnabled'] } },
+      where: { key: { in: ['luckyWheelPrizes', 'luckyTicketsCostPerSpin', 'luckyDrawEnabled', 'luckyTicketsPerGoldOrder', 'luckyTicketsPerStandardOrder'] } },
     });
     await prisma.prizeClaim.deleteMany({});
   });
 
   describe('GET /api/lucky-draw/config', () => {
-    it('returns default lucky draw settings (cost 5, enabled, 8 prizes)', async () => {
+    it('returns default lucky draw settings (cost 5, enabled, 8 prizes, default tickets)', async () => {
       const res = await request(app).get('/api/lucky-draw/config');
       expect(res.status).toBe(200);
       expect(res.body.enabled).toBe(true);
       expect(res.body.costPerSpin).toBe(5);
+      expect(res.body.luckyTicketsPerGoldOrder).toBe(2);
+      expect(res.body.luckyTicketsPerStandardOrder).toBe(1);
       expect(Array.isArray(res.body.prizes)).toBe(true);
       expect(res.body.prizes.length).toBe(8);
     });
 
-    it('reflects updated costPerSpin configured by manager', async () => {
+    it('reflects updated costPerSpin and tickets per order (including 0) configured by manager', async () => {
       await request(app)
         .put('/api/config')
         .set('Authorization', `Bearer ${managerToken}`)
         .send({ key: 'luckyTicketsCostPerSpin', value: '3' });
 
+      await request(app)
+        .put('/api/config')
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({ key: 'luckyTicketsPerStandardOrder', value: '0' });
+
       const res = await request(app).get('/api/lucky-draw/config');
       expect(res.status).toBe(200);
       expect(res.body.costPerSpin).toBe(3);
+      expect(res.body.luckyTicketsPerStandardOrder).toBe(0);
     });
   });
 
