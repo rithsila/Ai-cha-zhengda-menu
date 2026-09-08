@@ -64,7 +64,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
   const botName = import.meta.env.VITE_BOT_NAME || 'aicha_zhengda_arakawa_bot';
 
   return (
-    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-[#0F0406]">
+    <div className="relative flex flex-col min-h-[100dvh] w-screen items-center justify-center p-6 text-center overflow-hidden bg-gradient-to-br from-[#FFF5F5] via-[#FFF9F6] to-[#FEE2E2]">
       {/* Dynamic Brand Ambient Glow Orbs: Ai-Cha Red + Zhengda Golden Amber */}
       <motion.div
         animate={{
@@ -74,7 +74,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           y: [0, -40, 0],
         }}
         transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#e53935]/35 via-[#dc2626]/20 to-transparent blur-3xl pointer-events-none"
+        className="absolute -top-24 -left-20 w-96 h-96 rounded-full bg-gradient-to-br from-[#e53935]/25 via-[#dc2626]/15 to-transparent blur-3xl pointer-events-none"
       />
       <motion.div
         animate={{
@@ -84,7 +84,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           y: [0, 35, 0],
         }}
         transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#f59e0b]/35 via-[#d97706]/20 to-transparent blur-3xl pointer-events-none"
+        className="absolute -bottom-28 -right-20 w-96 h-96 rounded-full bg-gradient-to-tl from-[#f59e0b]/25 via-[#d97706]/15 to-transparent blur-3xl pointer-events-none"
       />
       <motion.div
         animate={{
@@ -92,13 +92,13 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           opacity: [0.15, 0.3, 0.15],
         }}
         transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#e53935]/15 via-transparent to-transparent blur-2xl pointer-events-none"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-[#e53935]/10 via-transparent to-transparent blur-2xl pointer-events-none"
       />
 
       {/* Subtle Warm Pattern Grid */}
       <div 
-        className="absolute inset-0 opacity-[0.06] pointer-events-none" 
-        style={{ backgroundImage: 'radial-gradient(rgba(245, 158, 11, 0.4) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
+        className="absolute inset-0 opacity-[0.07] pointer-events-none" 
+        style={{ backgroundImage: 'radial-gradient(rgba(229, 57, 53, 0.35) 1px, transparent 1px)', backgroundSize: '24px 24px' }}
       />
 
       {/* Double-Bezel Hardware Card Container */}
@@ -106,27 +106,31 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full max-w-sm p-2 rounded-[2.5rem] bg-gradient-to-b from-white/15 via-white/5 to-[#e53935]/15 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_40px_rgba(229,57,53,0.15)] backdrop-blur-2xl"
+        className="relative z-10 w-full max-w-sm p-2.5 rounded-[2.5rem] bg-white/70 border border-rose-200/70 shadow-[0_20px_50px_rgba(229,57,53,0.12),0_4px_20px_rgba(245,158,11,0.08)] backdrop-blur-2xl"
       >
-        <div className="p-7 sm:p-8 rounded-[2rem] bg-[#18080B]/90 border border-white/10 shadow-inner flex flex-col items-center">
+        <div className="p-7 sm:p-8 rounded-[2rem] bg-white border border-rose-100/80 shadow-sm flex flex-col items-center">
           
           {/* Dual Brand Header Floating Badges */}
-          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md shadow-sm">
+          <div className="flex items-center justify-center gap-3 mb-6 p-2 px-4 rounded-2xl bg-rose-50/80 border border-rose-200/60 shadow-xs">
             <div className="flex items-center gap-1.5">
-              <img src="/images/aicha-logo.webp" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-md" />
-              <span className="text-xs font-bold text-white tracking-wide">Ai-Cha</span>
+              <img src="/images/aicha-logo.webp" alt="Ai-Cha" className="h-7 w-auto object-contain drop-shadow-sm" />
+              <span className="text-xs font-bold text-slate-800 tracking-wide">Ai-Cha</span>
             </div>
-            <span className="text-amber-300 font-bold text-sm">+</span>
+            <span className="text-[#e53935] font-extrabold text-sm">+</span>
             <div className="flex items-center gap-1.5">
-              <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-md" />
-              <span className="text-xs font-bold text-white tracking-wide">Zhengda</span>
+              <img src="/images/zhengda_logo_cropped.webp" alt="Zhengda" className="h-7 w-auto object-contain drop-shadow-sm" />
+              <span className="text-xs font-bold text-slate-800 tracking-wide">Zhengda</span>
             </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mb-2 leading-tight">
-            Welcome to<br />Ai-Cha & Zhengda Arakawa
+          <p className="text-xs font-bold uppercase tracking-widest text-[#e53935] mb-1">
+            Welcome to
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2 leading-tight">
+            Ai-Cha & Zhengda<br />
+            <span className="text-amber-600 font-bold text-lg sm:text-xl">Arakawa Branch</span>
           </h1>
-          <p className="text-xs sm:text-sm text-rose-100/80 mb-8 max-w-[280px] leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-600 mb-7 max-w-[280px] leading-relaxed">
             Order fresh boba, ice cream & crispy chicken on Telegram.
           </p>
 
@@ -139,7 +143,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
             }}
             target="_blank"
             rel="noopener noreferrer"
-            className="group relative flex items-center justify-center gap-3 w-full py-3.5 px-5 bg-gradient-to-r from-[#2AABEE] to-[#229ED9] hover:from-[#32b2f5] hover:to-[#25a5e3] text-white text-sm font-bold rounded-2xl transition-all duration-300 shadow-[0_8px_24px_rgba(42,171,238,0.35)] hover:shadow-[0_12px_28px_rgba(42,171,238,0.45)] active:scale-[0.98]"
+            className="group relative flex items-center justify-center gap-3 w-full py-3.5 px-5 bg-gradient-to-r from-[#e53935] to-[#d32f2f] hover:from-[#f0433f] hover:to-[#c62828] text-white text-sm font-bold rounded-2xl transition-all duration-300 shadow-[0_8px_24px_rgba(229,57,53,0.32)] hover:shadow-[0_12px_28px_rgba(229,57,53,0.42)] active:scale-[0.98]"
           >
             <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6">
               <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
@@ -153,7 +157,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
           <button
             type="button"
             onClick={onContinueAsGuest}
-            className="mt-3 flex items-center justify-center gap-2 w-full py-3 px-5 bg-white/10 hover:bg-white/15 text-white text-sm font-semibold rounded-2xl border border-white/15 transition-all duration-200 active:scale-[0.98]"
+            className="mt-3 flex items-center justify-center gap-2 w-full py-3 px-5 bg-rose-50 hover:bg-rose-100/80 text-[#e53935] text-sm font-bold rounded-2xl border border-rose-200/80 transition-all duration-200 active:scale-[0.98]"
           >
             <span>Browse Menu as Guest</span>
             <span>→</span>
@@ -166,7 +170,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
                 await loginAsDevCustomer('dev_test_customer');
                 onContinueAsGuest();
               }}
-              className="mt-2 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-amber-500/10 flex items-center gap-1.5"
+              className="mt-2 text-xs font-bold text-amber-700 hover:text-amber-800 transition-colors duration-200 py-1.5 px-3 rounded-lg hover:bg-amber-100/60 flex items-center gap-1.5"
             >
               <span>🧪</span> Sign in with Test Account (Dev)
             </button>
@@ -175,7 +179,7 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
       </motion.div>
 
       {/* Subtle Footer Identity */}
-      <p className="relative z-10 text-[11px] font-medium text-rose-200/40 mt-8 tracking-wider uppercase">
+      <p className="relative z-10 text-[11px] font-semibold text-slate-400 mt-8 tracking-wider uppercase">
         Arakawa Branch • Official Menu
       </p>
     </div>
