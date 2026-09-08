@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
-import { hasIdentity } from './utils/api';
+import { hasIdentity, apiFetch } from './utils/api';
 import { refreshOnlinePaymentState } from './utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
 import { loginAsDevCustomer } from './utils/telegramUser';
@@ -206,6 +206,14 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [pickupCode, setPickupCode] = useState('');
+  const [lastPaymentMethod, setLastPaymentMethod] = useState<'khqr' | 'cash' | null>(null);
+  const [activePendingOrderId, setActivePendingOrderId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem('ai_cha_active_payment');
+    } catch {
+      return null;
+    }
+  });
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [luckyDrawOpen, setLuckyDrawOpen] = useState(false);
@@ -510,14 +518,68 @@ export default function App() {
     }
   };
 
-  const handleCheckoutSuccess = (newPickupCode: string) => {
+  const handleCheckoutSuccess = useCallback((newPickupCode: string, method: 'khqr' | 'cash' = 'cash') => {
     if (WebApp?.HapticFeedback) WebApp.HapticFeedback.notificationOccurred?.('success');
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
+    setActivePendingOrderId(null);
     setPickupCode(newPickupCode);
+    setLastPaymentMethod(method);
     setIsSuccessOpen(true);
     setCart([]);
-  };
+  }, []);
+
+  // Check active pending KHQR payment on mount and app visibility
+  useEffect(() => {
+    const checkActivePayment = async () => {
+      let activeId: string | null = null;
+      try {
+        activeId = sessionStorage.getItem('ai_cha_active_payment');
+      } catch {}
+      if (!activeId) {
+        setActivePendingOrderId(null);
+        return;
+      }
+      try {
+        const res = await apiFetch(`/api/payment/aba/status/${activeId}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          if (res.status === 409 && errData?.lateApproved) {
+            try { sessionStorage.removeItem('ai_cha_active_payment'); } catch {}
+            setActivePendingOrderId(null);
+            handleCheckoutSuccess(errData.pickupCode || '', 'khqr');
+          }
+          return;
+        }
+        const data = await res.json();
+        if (data.status === 'APPROVED') {
+          try { sessionStorage.removeItem('ai_cha_active_payment'); } catch {}
+          setActivePendingOrderId(null);
+          handleCheckoutSuccess(data.pickupCode, 'khqr');
+        } else if (data.status === 'DECLINED' || data.status === 'EXPIRED' || data.status === 'CANCELLED') {
+          try { sessionStorage.removeItem('ai_cha_active_payment'); } catch {}
+          setActivePendingOrderId(null);
+        } else {
+          setActivePendingOrderId(activeId);
+        }
+      } catch {
+        // Network error: keep active pending payment state
+      }
+    };
+
+    checkActivePayment();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkActivePayment();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', checkActivePayment);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', checkActivePayment);
+    };
+  }, [handleCheckoutSuccess]);
 
   const cycleLanguage = () => {
     const langs = ['en', 'km', 'zh'];
@@ -532,18 +594,19 @@ export default function App() {
   }
 
   if (isSuccessOpen) {
+    const isKhqr = lastPaymentMethod === 'khqr';
     return (
       <div className="min-h-screen bg-tg-bg flex flex-col items-center justify-center p-6 text-center">
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-24 h-24 bg-brand-primary rounded-full flex items-center justify-center mb-6 text-white text-4xl">
           ✓
         </motion.div>
-        <h1 className="text-3xl font-bold mb-2">{t('successTitle')}</h1>
-        <p className="text-tg-hint mb-8">{t('successDesc')}</p>
+        <h1 className="text-3xl font-bold mb-2">{isKhqr ? t('paymentSuccessful', 'Payment successful') : t('successTitle', 'Order Placed!')}</h1>
+        <p className="text-tg-hint mb-8">{isKhqr ? t('paymentSuccessfulDesc', 'Your payment has been verified. Show this code to the staff.') : t('successDescCash', 'Pay with cash at the counter. Show this code to the staff.')}</p>
         <div className="bg-tg-secondary-bg p-6 rounded-2xl w-full mb-8">
-          <p className="text-sm font-bold text-tg-hint mb-1">{t('pickupCode')}</p>
+          <p className="text-sm font-bold text-tg-hint mb-1">{t('pickupCode', 'Pickup Code')}</p>
           <p className="text-4xl font-black font-mono">{pickupCode}</p>
         </div>
-        <Button fullWidth onClick={() => setIsSuccessOpen(false)}>{t('backToMenu')}</Button>
+        <Button fullWidth onClick={() => { setIsSuccessOpen(false); setLastPaymentMethod(null); }}>{t('backToMenu', 'Back to Menu')}</Button>
       </div>
     );
   }
@@ -774,6 +837,34 @@ export default function App() {
       </>
       )}
       </div>
+
+      {/* Pending Payment Recovery Floating Pill */}
+      <AnimatePresence>
+        {activePendingOrderId && activeTab !== 'orders' && !isCheckoutOpen && !isSuccessOpen && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 w-[92%] max-w-sm z-30"
+          >
+            <div className="bg-amber-500/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-lg border border-amber-400/40 flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-medium text-amber-100">{t('awaitingPaymentConfirmation', 'Awaiting payment confirmation')}</p>
+                <p className="text-xs font-bold truncate">{t('resumePendingPayment', 'You have an order awaiting payment confirmation')}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveTab('orders');
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                }}
+                className="px-2.5 py-1.5 bg-white text-amber-800 font-bold text-xs rounded-xl flex-shrink-0 active:scale-95 transition-transform"
+              >
+                {t('viewOrder', 'View order')}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom Navigation (Apple Liquid Glass Compact Dock) */}
       <div className="fixed bottom-3 left-1/2 -translate-x-1/2 w-[86%] max-w-[330px] bg-gradient-to-b from-white/30 via-white/20 to-white/10 backdrop-blur-2xl border border-white/40 shadow-[0_12px_32px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.45),inset_0_-1px_1px_rgba(0,0,0,0.15)] rounded-full py-1 px-2 flex justify-between items-center z-20">

@@ -23,7 +23,7 @@ interface CheckoutModalProps {
   total: number;
   cart: CartItem[];
   onClose: () => void;
-  onSuccess: (pickupCode: string) => void;
+  onSuccess: (pickupCode: string, method: 'khqr' | 'cash') => void;
 }
 
 /** The saved preference, but never KHQR while online payment is switched off. */
@@ -282,7 +282,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
         return;
       }
 
-      onSuccess(orderData.pickupCode);
+      onSuccess(orderData.pickupCode, 'cash');
     } catch {
       // Never show the server's own wording — it is written for developers.
       setError(t('orderFailed', 'We could not place your order. Please try again.'));
@@ -348,9 +348,16 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
               <KhqrPaymentPanel
                 orderId={paymentOrderId}
                 totalAmount={finalTotal}
-                onPaid={(code) => onSuccess(code)}
-                onExpired={onClose}
-                onCancel={() => setStep(1)}
+                onPaid={(code) => onSuccess(code, 'khqr')}
+                onExpired={() => {
+                  setStep(1);
+                  setPaymentOrderId(null);
+                  onClose();
+                }}
+                onCancel={() => {
+                  setStep(1);
+                  setPaymentOrderId(null);
+                }}
                 isViewingKhqr={isViewingKhqr}
                 onViewingKhqrChange={setIsViewingKhqr}
               />

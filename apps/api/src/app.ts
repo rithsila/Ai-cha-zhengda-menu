@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHmac } from 'crypto';
 import { ABAPayWay, generateTransactionId, getQRExpiration } from 'aba-payway-sdk-unofficial';
 import {
   settleOrderPoints,
@@ -41,6 +41,71 @@ import { uploadToR2, isR2Configured } from './r2';
 // The tuned SQLite client lives in db.ts; re-exported here because every
 // caller (and every test) already imports it from this module.
 export { prisma };
+
+export const ABA_NOT_CONFIGURED =
+  'ABA PayWay is not configured. Set ABA_MERCHANT_ID and ABA_API_KEY in apps/api/.env.';
+
+// ABA PayWay client. Built per call, not once at startup, so the server picks
+// up credentials without a restart and tests can vary the environment.
+// Returns null when unconfigured -- never fall back to fake credentials, which
+// only turns a missing-config problem into an unreadable "wrong hash" error.
+export function getAbaClient(): ABAPayWay | null {
+  const merchantId = process.env.ABA_MERCHANT_ID || '';
+  const apiKey = process.env.ABA_API_KEY || '';
+  if (!merchantId || !apiKey) return null;
+  return new ABAPayWay({
+    merchantId,
+    apiKey,
+    baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
+    webhookSecret: process.env.ABA_WEBHOOK_SECRET || undefined,
+  });
+}
+
+/**
+ * Close a transaction with ABA PayWay before payment completes.
+ * Once closed, PayWay will reject or reverse any incoming payment,
+ * preventing late payments from going through.
+ * See: https://developer.payway.com.kh/close-transaction-14530822e0.md
+ */
+export async function closeAbaTransaction(tranId: string): Promise<{ success: boolean; code?: string; message?: string }> {
+  const merchantId = (process.env.ABA_MERCHANT_ID || '').trim();
+  const apiKey = (process.env.ABA_API_KEY || '').trim();
+  const baseUrl = (process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh').replace(/\/+$/, '');
+
+  if (!merchantId || !apiKey || !tranId) {
+    return { success: false, message: 'Missing credentials or transaction ID' };
+  }
+
+  const d = new Date();
+  const reqTime = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}${String(d.getUTCSeconds()).padStart(2, '0')}`;
+  const b4hash = reqTime + merchantId + tranId;
+  const hash = createHmac('sha512', apiKey).update(b4hash).digest('base64');
+
+  try {
+    const res = await fetch(`${baseUrl}/api/payment-gateway/v1/payments/close-transaction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        req_time: reqTime,
+        merchant_id: merchantId,
+        tran_id: tranId,
+        hash,
+      }),
+    });
+    if (!res.ok) {
+      return { success: false, message: `HTTP ${res.status}` };
+    }
+    const data = await res.json() as any;
+    const code = String(data?.status?.code ?? '');
+    return {
+      success: code === '00' || code === '5',
+      code,
+      message: data?.status?.message,
+    };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Network error' };
+  }
+}
 
 /** The only statuses an order may hold. */
 const ORDER_STATUSES = ['pending', 'preparing', 'ready', 'completed', 'cancelled', 'paid'];
@@ -407,24 +472,6 @@ export function createApp() {
       res.status(500).json({ error: 'Internal server error while verifying code.' });
     }
   });
-
-  // ABA PayWay client. Built per call, not once at startup, so the server picks
-  // up credentials without a restart and tests can vary the environment.
-  // Returns null when unconfigured -- never fall back to fake credentials, which
-  // only turns a missing-config problem into an unreadable "wrong hash" error.
-  function getAbaClient(): ABAPayWay | null {
-    const merchantId = process.env.ABA_MERCHANT_ID || '';
-    const apiKey = process.env.ABA_API_KEY || '';
-    if (!merchantId || !apiKey) return null;
-    return new ABAPayWay({
-      merchantId,
-      apiKey,
-      baseUrl: process.env.ABA_BASE_URL || 'https://checkout-sandbox.payway.com.kh',
-    });
-  }
-
-  const ABA_NOT_CONFIGURED =
-    'ABA PayWay is not configured. Set ABA_MERCHANT_ID and ABA_API_KEY in apps/api/.env.';
 
   app.get('/', (req, res) => {
     res.json({ status: 'ok', message: 'Ai-Cha & Zhengda API is running' });
@@ -1558,12 +1605,9 @@ export function createApp() {
     if (order.status === 'paid') {
       return { ok: true as const, status: 'APPROVED', orderStatus: order.status, order };
     }
-    // A cancelled order has already had its reserved points handed back, so a
-    // late payment must not quietly revive it. Do not test pointsSettled here:
-    // refundOrderPoints sets that flag too, and treating it as "already paid"
-    // would report a cancelled order as APPROVED.
-    if (order.status === 'cancelled') {
-      return { ok: false as const, code: 409, body: { error: 'This order was cancelled' } };
+
+    if (order.transactionId && transactionId && transactionId !== order.transactionId) {
+      return { ok: false as const, code: 400, body: { error: 'Transaction reference mismatch' } };
     }
 
     let result = await aba.checkStatus(transactionId);
@@ -1576,13 +1620,49 @@ export function createApp() {
     if (!result.success) {
       return { ok: false as const, code: 502, body: { error: result.error || 'Could not reach ABA PayWay' } };
     }
+
+    // A cancelled order has already had its reserved points handed back.
+    // Explicitly handle late approvals so a charged customer's payment is not silently lost.
+    if (order.status === 'cancelled') {
+      if (result.status === 'APPROVED') {
+        const lateNote = order.cancelReason && !order.cancelReason.includes('Late payment')
+          ? `${order.cancelReason} [Late payment approved: customer was charged]`
+          : (order.cancelReason || 'Late payment approved: customer was charged');
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { cancelReason: lateNote },
+        });
+        return {
+          ok: false as const,
+          code: 409,
+          body: {
+            error: 'This order was cancelled before payment was confirmed. Customer was charged.',
+            status: 'LATE_APPROVED',
+            lateApproved: true,
+            pickupCode: order.pickupCode,
+            orderStatus: order.status,
+          },
+        };
+      }
+      return { ok: false as const, code: 409, body: { error: 'This order was cancelled' } };
+    }
+
     if (result.status !== 'APPROVED') {
       return { ok: true as const, status: result.status, orderStatus: order.status, order };
     }
 
-    // ABA says approved -- but for how much? A short payment must not settle
-    // the order.
-    if (result.amount != null && Math.abs(result.amount - order.totalAmount) > AMOUNT_TOLERANCE) {
+    // ABA says approved -- strictly verify amount and currency.
+    // Do not accept a missing or invalid amount as successful verification.
+    if (result.amount == null || typeof result.amount !== 'number' || Number.isNaN(result.amount)) {
+      console.error(`ABA amount missing or invalid on order ${order.id}: received ${result.amount}`);
+      return {
+        ok: false as const,
+        code: 400,
+        body: { error: 'Paid amount missing or invalid from payment gateway' },
+      };
+    }
+
+    if (Math.abs(result.amount - order.totalAmount) > AMOUNT_TOLERANCE) {
       console.error(
         `ABA amount mismatch on order ${order.id}: paid ${result.amount}, expected ${order.totalAmount}`
       );
@@ -1593,9 +1673,27 @@ export function createApp() {
       };
     }
 
-    const updated = await prisma.order.update({ where: { id: order.id }, data: { status: 'paid' } });
-    await settleOrderPoints(prisma, order.id);
-    return { ok: true as const, status: 'APPROVED', orderStatus: updated.status, order: updated };
+    if (result.currency && result.currency.toUpperCase() !== 'USD') {
+      console.error(`ABA currency mismatch on order ${order.id}: received ${result.currency}, expected USD`);
+      return {
+        ok: false as const,
+        code: 400,
+        body: { error: 'Paid currency does not match the order currency' },
+      };
+    }
+
+    // Atomic update for idempotency under concurrent polling, callbacks, and expiry sweeps
+    const updateResult = await prisma.order.updateMany({
+      where: { id: order.id, status: 'pending' },
+      data: { status: 'paid' },
+    });
+
+    if (updateResult.count > 0) {
+      await settleOrderPoints(prisma, order.id);
+    }
+
+    const finalOrder = (await prisma.order.findUnique({ where: { id: order.id } }))!;
+    return { ok: true as const, status: 'APPROVED', orderStatus: finalOrder.status, order: finalOrder };
   }
 
   /**
@@ -1643,11 +1741,32 @@ export function createApp() {
       const denied = denyPaymentAccess(req, order);
       if (denied) return res.status(denied.code).json(denied.body);
 
+      // Restrict payment creation to eligible orders
+      if (order.paymentMethod !== 'khqr') {
+        return res.status(400).json({ error: 'Cannot initiate ABA payment for a non-KHQR order' });
+      }
       if (order.status === 'paid') {
         return res.status(409).json({ error: 'This order is already paid' });
       }
+      if (order.status === 'cancelled') {
+        return res.status(409).json({ error: 'This order was cancelled' });
+      }
+      if (order.status !== 'pending') {
+        return res.status(409).json({ error: `Cannot initiate payment for order with status: ${order.status}` });
+      }
       if (order.totalAmount <= 0) {
         return res.status(409).json({ error: 'Order total must be greater than zero' });
+      }
+
+      // Verify previous attempt before creating or retrying
+      if (order.transactionId) {
+        const prevCheck = await confirmAbaPayment(aba, order.id, order.transactionId);
+        if (prevCheck.ok && prevCheck.status === 'APPROVED') {
+          return res.status(409).json({
+            error: 'This order is already paid',
+            pickupCode: order.pickupCode,
+          });
+        }
       }
 
       // Reuse the transaction id if one exists, so refreshing the checkout page
@@ -1745,12 +1864,25 @@ export function createApp() {
       if (!order.transactionId) {
         return res.status(409).json({ error: 'No ABA payment has been started for this order' });
       }
-      if (order.paymentExpiresAt && order.paymentExpiresAt.getTime() < Date.now()) {
-        return res.json({ status: 'EXPIRED', ...base });
-      }
 
       const result = await confirmAbaPayment(aba, order.id, order.transactionId);
-      if (!result.ok) return res.status(result.code).json(result.body);
+      if (!result.ok) {
+        return res.status(result.code).json(result.body);
+      }
+
+      // If ABA reports PENDING and payment deadline has passed, report EXPIRED
+      if (
+        result.status === 'PENDING' &&
+        order.paymentExpiresAt &&
+        order.paymentExpiresAt.getTime() < Date.now()
+      ) {
+        return res.json({
+          status: 'EXPIRED',
+          orderStatus: result.orderStatus,
+          pickupCode: result.order.pickupCode,
+          expiresAt: result.order.paymentExpiresAt?.toISOString() ?? null,
+        });
+      }
 
       res.json({
         status: result.status,
@@ -1761,6 +1893,116 @@ export function createApp() {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to check payment status' });
+    }
+  });
+
+  // Background payment confirmation: official ABA PayWay pushback callback
+  app.post('/api/payment/aba/callback', async (req, res) => {
+    try {
+      const aba = getAbaClient();
+      if (!aba) return res.status(503).json({ error: ABA_NOT_CONFIGURED });
+
+      const signature = (req.header('X-PayWay-HMAC-SHA512') || req.header('x-payway-hmac-sha512') || '').trim();
+      const isValid = await aba.verifyWebhook(req.body, signature);
+      if (!isValid) {
+        console.warn('ABA callback rejected: invalid webhook signature');
+        return res.status(401).json({ error: 'Invalid webhook signature' });
+      }
+
+      const body = req.body || {};
+      const tranId = typeof body.tran_id === 'string' ? body.tran_id : '';
+      const orderId = typeof body.return_params === 'string' ? body.return_params : '';
+
+      const order = await prisma.order.findFirst({
+        where: {
+          OR: [
+            ...(orderId ? [{ id: orderId }] : []),
+            ...(tranId ? [{ transactionId: tranId }] : []),
+          ],
+        },
+      });
+
+      if (!order) {
+        console.warn(`ABA callback: order not found (tran_id=${tranId}, return_params=${orderId})`);
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      // Treat callback as untrusted until verified using server-side transaction checks
+      const result = await confirmAbaPayment(aba, order.id, tranId || order.transactionId || '');
+      if (!result.ok) {
+        return res.status(result.code).json(result.body);
+      }
+
+      res.json({ success: true, status: result.status });
+    } catch (error) {
+      console.error('Error handling ABA callback:', error);
+      res.status(500).json({ error: 'Failed to process payment callback' });
+    }
+  });
+
+  // Customer cancellation of unpaid order with server reconciliation
+  app.post('/api/payment/aba/cancel', resolveCustomer, async (req, res) => {
+    try {
+      const { orderId } = req.body || {};
+      if (!orderId) return res.status(400).json({ error: 'orderId is required' });
+
+      const order = await prisma.order.findUnique({ where: { id: String(orderId) } });
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+
+      const denied = denyPaymentAccess(req, order);
+      if (denied) return res.status(denied.code).json(denied.body);
+
+      if (order.status === 'paid') {
+        return res.status(409).json({ error: 'Cannot cancel an order that is already paid', pickupCode: order.pickupCode });
+      }
+      if (order.status === 'cancelled') {
+        return res.json({ status: 'cancelled', orderStatus: 'cancelled' });
+      }
+      if (order.status !== 'pending') {
+        return res.status(409).json({ error: `Cannot cancel order with status ${order.status}` });
+      }
+
+      const aba = getAbaClient();
+      // If payment was initiated, verify with ABA that customer did not already pay
+      if (order.transactionId && aba) {
+        let checkResult;
+        try {
+          checkResult = await aba.checkStatus(order.transactionId);
+        } catch {
+          return res.status(502).json({ error: 'Cannot verify payment status with ABA PayWay' });
+        }
+
+        if (!checkResult.success && checkResult.errorCode !== '6') {
+          return res.status(502).json({ error: 'ABA verification unavailable. Preserving unresolved state.' });
+        }
+
+        if (checkResult.status === 'APPROVED') {
+          const confirmRes = await confirmAbaPayment(aba, order.id, order.transactionId);
+          if (confirmRes.ok) {
+            return res.status(409).json({
+              error: 'Payment was already approved by ABA PayWay',
+              status: 'APPROVED',
+              pickupCode: order.pickupCode,
+            });
+          }
+        }
+
+        // Close the transaction with ABA PayWay so no incoming payment can be accepted
+        await closeAbaTransaction(order.transactionId).catch((err) => {
+          console.warn(`ABA close-transaction failed for order ${order.id}:`, err);
+        });
+      }
+
+      const updated = await prisma.order.update({
+        where: { id: order.id },
+        data: { status: 'cancelled', cancelReason: 'Cancelled by customer' },
+      });
+      await refundOrderPoints(prisma, order.id);
+
+      res.json({ status: 'cancelled', orderStatus: updated.status });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Failed to cancel order' });
     }
   });
 

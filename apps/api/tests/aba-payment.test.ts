@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHmac } from 'crypto';
 import { createApp, prisma } from '../src/app';
 import { issueToken } from '../src/auth';
 import {
@@ -8,8 +8,15 @@ import {
   disableAba,
   stubAbaFetch,
   approvedStatus,
+  ABA_ENV,
 } from './helpers/aba';
 import { asCustomer } from './helpers/customer';
+
+function signWebhookPayload(payload: Record<string, any>, key: string = ABA_ENV.ABA_API_KEY) {
+  const sortedKeys = Object.keys(payload).sort();
+  const concatenated = sortedKeys.map((k) => String(payload[k])).join('');
+  return createHmac('sha512', key).update(concatenated).digest('base64');
+}
 
 const app = createApp();
 const uid = `aba-${randomUUID()}`;
@@ -242,9 +249,179 @@ describe('GET /api/payment/aba/status/:orderId', () => {
     expect(after!.status).toBe('cancelled');
   });
 
+  it('refuses to settle when currency is not USD', async () => {
+    const { id, totalAmount } = await makeOrderWithTransaction();
+    stubAbaFetch({ status: { ...approvedStatus(totalAmount), currency: 'KHR' } });
+
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('currency');
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.status).toBe('pending');
+  });
+
+  it('refuses to settle when amount is missing or invalid', async () => {
+    const { id } = await makeOrderWithTransaction();
+    stubAbaFetch({ status: { status: 0, payment_status: 'APPROVED', amount: 'invalid', currency: 'USD' } });
+
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('amount missing or invalid');
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.status).toBe('pending');
+  });
+
+  it('settles order if ABA is approved even if local payment window expired', async () => {
+    const { id, totalAmount, pickupCode } = await makeOrderWithTransaction();
+    await prisma.order.update({
+      where: { id },
+      data: { paymentExpiresAt: new Date(Date.now() - 60 * 1000) },
+    });
+    stubAbaFetch({ status: approvedStatus(totalAmount) });
+
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('APPROVED');
+    expect(res.body.pickupCode).toBe(pickupCode);
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.status).toBe('paid');
+  });
+
   it('returns 409 when no payment has been started for the order', async () => {
     const order = await makeOrder();
     const res = await request(app).get(`/api/payment/aba/status/${order.id}`).set(asCustomer(uid));
     expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /api/payment/aba/callback', () => {
+  it('returns 503 when ABA is not configured', async () => {
+    disableAba();
+    const res = await request(app).post('/api/payment/aba/callback').send({});
+    expect(res.status).toBe(503);
+  });
+
+  it('returns 401 when signature header is missing or invalid', async () => {
+    enableAba();
+    const res = await request(app)
+      .post('/api/payment/aba/callback')
+      .send({ tran_id: '12345', return_params: 'abc' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 when signature header is forged', async () => {
+    enableAba();
+    const body = { tran_id: '12345', return_params: 'abc' };
+    const forgedSig = signWebhookPayload(body, 'wrong_key');
+    const res = await request(app)
+      .post('/api/payment/aba/callback')
+      .set('X-PayWay-HMAC-SHA512', forgedSig)
+      .send(body);
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when order is not found', async () => {
+    enableAba();
+    const body = { tran_id: 'nonexistent-tx', return_params: 'nonexistent-order' };
+    const validSig = signWebhookPayload(body);
+    const res = await request(app)
+      .post('/api/payment/aba/callback')
+      .set('X-PayWay-HMAC-SHA512', validSig)
+      .send(body);
+    expect(res.status).toBe(404);
+  });
+
+  it('verifies callback signature, checks ABA status, and settles order', async () => {
+    enableAba();
+    const { id, transactionId, totalAmount } = await makeOrderWithTransaction();
+    stubAbaFetch({ status: approvedStatus(totalAmount) });
+
+    const body = { tran_id: transactionId, return_params: id };
+    const validSig = signWebhookPayload(body);
+
+    const res = await request(app)
+      .post('/api/payment/aba/callback')
+      .set('X-PayWay-HMAC-SHA512', validSig)
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.status).toBe('APPROVED');
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.status).toBe('paid');
+  });
+});
+
+describe('POST /api/payment/aba/cancel', () => {
+  it('requires customer authentication', async () => {
+    const order = await makeOrder();
+    const res = await request(app).post('/api/payment/aba/cancel').send({ orderId: order.id });
+    expect(res.status).toBe(401);
+  });
+
+  it('forbids cancellation of another user order', async () => {
+    const otherUid = `aba-other-${randomUUID()}`;
+    const order = await makeOrder();
+    const res = await request(app)
+      .post('/api/payment/aba/cancel')
+      .set(asCustomer(otherUid))
+      .send({ orderId: order.id });
+    expect(res.status).toBe(403);
+  });
+
+  it('cancels pending unpaid order, closes transaction with ABA, and releases points', async () => {
+    const { id, transactionId } = await makeOrderWithTransaction();
+    const spy = stubAbaFetch({ status: { status: 0, payment_status: 'PENDING' } });
+
+    const res = await request(app)
+      .post('/api/payment/aba/cancel')
+      .set(asCustomer(uid))
+      .send({ orderId: id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('cancelled');
+
+    const closeCall = spy.mock.calls.find((c) => String(c[0]).includes('close-transaction'));
+    expect(closeCall).toBeTruthy();
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.status).toBe('cancelled');
+    expect(order!.cancelReason).toBe('Cancelled by customer');
+  });
+
+  it('refuses cancellation if customer already approved payment in ABA', async () => {
+    const { id, totalAmount, pickupCode } = await makeOrderWithTransaction();
+    stubAbaFetch({ status: approvedStatus(totalAmount) });
+
+    const res = await request(app)
+      .post('/api/payment/aba/cancel')
+      .set(asCustomer(uid))
+      .send({ orderId: id });
+
+    expect(res.status).toBe(409);
+    expect(res.body.pickupCode).toBe(pickupCode);
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.status).toBe('paid');
+  });
+
+  it('returns 409 with lateApproved if order was cancelled but customer paid', async () => {
+    const { id, totalAmount, pickupCode } = await makeOrderWithTransaction();
+    await prisma.order.update({
+      where: { id },
+      data: { status: 'cancelled', cancelReason: 'Customer cancelled payment' },
+    });
+
+    stubAbaFetch({ status: approvedStatus(totalAmount) });
+
+    const res = await request(app).get(`/api/payment/aba/status/${id}`).set(asCustomer(uid));
+
+    expect(res.status).toBe(409);
+    expect(res.body.lateApproved).toBe(true);
+    expect(res.body.pickupCode).toBe(pickupCode);
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    expect(order!.cancelReason).toContain('Late payment approved');
   });
 });

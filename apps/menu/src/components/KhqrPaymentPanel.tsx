@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DownloadSimple, Check, CaretRight } from '@phosphor-icons/react';
+import { DownloadSimple, Check, CaretRight, ArrowClockwise, WarningCircle, XCircle } from '@phosphor-icons/react';
 import { Button } from './ui/Button';
 import { apiFetch } from '../utils/api';
 import { launchAbaPayment } from '../utils/abaPaymentLaunch';
@@ -261,7 +261,12 @@ export function KhqrPaymentPanel({
     expiresAt: number;
   } | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const [expired, setExpired] = useState(false);
+  const [resultState, setResultState] = useState<'pending' | 'declined' | 'expired' | 'cancelled'>('pending');
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [networkInterrupted, setNetworkInterrupted] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -272,8 +277,8 @@ export function KhqrPaymentPanel({
     setInternalViewingKhqr(val);
     onViewingKhqrChange?.(val);
   };
-  // 'unavailable' means the shop has no online payment set up yet; 'failed' is a normal error.
-  const [error, setError] = useState<'unavailable' | 'failed' | null>(null);
+  // 'unavailable' means the shop has no online payment set up yet; 'failed' is a payment start error.
+  const [startError, setStartError] = useState<'unavailable' | 'failed' | null>(null);
   // Bumped by "Try again" to ask for a fresh QR for the same order.
   const [attempt, setAttempt] = useState(0);
 
@@ -283,23 +288,55 @@ export function KhqrPaymentPanel({
   const onExpiredRef = useRef(onExpired);
   onExpiredRef.current = onExpired;
 
-  // Auto return to menu 3 seconds after QR code expires
-  useEffect(() => {
-    if (!expired) return;
-    const timer = setTimeout(() => {
-      onExpiredRef.current?.();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [expired]);
+  // Check payment status with server
+  const checkStatusNow = useCallback(async (manual = false) => {
+    if (manual) setIsCheckingStatus(true);
+    try {
+      const res = await apiFetch(`/api/payment/aba/status/${orderId}`);
+      setNetworkInterrupted(false);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        if (res.status === 409 && errData?.lateApproved) {
+          sessionStorage.removeItem('ai_cha_active_payment');
+          setPayment(null);
+          onPaidRef.current(errData.pickupCode || '');
+          return;
+        }
+        return;
+      }
+
+      const data = await res.json();
+      if (data.status === 'APPROVED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setPayment(null);
+        onPaidRef.current(data.pickupCode);
+      } else if (data.status === 'DECLINED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('declined');
+      } else if (data.status === 'EXPIRED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('expired');
+      } else if (data.status === 'CANCELLED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('cancelled');
+      }
+    } catch {
+      setNetworkInterrupted(true);
+    } finally {
+      if (manual) setIsCheckingStatus(false);
+    }
+  }, [orderId]);
 
   // Create (or re-create) the ABA payment for this order.
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    setError(null);
+    setStartError(null);
     setPayment(null);
-    setExpired(false);
+    setResultState('pending');
     setIsSaved(false);
+    setConfirmingCancel(false);
+    setCancelError(null);
 
     (async () => {
       try {
@@ -312,15 +349,17 @@ export function KhqrPaymentPanel({
         if (!res.ok) {
           if (res.status === 503) {
             markOnlinePaymentUnavailable();
-            if (!cancelled) setError('unavailable');
+            if (!cancelled) setStartError('unavailable');
             return;
           }
-          if (!cancelled) setError('failed');
+          if (!cancelled) setStartError('failed');
           return;
         }
 
         const data = await res.json();
         markOnlinePaymentAvailable();
+        sessionStorage.setItem('ai_cha_active_payment', orderId);
+
         if (cancelled) return;
         setPayment({
           abapayDeeplink: data.abapayDeeplink,
@@ -333,7 +372,7 @@ export function KhqrPaymentPanel({
         });
       } catch {
         if (cancelled) return;
-        setError('failed');
+        setStartError('failed');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -342,46 +381,57 @@ export function KhqrPaymentPanel({
     return () => { cancelled = true; };
   }, [orderId, attempt]);
 
-  // Poll status from server
+  // Poll status from server every 3s while pending
   useEffect(() => {
-    if (!payment || expired) return;
-    let cancelled = false;
+    if (!payment || resultState !== 'pending') return;
 
-    const interval = setInterval(async () => {
-      try {
-        const res = await apiFetch(`/api/payment/aba/status/${orderId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled) return;
-
-        if (data.status === 'APPROVED') {
-          setPayment(null);
-          onPaidRef.current(data.pickupCode);
-        } else if (data.status === 'EXPIRED' || data.status === 'DECLINED') {
-          setExpired(true);
-        }
-      } catch {}
+    const interval = setInterval(() => {
+      checkStatusNow(false);
     }, 3000);
 
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [orderId, payment, expired]);
+    return () => clearInterval(interval);
+  }, [payment, resultState, checkStatusNow]);
 
-  // Countdown timer
+  // Check status immediately when returning to tab from ABA Mobile
   useEffect(() => {
-    if (!payment) return;
+    if (!payment || resultState !== 'pending') return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkStatusNow(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [payment, resultState, checkStatusNow]);
+
+  // Countdown timer: on reaching 0, check with server before declaring expired
+  useEffect(() => {
+    if (!payment || resultState !== 'pending') return;
 
     const tick = () => {
       const left = Math.max(0, Math.round((payment.expiresAt - Date.now()) / 1000));
       setSecondsLeft(left);
-      if (left === 0) setExpired(true);
+      if (left === 0) {
+        // Reconcile with server before claiming expired
+        checkStatusNow(false);
+      }
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [payment]);
+  }, [payment, resultState, checkStatusNow]);
 
   const displayAmount = payment?.amount ?? totalAmount ?? 0;
-  const handleRetry = () => setAttempt(a => a + 1);
+  const handleRetry = () => {
+    setResultState('pending');
+    setAttempt(a => a + 1);
+  };
+
   const handleOpenAbaPayment = () => {
     if (!payment?.abapayDeeplink) return;
     const result = launchAbaPayment(payment.abapayDeeplink);
@@ -425,10 +475,42 @@ export function KhqrPaymentPanel({
     }
   };
 
+  const handleCancelOrder = async () => {
+    setIsCancelling(true);
+    setCancelError(null);
+    try {
+      const res = await apiFetch('/api/payment/aba/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.status === 'cancelled') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setResultState('cancelled');
+        setConfirmingCancel(false);
+        onCancel?.();
+        return;
+      }
+      if (res.status === 409 && data?.status === 'APPROVED') {
+        sessionStorage.removeItem('ai_cha_active_payment');
+        setPayment(null);
+        onPaidRef.current(data.pickupCode);
+        return;
+      }
+      setCancelError(data?.error || t('cancelFailed', 'Could not cancel order. Please try again.'));
+    } catch {
+      setCancelError(t('cancelFailed', 'Could not cancel order. Please try again.'));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const cancelButton = onCancel ? (
     <button
       type="button"
-      onClick={onCancel}
+      onClick={() => setConfirmingCancel(true)}
       className="text-sm font-semibold text-tg-hint hover:text-tg-text transition-colors py-2"
     >
       {t('cancel', 'Cancel')}
@@ -447,20 +529,21 @@ export function KhqrPaymentPanel({
     );
   }
 
-  if (error) {
+  // Payment start failure (distinguished from bank decline and expiry)
+  if (startError) {
     return (
       <div className="flex flex-col gap-4 items-center w-full text-center py-6">
         <div className="w-full bg-[#E53935]/10 text-[#E53935] text-sm p-3 rounded-xl border border-[#E53935]/20 font-medium">
-          {error === 'unavailable'
+          {startError === 'unavailable'
             ? t('onlinePaymentUnavailable', 'Online payment is not available right now.')
             : t('paymentStartFailed', 'Could not start the payment. Please try again.')}
         </div>
-        {error === 'unavailable' && (
+        {startError === 'unavailable' && (
           <p className="text-sm text-tg-hint">
             {t('orderSavedPayCash', 'Your order is saved. Please pay with cash at the counter.')}
           </p>
         )}
-        {error === 'failed' && (
+        {startError === 'failed' && (
           <Button onClick={handleRetry} className="w-full">
             {t('tryAgain', 'Try again')}
           </Button>
@@ -470,13 +553,99 @@ export function KhqrPaymentPanel({
     );
   }
 
-  if (!payment || expired) {
+  // Cancel confirmation dialog
+  if (confirmingCancel) {
     return (
-      <div className="flex flex-col gap-4 items-center w-full text-center py-6">
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+          <WarningCircle size={36} weight="fill" />
+        </div>
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('confirmCancelPayment', 'Cancel payment?')}
+        </h3>
+        <p className="text-sm text-tg-hint max-w-xs">
+          {t('confirmCancelPaymentHint', 'If you already approved payment in ABA Mobile, please wait a moment for confirmation.')}
+        </p>
+        {cancelError && (
+          <div className="w-full bg-[#E53935]/10 text-[#E53935] text-xs p-3 rounded-xl">
+            {cancelError}
+          </div>
+        )}
+        <div className="flex flex-col gap-2 w-full mt-2">
+          <Button
+            onClick={() => setConfirmingCancel(false)}
+            className="w-full"
+            disabled={isCancelling}
+          >
+            {t('keepWaiting', 'Keep waiting')}
+          </Button>
+          <button
+            type="button"
+            onClick={handleCancelOrder}
+            disabled={isCancelling}
+            className="w-full py-2.5 rounded-xl border border-rose-500/30 text-rose-500 font-semibold text-sm hover:bg-rose-500/10 transition-colors"
+          >
+            {isCancelling ? t('saving', 'Cancelling...') : t('cancelOrder', 'Cancel order')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Result: Declined by bank
+  if (resultState === 'declined') {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center">
+          <XCircle size={40} weight="fill" />
+        </div>
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('paymentDeclined', 'Payment declined')}
+        </h3>
+        <p className="text-sm text-tg-hint max-w-xs">
+          {t('paymentDeclinedHint', 'Your bank declined this transaction. Please try again or pay with cash.')}
+        </p>
+        <Button onClick={handleRetry} className="w-full mt-2">
+          {t('tryAgain', 'Try again')}
+        </Button>
+        {cancelButton}
+      </div>
+    );
+  }
+
+  // Result: Cancelled confirmed by server
+  if (resultState === 'cancelled') {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-tg-hint/15 text-tg-hint flex items-center justify-center">
+          <XCircle size={40} weight="fill" />
+        </div>
+        <h3 className="font-bold text-lg text-tg-text">
+          {t('paymentCancelled', 'Payment cancelled')}
+        </h3>
+        <p className="text-sm text-tg-hint max-w-xs">
+          {t('paymentCancelledDesc', 'Your payment was cancelled and your order has not been placed.')}
+        </p>
+        {onCancel && (
+          <Button onClick={onCancel} className="w-full mt-2">
+            {t('backToMenu', 'Back to Menu')}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // Result: Expired QR confirmed by server
+  if (resultState === 'expired' || !payment) {
+    return (
+      <div className="flex flex-col gap-4 items-center w-full text-center py-6 animate-in fade-in">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+          <WarningCircle size={40} weight="fill" />
+        </div>
         <h3 className="font-bold text-lg text-tg-text">
           {t('paymentExpired', 'This QR code has expired')}
         </h3>
-        <p className="text-sm text-tg-hint">
+        <p className="text-sm text-tg-hint max-w-xs">
           {t('paymentExpiredHint', 'Your order is still saved. Get a new QR code to pay.')}
         </p>
         <Button onClick={handleRetry} className="w-full mt-2">
@@ -597,6 +766,30 @@ export function KhqrPaymentPanel({
           {t('scanWithMobileBankingApp', 'Scan with mobile banking app that supports KHQR')}
         </p>
 
+        {/* Status Indicator & Manual Check */}
+        <div className="flex flex-col items-center gap-1.5 w-full max-w-[220px]">
+          <div className="flex items-center gap-1.5 text-xs text-tg-hint">
+            <span className="w-2 h-2 rounded-full bg-brand-primary animate-ping" />
+            <span>{t('awaitingPaymentConfirmation', 'Awaiting payment confirmation')}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => checkStatusNow(true)}
+            disabled={isCheckingStatus}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary py-1 px-3 rounded-full hover:bg-brand-primary/10 transition-colors disabled:opacity-60"
+          >
+            <ArrowClockwise size={12} className={isCheckingStatus ? 'animate-spin' : ''} />
+            <span>{isCheckingStatus ? t('checkingPaymentStatus', 'Checking...') : t('checkStatus', 'Check status')}</span>
+          </button>
+        </div>
+
+        {networkInterrupted && (
+          <div className="w-full max-w-[220px] bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[11px] p-2 rounded-xl border border-amber-500/20 text-center">
+            {t('connectionInterrupted', 'Connection interrupted. Tap below to check status.')}
+          </div>
+        )}
+
         {/* Button: Save KHQR to Photos */}
         <button
           type="button"
@@ -625,9 +818,20 @@ export function KhqrPaymentPanel({
 
   // View 1: Main payment options view
   return (
-    <div className="flex flex-col justify-between flex-1 w-full min-h-[380px] gap-6">
-      <div className="flex flex-col gap-4 items-center w-full">
-        <div className="text-center">
+    <div className="flex flex-col items-center w-full min-h-[380px] animate-in fade-in duration-200">
+      <div className="w-full flex flex-col items-center">
+        {/* Total Amount Badge */}
+        <div className="mb-4 text-center">
+          <span className="text-xs font-bold text-tg-hint uppercase tracking-wider">
+            {t('total', 'Total')}
+          </span>
+          <div className="text-3xl font-black text-tg-text mt-0.5">
+            {formatKhqrAmount(displayAmount)}
+          </div>
+        </div>
+
+        {/* Headline */}
+        <div className="text-center mb-5">
           <h3 className="font-bold text-lg mb-1 text-tg-text">
             {t('completePayment', 'Complete Payment')}
           </h3>
@@ -635,6 +839,30 @@ export function KhqrPaymentPanel({
             {t('completePaymentHint', 'Pay directly with ABA Mobile or save KHQR to scan in any bank app.')}
           </p>
         </div>
+
+        {/* Status Indicator & Manual Check */}
+        <div className="flex flex-col items-center gap-1.5 mb-4">
+          <div className="flex items-center gap-1.5 text-xs text-tg-hint">
+            <span className="w-2 h-2 rounded-full bg-brand-primary animate-ping" />
+            <span>{t('awaitingPaymentConfirmation', 'Awaiting payment confirmation')}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => checkStatusNow(true)}
+            disabled={isCheckingStatus}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary py-1 px-3 rounded-full hover:bg-brand-primary/10 transition-colors disabled:opacity-60"
+          >
+            <ArrowClockwise size={12} className={isCheckingStatus ? 'animate-spin' : ''} />
+            <span>{isCheckingStatus ? t('checkingPaymentStatus', 'Checking...') : t('checkStatus', 'Check status')}</span>
+          </button>
+        </div>
+
+        {networkInterrupted && (
+          <div className="w-full bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs p-2.5 rounded-xl border border-amber-500/20 text-center mb-3">
+            {t('connectionInterrupted', 'Connection interrupted. Tap below to check status.')}
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="w-full flex flex-col gap-3">

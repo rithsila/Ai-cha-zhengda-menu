@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -81,6 +81,17 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [paidCode, setPaidCode] = useState<string | null>(null);
 
+  // Restore pending payment panel if an active session payment exists
+  useEffect(() => {
+    const activeOrderId = sessionStorage.getItem('ai_cha_active_payment');
+    if (activeOrderId && !selectedOrderId && orders.length > 0) {
+      const match = orders.find(o => o.id === activeOrderId);
+      if (match && match.status === 'pending') {
+        setSelectedOrderId(activeOrderId);
+      }
+    }
+  }, [orders, selectedOrderId]);
+
   const panelOpenRef = useRef(false);
   panelOpenRef.current = selectedOrderId !== null;
 
@@ -108,11 +119,29 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
   };
 
   const getStatusBadge = (order: Order) => {
-    if (isExpiredKhqrPayment(order)) {
+    if (isExpiredKhqrPayment(order) || order.cancelReason === 'Payment expired') {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
           <X size={13} weight="bold" />
-          {t('paymentFailed', 'Payment failed')}
+          {t('qrExpired', 'QR expired')}
+        </span>
+      );
+    }
+
+    if (order.status === 'cancelled' && (order.cancelReason === 'Payment declined' || order.cancelReason?.toLowerCase().includes('declined'))) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
+          <X size={13} weight="bold" />
+          {t('paymentDeclined', 'Payment declined')}
+        </span>
+      );
+    }
+
+    if (order.status === 'cancelled' && order.cancelReason === 'Customer cancelled payment') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600">
+          <X size={13} weight="bold" />
+          {t('paymentCancelled', 'Payment cancelled')}
         </span>
       );
     }
@@ -122,7 +151,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/15 text-yellow-700">
             <Clock size={13} weight="bold" />
-            {t('pending', 'Pending')}
+            {order.paymentMethod === 'khqr' ? t('awaitingPaymentConfirmation', 'Pending') : t('pending', 'Pending')}
           </span>
         );
       case 'preparing':
@@ -200,7 +229,7 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
           >
             <CheckCircle size={24} weight="fill" className="text-green-600 flex-shrink-0" />
             <div className="flex-1">
-              <h3 className="font-bold text-tg-text">{t('paymentDone', 'Payment done')}</h3>
+              <h3 className="font-bold text-tg-text">{t('paymentSuccessful', 'Payment successful')}</h3>
               <p className="text-sm text-tg-hint">
                 {t('showThisCode', 'Show this code at the counter:')}
               </p>
@@ -263,16 +292,22 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
                     {shortDate(order.createdAt)}
                   </p>
 
-                  {isCancelled && !paymentFailed && order.cancelReason && (
+                  {isCancelled && !paymentFailed && order.cancelReason && !order.cancelReason.startsWith('Late ABA payment') && (
                     <p className="text-xs font-semibold text-rose-500 mt-1">
-                      Reason: {order.cancelReason}
+                      {order.cancelReason === 'Payment expired'
+                        ? t('qrExpired', 'QR expired')
+                        : order.cancelReason === 'Customer cancelled payment'
+                        ? t('paymentCancelled', 'Payment cancelled')
+                        : order.cancelReason}
                     </p>
                   )}
                   {isCancelled && (
                     <p className="text-xs text-tg-hint mt-0.5">
-                      {paymentFailed
-                        ? t('paymentFailedExpired', 'KHQR payment was not completed before the QR code expired. You were not charged.')
-                        : t('cancelledNotCharged', 'This order was cancelled. You were not charged.')}
+                      {paymentFailed || order.cancelReason === 'Payment expired'
+                        ? t('paymentFailedExpired', 'KHQR payment was not completed before the QR code expired.')
+                        : order.cancelReason === 'Customer cancelled payment'
+                        ? t('paymentCancelledDesc', 'Your payment was cancelled and your order has not been placed.')
+                        : t('orderCancelledDesc', 'This order was cancelled.')}
                     </p>
                   )}
                 </div>
