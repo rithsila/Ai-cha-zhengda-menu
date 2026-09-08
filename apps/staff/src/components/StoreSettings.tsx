@@ -497,8 +497,23 @@ function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState)
   return changes;
 }
 
+export type SettingsCategory = 'all' | 'hours' | 'orders' | 'branding' | 'kitchen';
+
+export const SETTINGS_CATEGORIES: Array<{
+  id: SettingsCategory;
+  label: string;
+  icon: typeof Clock;
+}> = [
+  { id: 'all', label: 'All Settings', icon: Sliders },
+  { id: 'hours', label: 'Store & Hours', icon: Clock },
+  { id: 'orders', label: 'Orders & Payments', icon: ShoppingBag },
+  { id: 'branding', label: 'Shop & Branding', icon: Store },
+  { id: 'kitchen', label: 'Kitchen Alerts', icon: Bell },
+];
+
 export function StoreSettings() {
   const { toast } = useToast();
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>('all');
   const [savedConfig, setSavedConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [config, setConfig] = useState<StoreConfigState>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
@@ -872,6 +887,38 @@ export function StoreSettings() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Category Navigation Bar */}
+      <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 bg-surface/95 backdrop-blur-xs py-2 border-b border-border">
+        {SETTINGS_CATEGORIES.map((cat) => {
+          const Icon = cat.icon;
+          const isActive = activeCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setActiveCategory(cat.id)}
+              className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold transition-all rounded-none ${
+                isActive
+                  ? 'bg-accent text-accent-contrast shadow-xs'
+                  : 'bg-surface border border-border text-ink hover:bg-surface-raised'
+              }`}
+            >
+              <Icon className="size-3.5" />
+              <span>{cat.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* GROUP 1: STORE & OPERATING HOURS */}
+      {(activeCategory === 'all' || activeCategory === 'hours') && (
+        <div className="space-y-6">
+          {activeCategory === 'all' && (
+            <div className="flex items-center gap-2 border-b border-border pb-2 pt-1 text-xs font-extrabold uppercase tracking-wider text-ink-soft">
+              <Clock className="size-3.5 text-accent" />
+              <span>Store &amp; Operating Hours</span>
+            </div>
+          )}
       {/* 1. Operating Hours & Auto-Schedule */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
@@ -993,6 +1040,336 @@ export function StoreSettings() {
         </div>
       </Card>
 
+        </div>
+      )}
+      {/* GROUP 2: ORDERS, DELIVERY & PAYMENT RULES */}
+      {(activeCategory === 'all' || activeCategory === 'orders') && (
+        <div className="space-y-6">
+          {activeCategory === 'all' && (
+            <div className="flex items-center gap-2 border-b border-border pb-2 pt-2 text-xs font-extrabold uppercase tracking-wider text-ink-soft">
+              <ShoppingBag className="size-3.5 text-accent" />
+              <span>Orders, Delivery &amp; Payment Rules</span>
+            </div>
+          )}
+      {/* 2. Order Types & Delivery Fee */}
+      <Card className="p-5 flex flex-col gap-5">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
+            <Sliders className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">Order Types &amp; Delivery Fee</h3>
+            <p className="text-xs text-ink-soft">
+              Turn Pickup or Delivery orders on/off and configure delivery fee per order.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Pickup Toggle */}
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
+                <ShoppingBag className="size-5" />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-ink">Pickup Orders</div>
+                <div className="text-xs text-ink-soft">Customer picks up at counter</div>
+              </div>
+            </div>
+            <Switch
+              checked={config.enablePickup}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enablePickup: next }))}
+              srLabel="Enable or disable pickup orders"
+            />
+          </div>
+
+          {/* Delivery Toggle */}
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
+                <Truck className="size-5" />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-ink">Delivery Orders</div>
+                <div className="text-xs text-ink-soft">Delivery inside Arakawa buildings</div>
+              </div>
+            </div>
+            <Switch
+              checked={config.enableDelivery}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableDelivery: next }))}
+              srLabel="Enable or disable delivery orders"
+            />
+          </div>
+        </div>
+
+        {/* Delivery Fee Input */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
+              <Truck className="size-5" />
+            </div>
+            <div>
+              <label htmlFor="delivery-fee-input" className="font-bold text-sm text-ink block">
+                Delivery Fee ($)
+              </label>
+              <div className="text-xs text-ink-soft">
+                Fee charged per delivery order inside Arakawa buildings (0 = Free delivery)
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="delivery-fee-input"
+              type="number"
+              step="0.25"
+              min="0"
+              value={config.deliveryFee}
+              onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
+              className="h-10 w-28 rounded-none border border-border bg-surface px-3 font-mono text-sm font-bold text-ink text-center focus:border-accent focus:outline-none"
+            />
+            <span className="text-xs font-semibold text-ink-soft">USD</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* 5. Payment Methods Toggles */}
+      <Card className="p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
+            <Coins className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">Payment Methods</h3>
+            <p className="text-xs text-ink-soft">
+              Control accepted payment methods at checkout.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Cash Toggle */}
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-none bg-emerald-500/10 text-emerald-600">
+                <Coins className="size-5" />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-ink">Cash Payment</div>
+                <div className="text-xs text-ink-soft">Pay at counter or upon delivery</div>
+              </div>
+            </div>
+            <Switch
+              checked={config.enableCash}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableCash: next }))}
+              srLabel="Enable or disable cash payment"
+            />
+          </div>
+
+          {/* KHQR Toggle */}
+          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-none bg-rose-500/10 text-rose-600">
+                <QrCode className="size-5" />
+              </div>
+              <div>
+                <div className="font-bold text-sm text-ink">KHQR Payment</div>
+                <div className="text-xs text-ink-soft">Bakong / ABA PayWay QR scan</div>
+              </div>
+            </div>
+            <Switch
+              checked={config.enableKhqr}
+              onChange={(next) => setConfig((prev) => ({ ...prev, enableKhqr: next }))}
+              srLabel="Enable or disable KHQR payment"
+            />
+          </div>
+        </div>
+
+        {/* Cash Restriction for Standard Customers */}
+        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
+              <ShieldCheck className="size-5" />
+            </div>
+            <div>
+              <div className="font-bold text-sm text-ink">Allow Cash Pickup for Standard Customers</div>
+              <div className="text-xs text-ink-soft">
+                When disabled, Standard customers must pay with KHQR upfront before kitchen preparation. Gold VIPs can always pay cash.
+              </div>
+            </div>
+          </div>
+          <Switch
+            checked={config.allowCashForStandard}
+            onChange={(next) => setConfig((prev) => ({ ...prev, allowCashForStandard: next }))}
+            srLabel="Allow cash pickup for standard customers"
+          />
+        </div>
+      </Card>
+
+      {/* 6. Customer VIP & Trust Rules */}
+      <Card className="p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">Customer VIP &amp; Trust Rules</h3>
+            <p className="text-xs text-ink-soft">
+              Configure order rules for customer VIP tiers and privileges.
+            </p>
+          </div>
+        </div>
+
+        <div className="max-w-md flex flex-col gap-2">
+          <label htmlFor="gold-min-orders-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+            <Sparkles className="size-3.5 text-amber-500" />
+            Orders for Gold VIP Promotion
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="gold-min-orders-input"
+              type="number"
+              min={1}
+              max={100}
+              value={config.goldMinOrdersThreshold}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  goldMinOrdersThreshold: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+              className="h-11 w-28 rounded-none border border-border bg-surface px-3 font-mono text-sm font-bold text-ink focus:border-accent focus:outline-none text-center"
+            />
+            <span className="text-xs font-semibold text-ink-soft">paid orders</span>
+          </div>
+          <p className="text-[11px] text-ink-faint">
+            Number of completed/paid orders needed to auto-promote customer to Gold VIP.
+          </p>
+        </div>
+      </Card>
+
+      {/* 7. Lucky Draw & Ticket Rules */}
+      <Card className="p-5 flex flex-col gap-5">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
+            <Gift className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">Lucky Draw &amp; Ticket Rules</h3>
+            <p className="text-xs text-ink-soft">
+              Configure lucky draw feature status and ticket rewards per order.
+            </p>
+          </div>
+        </div>
+
+        {/* Feature Toggle */}
+        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+          <div>
+            <div className="font-bold text-sm text-ink">Lucky Draw Feature Active</div>
+            <div className="text-xs text-ink-soft">
+              Enable giving lucky draw tickets to customers on qualifying orders.
+            </div>
+          </div>
+          <Switch
+            checked={config.luckyDrawEnabled}
+            onChange={(next) => setConfig((prev) => ({ ...prev, luckyDrawEnabled: next }))}
+            srLabel="Enable lucky draw feature"
+          />
+        </div>
+
+        {/* Ticket Rates and Spin Cost Grid */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* Gold VIP Ticket Rate */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="gold-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-amber-500" />
+              Tickets per Gold VIP Order
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="gold-tickets-input"
+                type="number"
+                min={0}
+                max={50}
+                value={config.luckyTicketsPerGoldOrder}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    luckyTicketsPerGoldOrder: Math.max(0, Number(e.target.value) || 0),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">tickets</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Earned by Gold VIP customers per order.</p>
+          </div>
+
+          {/* Standard Ticket Rate */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="std-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Ticket className="size-3.5 text-ink-soft" />
+              Tickets per Standard Order
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="std-tickets-input"
+                type="number"
+                min={0}
+                max={50}
+                value={config.luckyTicketsPerStandardOrder}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    luckyTicketsPerStandardOrder: Math.max(0, Number(e.target.value) || 0),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">tickets</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Earned by Standard customers per order.</p>
+          </div>
+
+          {/* Ticket Cost Per Lucky Spin */}
+          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
+            <label htmlFor="spin-cost-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+              <Dices className="size-3.5 text-accent" />
+              Ticket Cost Per Lucky Spin
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="spin-cost-input"
+                type="number"
+                min={1}
+                max={100}
+                value={config.luckyTicketsCostPerSpin}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    luckyTicketsCostPerSpin: Math.max(1, Number(e.target.value) || 1),
+                  }))
+                }
+                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
+              />
+              <span className="text-xs font-semibold text-ink-soft">tickets</span>
+            </div>
+            <p className="text-[11px] text-ink-faint">Tickets required for 1 spin (Default: 5).</p>
+          </div>
+        </div>
+      </Card>
+
+        </div>
+      )}
+      {/* GROUP 3: SHOP PROFILE & MENU BRANDING */}
+      {(activeCategory === 'all' || activeCategory === 'branding') && (
+        <div className="space-y-6">
+          {activeCategory === 'all' && (
+            <div className="flex items-center gap-2 border-b border-border pb-2 pt-2 text-xs font-extrabold uppercase tracking-wider text-ink-soft">
+              <Store className="size-3.5 text-accent" />
+              <span>Shop Profile &amp; Menu Branding</span>
+            </div>
+          )}
       {/* 2. Customer Menu Banner & Brand Tabs */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center gap-3 border-b border-border pb-3">
@@ -1677,285 +2054,17 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 4. Order Types Toggles */}
-      <Card className="p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
-            <Sliders className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Order Types</h3>
-            <p className="text-xs text-ink-soft">
-              Turn Pickup or Delivery orders on/off. When turned off, the option is disabled in the customer menu.
-            </p>
-          </div>
         </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Pickup Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
-                <ShoppingBag className="size-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm text-ink">Pickup Orders</div>
-                <div className="text-xs text-ink-soft">Customer picks up at counter</div>
-              </div>
+      )}
+      {/* GROUP 4: KITCHEN & STAFF ALERTS */}
+      {(activeCategory === 'all' || activeCategory === 'kitchen') && (
+        <div className="space-y-6">
+          {activeCategory === 'all' && (
+            <div className="flex items-center gap-2 border-b border-border pb-2 pt-2 text-xs font-extrabold uppercase tracking-wider text-ink-soft">
+              <Bell className="size-3.5 text-accent" />
+              <span>Kitchen &amp; Staff Alerts</span>
             </div>
-            <Switch
-              checked={config.enablePickup}
-              onChange={(next) => setConfig((prev) => ({ ...prev, enablePickup: next }))}
-              srLabel="Enable or disable pickup orders"
-            />
-          </div>
-
-          {/* Delivery Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
-                <Truck className="size-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm text-ink">Delivery Orders</div>
-                <div className="text-xs text-ink-soft">Delivery inside Arakawa buildings</div>
-              </div>
-            </div>
-            <Switch
-              checked={config.enableDelivery}
-              onChange={(next) => setConfig((prev) => ({ ...prev, enableDelivery: next }))}
-              srLabel="Enable or disable delivery orders"
-            />
-          </div>
-        </div>
-      </Card>
-
-      {/* 5. Payment Methods Toggles */}
-      <Card className="p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
-            <Coins className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Payment Methods</h3>
-            <p className="text-xs text-ink-soft">
-              Control accepted payment methods at checkout.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Cash Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-none bg-emerald-500/10 text-emerald-600">
-                <Coins className="size-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm text-ink">Cash Payment</div>
-                <div className="text-xs text-ink-soft">Pay at counter or upon delivery</div>
-              </div>
-            </div>
-            <Switch
-              checked={config.enableCash}
-              onChange={(next) => setConfig((prev) => ({ ...prev, enableCash: next }))}
-              srLabel="Enable or disable cash payment"
-            />
-          </div>
-
-          {/* KHQR Toggle */}
-          <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-none bg-rose-500/10 text-rose-600">
-                <QrCode className="size-5" />
-              </div>
-              <div>
-                <div className="font-bold text-sm text-ink">KHQR Payment</div>
-                <div className="text-xs text-ink-soft">Bakong / ABA PayWay QR scan</div>
-              </div>
-            </div>
-            <Switch
-              checked={config.enableKhqr}
-              onChange={(next) => setConfig((prev) => ({ ...prev, enableKhqr: next }))}
-              srLabel="Enable or disable KHQR payment"
-            />
-          </div>
-        </div>
-
-        {/* Cash Restriction for Standard Customers */}
-        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
-              <ShieldCheck className="size-5" />
-            </div>
-            <div>
-              <div className="font-bold text-sm text-ink">Allow Cash Pickup for Standard Customers</div>
-              <div className="text-xs text-ink-soft">
-                When disabled, Standard customers must pay with KHQR upfront before kitchen preparation. Gold VIPs can always pay cash.
-              </div>
-            </div>
-          </div>
-          <Switch
-            checked={config.allowCashForStandard}
-            onChange={(next) => setConfig((prev) => ({ ...prev, allowCashForStandard: next }))}
-            srLabel="Allow cash pickup for standard customers"
-          />
-        </div>
-      </Card>
-
-      {/* 6. Customer VIP & Trust Rules */}
-      <Card className="p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
-            <Sparkles className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Customer VIP &amp; Trust Rules</h3>
-            <p className="text-xs text-ink-soft">
-              Configure order rules for customer VIP tiers and privileges.
-            </p>
-          </div>
-        </div>
-
-        <div className="max-w-md flex flex-col gap-2">
-          <label htmlFor="gold-min-orders-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
-            <Sparkles className="size-3.5 text-amber-500" />
-            Orders for Gold VIP Promotion
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              id="gold-min-orders-input"
-              type="number"
-              min={1}
-              max={100}
-              value={config.goldMinOrdersThreshold}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  goldMinOrdersThreshold: Math.max(1, Number(e.target.value) || 1),
-                }))
-              }
-              className="h-11 w-28 rounded-none border border-border bg-surface px-3 font-mono text-sm font-bold text-ink focus:border-accent focus:outline-none text-center"
-            />
-            <span className="text-xs font-semibold text-ink-soft">paid orders</span>
-          </div>
-          <p className="text-[11px] text-ink-faint">
-            Number of completed/paid orders needed to auto-promote customer to Gold VIP.
-          </p>
-        </div>
-      </Card>
-
-      {/* 7. Lucky Draw & Ticket Rules */}
-      <Card className="p-5 flex flex-col gap-5">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
-            <Gift className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Lucky Draw &amp; Ticket Rules</h3>
-            <p className="text-xs text-ink-soft">
-              Configure lucky draw feature status and ticket rewards per order.
-            </p>
-          </div>
-        </div>
-
-        {/* Feature Toggle */}
-        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
-          <div>
-            <div className="font-bold text-sm text-ink">Lucky Draw Feature Active</div>
-            <div className="text-xs text-ink-soft">
-              Enable giving lucky draw tickets to customers on qualifying orders.
-            </div>
-          </div>
-          <Switch
-            checked={config.luckyDrawEnabled}
-            onChange={(next) => setConfig((prev) => ({ ...prev, luckyDrawEnabled: next }))}
-            srLabel="Enable lucky draw feature"
-          />
-        </div>
-
-        {/* Ticket Rates and Spin Cost Grid */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          {/* Gold VIP Ticket Rate */}
-          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
-            <label htmlFor="gold-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
-              <Sparkles className="size-3.5 text-amber-500" />
-              Tickets per Gold VIP Order
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="gold-tickets-input"
-                type="number"
-                min={0}
-                max={50}
-                value={config.luckyTicketsPerGoldOrder}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    luckyTicketsPerGoldOrder: Math.max(0, Number(e.target.value) || 0),
-                  }))
-                }
-                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
-              />
-              <span className="text-xs font-semibold text-ink-soft">tickets</span>
-            </div>
-            <p className="text-[11px] text-ink-faint">Earned by Gold VIP customers per order.</p>
-          </div>
-
-          {/* Standard Ticket Rate */}
-          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
-            <label htmlFor="std-tickets-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
-              <Ticket className="size-3.5 text-ink-soft" />
-              Tickets per Standard Order
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="std-tickets-input"
-                type="number"
-                min={0}
-                max={50}
-                value={config.luckyTicketsPerStandardOrder}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    luckyTicketsPerStandardOrder: Math.max(0, Number(e.target.value) || 0),
-                  }))
-                }
-                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
-              />
-              <span className="text-xs font-semibold text-ink-soft">tickets</span>
-            </div>
-            <p className="text-[11px] text-ink-faint">Earned by Standard customers per order.</p>
-          </div>
-
-          {/* Ticket Cost Per Lucky Spin */}
-          <div className="flex flex-col gap-2 rounded-none border border-border bg-surface-raised p-4">
-            <label htmlFor="spin-cost-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
-              <Dices className="size-3.5 text-accent" />
-              Ticket Cost Per Lucky Spin
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="spin-cost-input"
-                type="number"
-                min={1}
-                max={100}
-                value={config.luckyTicketsCostPerSpin}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    luckyTicketsCostPerSpin: Math.max(1, Number(e.target.value) || 1),
-                  }))
-                }
-                className="h-10 w-24 rounded-none border border-border bg-surface px-2.5 text-center font-mono text-xs font-bold text-ink focus:border-accent focus:outline-none"
-              />
-              <span className="text-xs font-semibold text-ink-soft">tickets</span>
-            </div>
-            <p className="text-[11px] text-ink-faint">Tickets required for 1 spin (Default: 5).</p>
-          </div>
-        </div>
-      </Card>
-
+          )}
       {/* 8. Kitchen Alert Sounds & Timers */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center justify-between border-b border-border pb-3">
@@ -2176,34 +2285,8 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 9. Delivery Fee */}
-      <Card className="p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3 border-b border-border pb-3">
-          <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
-            <Truck className="size-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-ink">Delivery Fee</h3>
-            <p className="text-xs text-ink-soft">
-              Delivery fee charged per order inside Arakawa buildings.
-            </p>
-          </div>
         </div>
-
-        <div className="max-w-xs flex flex-col gap-2">
-          <label className="text-xs font-bold text-ink">Delivery Fee ($)</label>
-          <input
-            type="number"
-            step="0.25"
-            min="0"
-            value={config.deliveryFee}
-            onChange={(e) => setConfig((prev) => ({ ...prev, deliveryFee: Number(e.target.value) }))}
-            className="h-11 rounded-none border border-border bg-surface px-3 font-mono text-sm font-semibold text-ink focus:border-accent focus:outline-none"
-          />
-          <span className="text-[11px] text-ink-faint">0 = Free delivery for customers</span>
-        </div>
-      </Card>
-
+      )}
       {/* Sticky Bottom Action Bar for Unsaved Changes */}
       {isDirty && (
         <div className="sticky bottom-4 z-40 flex flex-wrap items-center justify-between gap-3 rounded-none border-2 border-accent bg-surface p-4 shadow-2xl animate-fade-in">
