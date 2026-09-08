@@ -131,10 +131,6 @@ export function createApp() {
 
   app.set('trust proxy', 1);
 
-  app.use(helmet());
-
-  app.use(express.json());
-
   // Only the shop's own front-ends may call the API from a browser. Requests
   // with no Origin (curl and the bot) are not browser requests and are left
   // alone; the routes' own auth still applies to them.
@@ -142,6 +138,12 @@ export function createApp() {
     origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     credentials: true,
   }));
+
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
+
+  app.use(express.json());
 
   app.get('/api/auth/telegram/callback', async (req, res) => {
     try {
@@ -575,7 +577,19 @@ export function createApp() {
     }
   });
 
-  // Static folder for menu images & uploaded images
+  // Static folder for menu public assets (banner, etc.), menu images & uploaded images
+  const menuPublicDirs = [
+    path.resolve(process.cwd(), '../menu/public'),
+    path.resolve(__dirname, '../../menu/public'),
+    path.resolve(process.cwd(), 'public'),
+  ];
+  for (const pubDir of menuPublicDirs) {
+    if (fs.existsSync(pubDir)) {
+      app.use(express.static(pubDir));
+      break;
+    }
+  }
+
   const menuImagesDirs = [
     path.resolve(process.cwd(), '../menu/public/images'),
     path.resolve(__dirname, '../../menu/public/images'),
