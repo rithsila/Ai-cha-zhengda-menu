@@ -20,6 +20,8 @@ import {
   AlertTriangle,
   Check,
   Save,
+  ShieldCheck,
+  Sparkles,
   X,
   ChevronLeft,
   ChevronRight,
@@ -52,6 +54,8 @@ export interface StoreConfigState {
   enableDelivery: boolean;
   enableCash: boolean;
   enableKhqr: boolean;
+  allowCashForStandard: boolean;
+  goldMinOrdersThreshold: number;
   deliveryFee: number;
   isOpen: boolean;
   currentTime: string;
@@ -97,6 +101,8 @@ const DEFAULT_CONFIG: StoreConfigState = {
   enableDelivery: true,
   enableCash: true,
   enableKhqr: true,
+  allowCashForStandard: false,
+  goldMinOrdersThreshold: 3,
   deliveryFee: 0,
   isOpen: true,
   currentTime: '',
@@ -244,6 +250,26 @@ function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState)
       oldDisplay: `$${saved.deliveryFee}`,
       newDisplay: `$${draft.deliveryFee}`,
       rawNewValue: String(draft.deliveryFee),
+    });
+  }
+
+  if (draft.allowCashForStandard !== saved.allowCashForStandard) {
+    changes.push({
+      key: 'allowCashForStandard',
+      label: 'Cash for Standard Customers',
+      oldDisplay: saved.allowCashForStandard ? 'Allowed' : 'KHQR Required',
+      newDisplay: draft.allowCashForStandard ? 'Allowed' : 'KHQR Required',
+      rawNewValue: draft.allowCashForStandard ? '1' : '0',
+    });
+  }
+
+  if (draft.goldMinOrdersThreshold !== saved.goldMinOrdersThreshold) {
+    changes.push({
+      key: 'goldMinOrdersThreshold',
+      label: 'Orders for Gold VIP Promotion',
+      oldDisplay: `${saved.goldMinOrdersThreshold} orders`,
+      newDisplay: `${draft.goldMinOrdersThreshold} orders`,
+      rawNewValue: String(draft.goldMinOrdersThreshold),
     });
   }
 
@@ -490,6 +516,8 @@ export function StoreSettings() {
         enableDelivery: statusRes.enableDelivery ?? (configMap.get('enableDelivery') !== '0'),
         enableCash: statusRes.enableCash ?? (configMap.get('enableCash') !== '0'),
         enableKhqr: statusRes.enableKhqr ?? (configMap.get('enableKhqr') !== '0'),
+        allowCashForStandard: configMap.get('allowCashForStandard') === '1',
+        goldMinOrdersThreshold: Number(configMap.get('goldMinOrdersThreshold') ?? 3),
         deliveryFee: Number(configMap.get('deliveryFee') ?? 0),
         isOpen: !!statusRes.isOpen,
         currentTime: statusRes.currentTime || '',
@@ -1638,7 +1666,7 @@ export function StoreSettings() {
         </div>
       </Card>
 
-      {/* 4. Payment Methods Toggles */}
+      {/* 5. Payment Methods Toggles */}
       <Card className="p-5 flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-border pb-3">
           <div className="flex size-9 items-center justify-center rounded-none bg-accent/10 text-accent">
@@ -1689,9 +1717,71 @@ export function StoreSettings() {
             />
           </div>
         </div>
+
+        {/* Cash Restriction for Standard Customers */}
+        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-none bg-accent/10 text-accent">
+              <ShieldCheck className="size-5" />
+            </div>
+            <div>
+              <div className="font-bold text-sm text-ink">Allow Cash Pickup for Standard Customers</div>
+              <div className="text-xs text-ink-soft">
+                When disabled, Standard customers must pay with KHQR upfront before kitchen preparation. Gold VIPs can always pay cash.
+              </div>
+            </div>
+          </div>
+          <Switch
+            checked={config.allowCashForStandard}
+            onChange={(next) => setConfig((prev) => ({ ...prev, allowCashForStandard: next }))}
+            srLabel="Allow cash pickup for standard customers"
+          />
+        </div>
       </Card>
 
-      {/* 5. Kitchen Alert Sounds & Timers */}
+      {/* 6. Customer VIP & Trust Rules */}
+      <Card className="p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-3 border-b border-border pb-3">
+          <div className="flex size-9 items-center justify-center rounded-none bg-amber-500/10 text-amber-500">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-ink">Customer VIP &amp; Trust Rules</h3>
+            <p className="text-xs text-ink-soft">
+              Configure order rules for customer VIP tiers and privileges.
+            </p>
+          </div>
+        </div>
+
+        <div className="max-w-md flex flex-col gap-2">
+          <label htmlFor="gold-min-orders-input" className="text-xs font-bold text-ink flex items-center gap-1.5">
+            <Sparkles className="size-3.5 text-amber-500" />
+            Orders for Gold VIP Promotion
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              id="gold-min-orders-input"
+              type="number"
+              min={1}
+              max={100}
+              value={config.goldMinOrdersThreshold}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  goldMinOrdersThreshold: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+              className="h-11 w-28 rounded-none border border-border bg-surface px-3 font-mono text-sm font-bold text-ink focus:border-accent focus:outline-none text-center"
+            />
+            <span className="text-xs font-semibold text-ink-soft">paid orders</span>
+          </div>
+          <p className="text-[11px] text-ink-faint">
+            Number of completed/paid orders needed to auto-promote customer to Gold VIP.
+          </p>
+        </div>
+      </Card>
+
+      {/* 7. Kitchen Alert Sounds & Timers */}
       <Card className="p-5 flex flex-col gap-5">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-3">
@@ -1744,6 +1834,19 @@ export function StoreSettings() {
               <span>Test Overdue Alarm</span>
             </Button>
           </div>
+        </div>
+
+        {/* Sound Toggle */}
+        <div className="flex items-center justify-between gap-3 rounded-none border border-border bg-surface-raised p-4">
+          <div>
+            <div className="font-bold text-sm text-ink">Kitchen Tablet Alert Chimes</div>
+            <div className="text-xs text-ink-soft">Play audible sound whenever pending or overdue orders require action</div>
+          </div>
+          <Switch
+            checked={config.orderAlertSoundEnabled}
+            onChange={(next) => setConfig((prev) => ({ ...prev, orderAlertSoundEnabled: next }))}
+            srLabel="Enable kitchen tablet alert chimes"
+          />
         </div>
 
         {/* Lane Thresholds Configuration */}

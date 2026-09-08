@@ -6,7 +6,6 @@ import {
   Plus,
   RotateCcw,
   Search,
-  ShieldCheck,
   Sparkles,
   Ticket,
   Trash2,
@@ -54,8 +53,6 @@ export function LuckyDrawManagement() {
   const [summary, setSummary] = useState<CustomersResponse['summary'] | null>(null);
 
   // Configuration states
-  const [goldMinOrdersThreshold, setGoldMinOrdersThreshold] = useState<number>(3);
-  const [allowCashForStandard, setAllowCashForStandard] = useState<boolean>(false);
   const [luckyDrawEnabled, setLuckyDrawEnabled] = useState<boolean>(true);
   const [luckyTicketsPerGoldOrder, setLuckyTicketsPerGoldOrder] = useState<number>(2);
   const [luckyTicketsPerStandardOrder, setLuckyTicketsPerStandardOrder] = useState<number>(1);
@@ -141,13 +138,6 @@ export function LuckyDrawManagement() {
         }
 
         const configMap = new Map(configs.map((c) => [c.key, c.value]));
-
-        if (configMap.has('goldMinOrdersThreshold')) {
-          setGoldMinOrdersThreshold(Number(configMap.get('goldMinOrdersThreshold')) || 3);
-        }
-        if (configMap.has('allowCashForStandard')) {
-          setAllowCashForStandard(configMap.get('allowCashForStandard') === '1');
-        }
         if (configMap.has('luckyDrawEnabled')) {
           setLuckyDrawEnabled(configMap.get('luckyDrawEnabled') === '1');
         }
@@ -425,64 +415,9 @@ export function LuckyDrawManagement() {
 
       {/* Rules & Configurations Grid */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left Column: Rules & Customer Type Settings */}
+        {/* Left Column: Rules & Lucky Draw Settings */}
         <div className="space-y-6 lg:col-span-6">
-          {/* Section 1: Customer Type & Payment Rules */}
-          <Card padding="lg" className="border-border bg-surface shadow-xs space-y-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-ink border-b border-border pb-3">
-              <ShieldCheck className="size-4 text-accent" />
-              <span>Customer Type &amp; Payment Rules</span>
-            </div>
-
-            <div className="space-y-3 rounded-none border border-border bg-surface-soft/40 p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <label htmlFor="gold-threshold-input" className="text-xs font-bold text-ink block">
-                    Orders for Gold VIP Promotion
-                  </label>
-                  <p className="text-[11px] text-ink-soft">
-                    Number of completed/paid orders needed to auto-promote customer to Gold.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <input
-                    id="gold-threshold-input"
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={goldMinOrdersThreshold}
-                    onChange={(e) => setGoldMinOrdersThreshold(Number(e.target.value) || 0)}
-                    onBlur={(e) => {
-                      const val = Math.max(0, Number(e.target.value) || 0);
-                      setGoldMinOrdersThreshold(val);
-                      updateSetting('goldMinOrdersThreshold', val, 'Gold promotion threshold');
-                    }}
-                    className="h-9 w-20 rounded-none border border-border bg-surface px-2.5 text-center text-xs font-bold text-ink outline-none focus:border-accent"
-                  />
-                  <span className="text-xs font-semibold text-ink-soft">orders</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-none border border-border bg-surface-soft/40 p-4">
-              <div className="pr-4">
-                <p className="text-xs font-bold text-ink">Allow Cash Pickup for Standard Customers</p>
-                <p className="text-[11px] text-ink-soft">
-                  Enable Standard customers to order with Cash on Delivery without requiring upfront KHQR.
-                </p>
-              </div>
-              <Switch
-                checked={allowCashForStandard}
-                onChange={(checked) => {
-                  setAllowCashForStandard(checked);
-                  updateSetting('allowCashForStandard', checked, 'Cash for Standard');
-                }}
-                srLabel="Allow cash for standard customers"
-              />
-            </div>
-          </Card>
-
-          {/* Section 2: Lucky Draw & Ticket Rules */}
+          {/* Section 1: Lucky Draw & Ticket Rules */}
           <Card padding="lg" className="border-border bg-surface shadow-xs space-y-4">
             <div className="flex items-center gap-2 text-sm font-bold text-ink border-b border-border pb-3">
               <Gift className="size-4 text-amber-500" />
@@ -600,7 +535,7 @@ export function LuckyDrawManagement() {
             </div>
           </Card>
 
-          {/* Section 3: Manager Raffle Draw */}
+          {/* Section 2: Manager Raffle Draw */}
           <Card padding="lg" className="border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-surface to-surface shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2 text-sm font-bold text-ink">
