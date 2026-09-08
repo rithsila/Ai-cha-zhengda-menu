@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import { apiFetch } from '../utils/api';
+import type { LocalizedText } from '../types';
 
 /**
  * Shared catalog + categories hook.  Replaces the manual fetch + 60s poll +
@@ -21,12 +22,20 @@ export interface RawCatalogItem {
   canClaim?: boolean;
   earnsStamp?: boolean;
   modifiers?: any[];
+  localized?: {
+    name?: LocalizedText;
+    description?: LocalizedText;
+  };
 }
 
 export interface CategoryRow {
+  id?: string;
   brand: string;
   name: string;
   sortOrder: number;
+  localized?: {
+    name?: LocalizedText;
+  };
 }
 
 async function fetchCatalogAndCategories(): Promise<{
@@ -49,9 +58,11 @@ async function fetchCatalogAndCategories(): Promise<{
     const catData = await catRes.json();
     if (Array.isArray(catData)) {
       categories = catData.map((c: any) => ({
+        id: c.id,
         brand: c.brand,
         name: c.name,
         sortOrder: typeof c.sortOrder === 'number' ? c.sortOrder : 999,
+        localized: c.localized,
       }));
     }
   }
@@ -66,8 +77,8 @@ export function useCatalog() {
     {
       // Poll every 60s in background — replaces the old setInterval.
       refreshInterval: 60_000,
-      // Don't re-fetch on every window focus — was causing repeated calls.
-      revalidateOnFocus: false,
+      // Enable revalidation on window focus as per plan.
+      revalidateOnFocus: true,
       revalidateIfStale: false,
       dedupingInterval: 10_000,
     },

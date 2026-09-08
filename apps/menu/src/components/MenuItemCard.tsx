@@ -5,6 +5,7 @@ import { Button } from './ui/Button';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '../utils/format';
 import { useLongPress } from '../hooks/useLongPress';
+import { resolveWithLegacyFallback } from '../utils/localizedText';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -15,9 +16,11 @@ interface MenuItemCardProps {
 }
 
 export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPreview }: MenuItemCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isAiCha = item.brand === 'ai-cha';
   const brandBg = isAiCha ? 'bg-brand-primary/10' : 'bg-brand-zhengda/10';
+  const itemName = resolveWithLegacyFallback(item.localized?.name, i18n.language, item.name, t);
+  const itemDesc = resolveWithLegacyFallback(item.localized?.description, i18n.language, item.description || '', t);
 
   const longPressProps = useLongPress({
     onLongPress: () => onPreview?.(item),
@@ -37,7 +40,7 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPrev
          {item.imageFallback ? (
            <img 
              src={item.imageFallback} 
-             alt={t(item.name)} 
+             alt={itemName} 
              loading="lazy"
              decoding="async"
              className="w-full h-full object-contain p-2 pointer-events-none" 
@@ -78,10 +81,10 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPrev
       </div>
       <div className="p-3 flex flex-col flex-1 justify-between">
         <div>
-          <h3 className="font-bold text-sm leading-tight mb-1">{t(item.name)}</h3>
-        {item.description && (
+          <h3 className="font-bold text-sm leading-tight mb-1">{itemName}</h3>
+        {Boolean(itemDesc) && (
           <p className="text-xs text-tg-hint line-clamp-2 mb-3">
-            {t(item.description)}
+            {itemDesc}
           </p>
         )}
         </div>

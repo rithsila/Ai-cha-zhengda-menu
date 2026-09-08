@@ -369,6 +369,83 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
       expect(uploadCall).toBeDefined();
     });
   });
+
+  it('supports Chinese-first entry and includes localization payload in POST', async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /category/i })).toBeDefined();
+    });
+
+    await user.click(screen.getByRole('combobox', { name: /category/i }));
+    await user.click(screen.getByRole('option', { name: 'Milk Tea' }));
+
+    const zhInput = screen.getByRole('textbox', { name: 'Chinese item name' }) as HTMLInputElement;
+    fireEvent.change(zhInput, { target: { value: '珍珠奶茶' } });
+
+    const submitBtn = screen.getByRole('button', { name: /Create Menu Item/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      const fetchMock = globalThis.fetch as any;
+      const createCall = fetchMock.mock.calls.find((call: any[]) =>
+        String(call[0]).endsWith('/api/catalog') && call[1]?.method === 'POST'
+      );
+      expect(createCall).toBeDefined();
+      const body = JSON.parse(createCall[1].body);
+      expect(body.name).toBe('珍珠奶茶');
+      expect(body.localization?.name?.sourceLocale).toBe('zh');
+      expect(body.localization?.name?.cells).toEqual(
+        expect.arrayContaining([expect.objectContaining({ locale: 'zh', text: '珍珠奶茶' })])
+      );
+    });
+  });
+
+  it('populates existing localized name and description when editing item', async () => {
+    const itemWithLocalization: MenuItemFull = {
+      id: 'item-loc',
+      brand: 'ai-cha',
+      name: 'Bubble Tea',
+      category: 'Milk Tea',
+      basePrice: 2.5,
+      localized: {
+        name: {
+          sourceLocale: 'en',
+          revision: 2,
+          cells: [
+            { locale: 'en', text: 'Bubble Tea', status: 'reviewed' },
+            { locale: 'km', text: 'តែគុជ', status: 'reviewed' },
+            { locale: 'zh', text: '波霸奶茶', status: 'draft' },
+          ],
+        },
+        description: {
+          sourceLocale: 'en',
+          revision: 1,
+          cells: [
+            { locale: 'en', text: 'Sweet and refreshing', status: 'reviewed' },
+          ],
+        },
+      },
+    };
+
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={itemWithLocalization} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect((screen.getByRole('textbox', { name: 'English item name' }) as HTMLInputElement).value).toBe('Bubble Tea');
+      expect((screen.getByRole('textbox', { name: 'Khmer item name' }) as HTMLInputElement).value).toBe('តែគុជ');
+      expect((screen.getByRole('textbox', { name: 'Chinese item name' }) as HTMLInputElement).value).toBe('波霸奶茶');
+    });
+  });
 });
+
 
 

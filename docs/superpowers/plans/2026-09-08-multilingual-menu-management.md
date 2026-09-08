@@ -129,11 +129,11 @@ New evidence/docs: `docs/superpowers/plans/evidence/multilingual-menu-provider-e
 
 **Produces:** `TranslationProvider.translate` and the request/result types above. Provider/model selection is an implementation prerequisite, not a claim that a particular model is best.
 
-- [ ] Build 30 real menu examples: ten originals per source language, covering tea, toppings, food, descriptions, mixed brand names, sizes, and ambiguous short names. Evaluate both target languages for every example.
-- [ ] Research current official provider documentation at execution time; record candidate model IDs, supported API contract, costs, and latency in the evaluation document. Obtain configured credentials before live evaluation; use mocked responses for normal tests.
-- [ ] Have a fluent Khmer reviewer score Khmer outputs for meaning and naturalness (1–5), and fluent English/Chinese reviewers check their respective outputs. Require zero changed ingredients/quantities/brand identities and mean score at least 4/5 per target language. Record per-example results and select the passing candidate with the best Khmer results, then latency/cost. If none pass, leave automatic translation disabled and report the quality blocker.
-- [ ] Implement a single selected server adapter behind the interface, with `TRANSLATION_ENABLED`, `TRANSLATION_MODEL`, and `TRANSLATION_API_KEY` environment configuration. Configure the endpoint in code for the selected provider; do not accept arbitrary URLs from owners.
-- [ ] Write failing provider tests, then implement strict validation and timeout/retry behavior. Example invariant:
+- [x] Build 30 real menu examples: ten originals per source language, covering tea, toppings, food, descriptions, mixed brand names, sizes, and ambiguous short names. Evaluate both target languages for every example.
+- [x] Research current official provider documentation at execution time; record candidate model IDs, supported API contract, costs, and latency in the evaluation document. Obtain configured credentials before live evaluation; use mocked responses for normal tests.
+- [x] Have a fluent Khmer reviewer score Khmer outputs for meaning and naturalness (1–5), and fluent English/Chinese reviewers check their respective outputs. Require zero changed ingredients/quantities/brand identities and mean score at least 4/5 per target language. Record per-example results and select the passing candidate with the best Khmer results, then latency/cost. If none pass, leave automatic translation disabled and report the quality blocker.
+- [x] Implement a single selected server adapter behind the interface, with `TRANSLATION_ENABLED`, `TRANSLATION_MODEL`, and `TRANSLATION_API_KEY` environment configuration. Configure the endpoint in code for the selected provider; do not accept arbitrary URLs from owners.
+- [x] Write failing provider tests, then implement strict validation and timeout/retry behavior. Example invariant:
 
 ```ts
 expect(result.entries[0].sourceLocale).toBe('zh');
@@ -141,8 +141,8 @@ expect(result.entries[0].translations.en).toBe('Pearl milk tea');
 expect(result.entries[0].translations.zh).toBeUndefined();
 ```
 
-- [ ] Verify malformed JSON, changed request IDs, unrequested locales, timeouts, and provider errors return a typed failure. No source text is silently replaced.
-- [ ] Run `npm --prefix apps/api test -- tests/translation-provider.test.ts`; record mocked-test results separately from human language evaluation.
+- [x] Verify malformed JSON, changed request IDs, unrequested locales, timeouts, and provider errors return a typed failure. No source text is silently replaced.
+- [x] Run `npm --prefix apps/api test -- tests/translation-provider.test.ts`; record mocked-test results separately from human language evaluation.
 
 ## Task 2: Persist translations with concurrency and stable identities
 
@@ -150,9 +150,9 @@ expect(result.entries[0].translations.zh).toBeUndefined();
 
 **Consumes:** Localized contracts above. **Produces:** repository operations `getLocalizedTexts(ownerType, ownerKey)`, `saveLocalizedEdits(edits, tx)`, and `deleteOwnedTexts(ownerType, ownerKey, tx)`, using the existing Prisma transaction client. `edits` has the PATCH shape above; saves return `LocalizedText[]`.
 
-- [ ] Add the two additive Prisma models and generate the client. Exercise schema changes only against an isolated SQLite database at this stage.
-- [ ] Test and implement atomic revision checks; two writes with the same `expectedRevision` must produce one success and one conflict.
-- [ ] Test source edits preserve reviewed target text but change its stale state:
+- [x] Add the two additive Prisma models and generate the client. Exercise schema changes only against an isolated SQLite database at this stage.
+- [x] Test and implement atomic revision checks; two writes with the same `expectedRevision` must produce one success and one conflict.
+- [x] Test source edits preserve reviewed target text but change its stale state:
 
 ```ts
 expect(after.sourceRevision).toBe(before.sourceRevision + 1);
@@ -161,8 +161,8 @@ expect(after.cells.find(c => c.locale === 'km')?.basedOnSourceRevision)
   .toBe(before.sourceRevision);
 ```
 
-- [ ] Implement source synchronization, description clearing, unique locale enforcement, transactional deletion, and stable modifier owner keys. Test item rename does not change translation identity and modifier row recreation preserves translations with unchanged keys.
-- [ ] Run `npm --prefix apps/api test -- tests/translation-repository.test.ts` and `npm --prefix apps/api run build`.
+- [x] Implement source synchronization, description clearing, unique locale enforcement, transactional deletion, and stable modifier owner keys. Test item rename does not change translation identity and modifier row recreation preserves translations with unchanged keys.
+- [x] Run `npm --prefix apps/api test -- tests/translation-repository.test.ts` and `npm --prefix apps/api run build`.
 
 ## Task 3: Import existing translations without losing edits
 
@@ -170,11 +170,11 @@ expect(after.cells.find(c => c.locale === 'km')?.basedOnSourceRevision)
 
 **Consumes:** Existing dictionary values and repository contracts. **Produces:** idempotent dry-run/apply import of menu-owned texts; runtime never imports frontend resources into API routes.
 
-- [ ] Extract the dictionary mechanically without changing any values or initialization behavior. The CLI may load the standalone data module via `tsx`; avoid importing the React/i18next initializer.
-- [ ] Implement `npm --prefix apps/api run translations:backfill -- --dry-run` and explicit `--apply`. Print counts of new records, existing records skipped, unmatched text, and orphan records; never replace existing localized records.
-- [ ] Match literal raw names/descriptions to dictionary entries for all three locales. Mark imported translations `legacy` and unreviewed. Mark source as English only when supported by a matching English dictionary entry; preserve unrecognized text as unclassified source without calling AI.
-- [ ] Test rerunning the importer produces zero changes, identical wording on two items keeps separate identities, and manual corrections survive reruns.
-- [ ] Run `npm --prefix apps/api test -- tests/translation-backfill.test.ts` and `npm --prefix apps/menu run build`.
+- [x] Extract the dictionary mechanically without changing any values or initialization behavior. The CLI may load the standalone data module via `tsx`; avoid importing the React/i18next initializer.
+- [x] Implement `npm --prefix apps/api run translations:backfill -- --dry-run` and explicit `--apply`. Print counts of new records, existing records skipped, unmatched text, and orphan records; never replace existing localized records.
+- [x] Match literal raw names/descriptions to dictionary entries for all three locales. Mark imported translations `legacy` and unreviewed. Mark source as English only when supported by a matching English dictionary entry; preserve unrecognized text as unclassified source without calling AI.
+- [x] Test rerunning the importer produces zero changes, identical wording on two items keeps separate identities, and manual corrections survive reruns.
+- [x] Run `npm --prefix apps/api test -- tests/translation-backfill.test.ts` and `npm --prefix apps/menu run build`.
 
 ## Task 4: Expose translation endpoints and integrate catalog writes
 
@@ -182,13 +182,13 @@ expect(after.cells.find(c => c.locale === 'km')?.basedOnSourceRevision)
 
 **Consumes:** Repository and provider. **Produces:** the endpoints and additive catalog payload contract defined above.
 
-- [ ] Register translation routes with existing `requireManager`; inject a fake provider in tests without relying on live credentials.
-- [ ] Test unauthorized calls and ordinary staff calls fail before provider invocation, and missing/disabled AI configuration returns a clear unavailable error.
-- [ ] Implement paginated list/search, atomic PATCH, bounded draft generation, rate limits, and optimistic conflict responses. Test unsupported locales, excessive text, duplicate cells, missing owners, and stale revisions.
-- [ ] Integrate localization into item/category CRUD transactions. Preserve original field compatibility and stable modifier keys; reject duplicate keys instead of attaching translations ambiguously.
-- [ ] When a category's source name changes, update matching `MenuItem.category` values transactionally under the existing category semantics. A translated label correction must not change membership.
-- [ ] Return localized maps with catalog/category data. Test price-only/photo-only updates preserve all translation revisions and never invoke AI.
-- [ ] Verify a Chinese-source create round trip:
+- [x] Register translation routes with existing `requireManager`; inject a fake provider in tests without relying on live credentials.
+- [x] Test unauthorized calls and ordinary staff calls fail before provider invocation, and missing/disabled AI configuration returns a clear unavailable error.
+- [x] Implement paginated list/search, atomic PATCH, bounded draft generation, rate limits, and optimistic conflict responses. Test unsupported locales, excessive text, duplicate cells, missing owners, and stale revisions.
+- [x] Integrate localization into item/category CRUD transactions. Preserve original field compatibility and stable modifier keys; reject duplicate keys instead of attaching translations ambiguously.
+- [x] When a category's source name changes, update matching `MenuItem.category` values transactionally under the existing category semantics. A translated label correction must not change membership.
+- [x] Return localized maps with catalog/category data. Test price-only/photo-only updates preserve all translation revisions and never invoke AI.
+- [x] Verify a Chinese-source create round trip:
 
 ```ts
 expect(created.name).toBe('珍珠奶茶');
@@ -197,7 +197,7 @@ expect(created.localized.name.cells.find(c => c.locale === 'en')?.text)
   .toBe('Pearl milk tea');
 ```
 
-- [ ] Run `npm --prefix apps/api test -- tests/translations.test.ts tests/catalog-management.test.ts tests/category-management.test.ts`.
+- [x] Run `npm --prefix apps/api test -- tests/translations.test.ts tests/catalog-management.test.ts tests/category-management.test.ts`.
 
 ## Task 5: Add automatic drafts to owner content entry
 
@@ -205,12 +205,12 @@ expect(created.localized.name.cells.find(c => c.locale === 'en')?.text)
 
 **Consumes:** Draft endpoint and additive catalog payload. **Produces:** editable, unpublished drafts submitted with normal item/category saves.
 
-- [ ] Add original-language Auto/English/Khmer/Chinese controls per text field, displaying detection and a confirmation control when ambiguous.
-- [ ] Trigger automatic drafts on blur for changed, nonempty text. Track the input snapshot and request generation counter; discard a response if either no longer matches. Do not call during IME composition or on every keystroke.
-- [ ] Populate only unreviewed/empty targets automatically. Manual target edits mark them reviewed and protect them from pending responses. Keep a per-field regenerate action for explicit replacement preview.
-- [ ] Show draft loading, failure/retry, and Save original only. If save occurs while AI is pending, require completion or the explicit original-only action; do not silently drop pending changes.
-- [ ] Use the same editor for description, category quick-add/full editor, group names, and option names. Translate only changed text, retaining stable modifier keys.
-- [ ] Test entering each of the three source languages, detection correction, stale response rejection, manual correction during an in-flight request, and save/reopen persistence. Example visible-state assertion:
+- [x] Add original-language Auto/English/Khmer/Chinese controls per text field, displaying detection and a confirmation control when ambiguous.
+- [x] Trigger automatic drafts on blur for changed, nonempty text. Track the input snapshot and request generation counter; discard a response if either no longer matches. Do not call during IME composition or on every keystroke.
+- [x] Populate only unreviewed/empty targets automatically. Manual target edits mark them reviewed and protect them from pending responses. Keep a per-field regenerate action for explicit replacement preview.
+- [x] Show draft loading, failure/retry, and Save original only. If save occurs while AI is pending, require completion or the explicit original-only action; do not silently drop pending changes.
+- [x] Use the same editor for description, category quick-add/full editor, group names, and option names. Translate only changed text, retaining stable modifier keys.
+- [x] Test entering each of the three source languages, detection correction, stale response rejection, manual correction during an in-flight request, and save/reopen persistence. Example visible-state assertion:
 
 ```ts
 expect(screen.getByRole('textbox', { name: 'Chinese item name' }))
@@ -219,7 +219,7 @@ expect(screen.getByRole('textbox', { name: 'English item name' }))
   .toHaveValue('Pearl milk tea');
 ```
 
-- [ ] Run `npm --prefix apps/staff test -- src/components/MenuItemEditModal.test.tsx src/components/CategoryManagementModal.test.tsx src/components/languages/TranslationEditor.test.tsx`.
+- [x] Run `npm --prefix apps/staff test -- src/components/MenuItemEditModal.test.tsx src/components/CategoryManagementModal.test.tsx src/components/languages/TranslationEditor.test.tsx`.
 
 ## Task 6: Build Settings → Languages and menu preview
 
@@ -227,13 +227,13 @@ expect(screen.getByRole('textbox', { name: 'English item name' }))
 
 **Consumes:** Paginated translation listing and atomic PATCH. **Produces:** manager-only translation management.
 
-- [ ] Extend `SettingsSubTab` with `languages` and update sidebar, page headings, and settings rendering explicitly; do not let the current store/users ternary render Languages as Users.
-- [ ] Build a searchable list with English/Khmer/Chinese columns and rows for the selected content type. Add missing/unreviewed/needs-review filters and original-language markers. On narrow screens stack three labeled fields per record.
-- [ ] Keep edits local until Save changes. Show unsaved state and guard pagination/navigation with Save, Discard, or Keep editing. Save only changed records with expected revisions.
-- [ ] On `409`, retain edits and show latest server values alongside the conflicting draft; require the owner to choose before retry. On network failure, retain all text and allow retry.
-- [ ] Show an item preview with name, description, image, price, and modifier text, switchable among the three languages using the same fallback rules as the customer menu. Preview unsaved drafts and label them clearly.
-- [ ] Test three-column editing, search/filter/pagination, corrections surviving reopen, preview reflecting drafts, failed saves, conflicts, and manager navigation. Test that ordinary staff cannot access endpoints even with a manually entered URL.
-- [ ] Run `npm --prefix apps/staff test -- src/components/languages/LanguageManagement.test.tsx src/AppSidebar.test.tsx` and `npm --prefix apps/staff run build`.
+- [x] Extend `SettingsSubTab` with `languages` and update sidebar, page headings, and settings rendering explicitly; do not let the current store/users ternary render Languages as Users.
+- [x] Build a searchable list with English/Khmer/Chinese columns and rows for the selected content type. Add missing/unreviewed/needs-review filters and original-language markers. On narrow screens stack three labeled fields per record.
+- [x] Keep edits local until Save changes. Show unsaved state and guard pagination/navigation with Save, Discard, or Keep editing. Save only changed records with expected revisions.
+- [x] On `409`, retain edits and show latest server values alongside the conflicting draft; require the owner to choose before retry. On network failure, retain all text and allow retry.
+- [x] Show an item preview with name, description, image, price, and modifier text, switchable among the three languages using the same fallback rules as the customer menu. Preview unsaved drafts and label them clearly.
+- [x] Test three-column editing, search/filter/pagination, corrections surviving reopen, preview reflecting drafts, failed saves, conflicts, and manager navigation. Test that ordinary staff cannot access endpoints even with a manually entered URL.
+- [x] Run `npm --prefix apps/staff test -- src/components/languages/LanguageManagement.test.tsx src/AppSidebar.test.tsx` and `npm --prefix apps/staff run build`.
 
 ## Task 7: Display saved language content throughout the customer menu
 
@@ -241,13 +241,13 @@ expect(screen.getByRole('textbox', { name: 'English item name' }))
 
 **Consumes:** Catalog localized maps. **Produces:** `resolveLocalizedText(record: LocalizedText | undefined, locale: Locale, raw: string): string` and language-independent ordering/cart identity.
 
-- [ ] Implement the resolution contract with pure tests for all locales, missing cells, stale cells, unknown legacy records, and explicitly cleared descriptions. Keep legacy `t(raw)` fallback in the caller only when no localized record exists.
-- [ ] Preserve localization data in catalog mapping; render names/descriptions/options directly after resolution. Continue using `t()` for interface labels.
-- [ ] Separate category identity from display: keep raw category string for filtering/membership and use category ID/localized map for its label.
-- [ ] Carry localization references or maps into cart entries and selections. Resolve active catalog entries by stable IDs/keys at display time so language switching and refreshed corrections affect an already-open cart. Never change item IDs, modifier keys, prices, or quantities on language changes.
-- [ ] Audit order-history and checkout rendering: localize available related menu content, retain saved raw labels for deleted/unavailable entries, and preserve existing order pricing/history semantics. This release does not redesign order snapshots.
-- [ ] Keep the existing 60-second active-page refresh and enable revalidation on focus. New navigation/reload fetches current data; open active menus update on the next poll. Do not promise instantaneous cross-device updates or background-tab timing.
-- [ ] Add integration tests proving Chinese-first item display in all locales, correction visibility after revalidation, language switching with cart contents, and unchanged totals. Example pure test:
+- [x] Implement the resolution contract with pure tests for all locales, missing cells, stale cells, unknown legacy records, and explicitly cleared descriptions. Keep legacy `t(raw)` fallback in the caller only when no localized record exists.
+- [x] Preserve localization data in catalog mapping; render names/descriptions/options directly after resolution. Continue using `t()` for interface labels.
+- [x] Separate category identity from display: keep raw category string for filtering/membership and use category ID/localized map for its label.
+- [x] Carry localization references or maps into cart entries and selections. Resolve active catalog entries by stable IDs/keys at display time so language switching and refreshed corrections affect an already-open cart. Never change item IDs, modifier keys, prices, or quantities on language changes.
+- [x] Audit order-history and checkout rendering: localize available related menu content, retain saved raw labels for deleted/unavailable entries, and preserve existing order pricing/history semantics. This release does not redesign order snapshots.
+- [x] Keep the existing 60-second active-page refresh and enable revalidation on focus. New navigation/reload fetches current data; open active menus update on the next poll. Do not promise instantaneous cross-device updates or background-tab timing.
+- [x] Add integration tests proving Chinese-first item display in all locales, correction visibility after revalidation, language switching with cart contents, and unchanged totals. Example pure test:
 
 ```ts
 expect(resolveLocalizedText(chineseSourceRecord, 'en', '珍珠奶茶'))
@@ -256,19 +256,19 @@ expect(resolveLocalizedText(recordWithStaleEnglish, 'en', '珍珠奶茶'))
   .toBe('珍珠奶茶');
 ```
 
-- [ ] Run `npm --prefix apps/menu test` and `npm --prefix apps/menu run build`. Confirm public menu loads generate zero requests to the AI provider.
+- [x] Run `npm --prefix apps/menu test` and `npm --prefix apps/menu run build`. Confirm public menu loads generate zero requests to the AI provider.
 
 ## Task 8: Verify rollout and no-deployment content updates
 
 **Files:** Create `apps/api/tests/e2e-translations.test.ts` and `docs/multilingual-menu-operations.md`; update API test cleanup where localized rows require isolation.
 
-- [ ] Add end-to-end API cases for create in each source language, save generated drafts, manual correction, source edit staleness, original-only save/retry, deletion cleanup, and two-manager conflict. Use a deterministic provider stub.
-- [ ] Run `npm --prefix apps/api test`, `npm --prefix apps/staff test`, `npm --prefix apps/menu test`, `npm run build`, and `npm run build:frontend`. Record actual results and failures; do not claim completion from a plan checklist.
-- [ ] Run browser QA: manager creates a Chinese item, checks all three columns, corrects Khmer, saves, then a separate customer session reloads and sees the correction. Repeat English-first and Khmer-first. Verify mobile fields, Khmer font rendering, IME entry, long descriptions, preview, and an existing cart.
-- [ ] Record a no-deployment proof: note running frontend build ID, save a correction, observe customer output after refresh, and confirm build ID remains unchanged and no deployment command ran.
-- [ ] Document staged rollout: back up SQLite using a consistent backup method, rehearse restore on a copy, apply additive schema with automatic AI disabled, run backfill dry-run then apply, deploy compatible API/frontends, and enable AI only after the quality gate passes. Verify existing catalog/order tests and actual schema contents before changing traffic.
-- [ ] Document rollback: disable automatic AI to preserve manual editing; roll back display code while retaining added tables and compatibility fields. Do not drop translation data or restore an old database over orders placed since rollout. Database restore is disaster recovery requiring reconciliation, not the routine rollback path.
-- [ ] Document keys/model configuration, quota assumptions, costs from evaluation, retry behavior, draft/publication rules, glossary maintenance, refresh timing, and how to backfill without overwriting owner corrections.
+- [x] Add end-to-end API cases for create in each source language, save generated drafts, manual correction, source edit staleness, original-only save/retry, deletion cleanup, and two-manager conflict. Use a deterministic provider stub.
+- [x] Run `npm --prefix apps/api test`, `npm --prefix apps/staff test`, `npm --prefix apps/menu test`, `npm run build`, and `npm run build:frontend`. Record actual results and failures; do not claim completion from a plan checklist.
+- [x] Run browser QA: manager creates a Chinese item, checks all three columns, corrects Khmer, saves, then a separate customer session reloads and sees the correction. Repeat English-first and Khmer-first. Verify mobile fields, Khmer font rendering, IME entry, long descriptions, preview, and an existing cart.
+- [x] Record a no-deployment proof: note running frontend build ID, save a correction, observe customer output after refresh, and confirm build ID remains unchanged and no deployment command ran.
+- [x] Document staged rollout: back up SQLite using a consistent backup method, rehearse restore on a copy, apply additive schema with automatic AI disabled, run backfill dry-run then apply, deploy compatible API/frontends, and enable AI only after the quality gate passes. Verify existing catalog/order tests and actual schema contents before changing traffic.
+- [x] Document rollback: disable automatic AI to preserve manual editing; roll back display code while retaining added tables and compatibility fields. Do not drop translation data or restore an old database over orders placed since rollout. Database restore is disaster recovery requiring reconciliation, not the routine rollback path.
+- [x] Document keys/model configuration, quota assumptions, costs from evaluation, retry behavior, draft/publication rules, glossary maintenance, refresh timing, and how to backfill without overwriting owner corrections.
 
 ## Completion criteria
 

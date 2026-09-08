@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock,
   Dices,
+  Globe,
   LayoutDashboard,
   ListPlus,
   LogOut,
@@ -1027,6 +1028,25 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                       </span>
                     )}
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('settings');
+                      setSettingsSubTab('languages');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'settings' && settingsSubTab === 'languages'
+                        ? 'bg-accent text-on-accent shadow-sm'
+                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Globe className="size-4" />
+                      <span>Languages</span>
+                    </div>
+                  </button>
                 </div>
               )}
             </div>
@@ -1126,7 +1146,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                                 : 'Rewards Catalog'
                               : settingsSubTab === 'users'
                                 ? 'Users'
-                                : 'Store Settings'}
+                                : settingsSubTab === 'languages'
+                                  ? 'Languages'
+                                  : 'Store Settings'}
                 </h2>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
@@ -1146,7 +1168,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                               : 'Manage loyalty prizes customer can redeem'
                             : settingsSubTab === 'users'
                               ? 'Authorized staff and manager accounts'
-                              : 'Store profile, ordering options, and branch details'}
+                              : settingsSubTab === 'languages'
+                                ? 'Manage English, Khmer, and Chinese translations with live preview'
+                                : 'Store profile, ordering options, and branch details'}
               </p>
             </div>
           </div>

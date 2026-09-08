@@ -189,3 +189,36 @@ model PrizeClaim {
   @@index([status])
 }
 
+model LocalizedText {
+  id             String               @id @default(uuid())
+  ownerType      String               // "item" | "category" | "modifierGroup" | "modifierOption"
+  ownerKey       String               // Item ID, Category ID, or JSON string for modifiers
+  field          String               // "name" | "description"
+  sourceLocale   String?              // "en" | "km" | "zh" | null
+  sourceText     String               @default("")
+  sourceRevision Int                  @default(1)
+  revision       Int                  @default(1)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @default(now()) @updatedAt
+  values         LocalizedTextValue[]
+
+  @@unique([ownerType, ownerKey, field])
+  @@index([ownerType, ownerKey])
+}
+
+model LocalizedTextValue {
+  id                    String        @id @default(uuid())
+  textId                String
+  localizedText         LocalizedText @relation(fields: [textId], references: [id], onDelete: Cascade)
+  locale                String        // "en" | "km" | "zh"
+  text                  String
+  origin                String        @default("manual") // "original" | "ai" | "manual" | "legacy"
+  reviewed              Boolean       @default(false)
+  basedOnSourceRevision Int           @default(1)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @default(now()) @updatedAt
+
+  @@unique([textId, locale])
+  @@index([textId])
+}
+

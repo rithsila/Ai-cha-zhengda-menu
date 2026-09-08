@@ -97,6 +97,21 @@ describe('Sidebar Menu & Brand Header', () => {
 
     // Collapsed
     expect(screen.queryByText('Store')).toBeNull();
+    expect(screen.queryByText('Languages')).toBeNull();
     expect(localStorage.getItem('staff_settings_expanded')).toBe('false');
+  });
+
+  it('renders Languages subtab in settings submenu and navigates to Languages view', () => {
+    render(<App />);
+
+    const languagesBtn = screen.getByRole('button', { name: /languages/i });
+    expect(languagesBtn).toBeDefined();
+
+    fireEvent.click(languagesBtn);
+
+    expect(screen.getByRole('heading', { name: 'Languages' })).toBeDefined();
+    expect(
+      screen.getByText('Manage English, Khmer, and Chinese translations with live preview')
+    ).toBeDefined();
   });
 });

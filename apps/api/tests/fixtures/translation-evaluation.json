@@ -1,0 +1,272 @@
+[
+  {
+    "id": "eval-en-01",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Milk Tea",
+    "text": "Brown Sugar Boba Milk",
+    "context": { "field": "name", "category": "Milk Tea" },
+    "expectedTargets": { "km": "ទឹកដោះគោគុជស្ករត្នោត", "zh": "黑糖波霸鲜奶" }
+  },
+  {
+    "id": "eval-en-02",
+    "sourceLocale": "en",
+    "field": "description",
+    "category": "Milk Tea",
+    "text": "Fresh milk paired with warm brown sugar pearls and rich syrup.",
+    "context": { "field": "description", "category": "Milk Tea", "itemName": "Brown Sugar Boba Milk" },
+    "expectedTargets": { "km": "ទឹកដោះគោស្រស់ជាមួយគុជស្ករត្នោតក្តៅឧណ្ហៗ និងទឹកស៊ីរ៉ូឈ្ងុយឆ្ងាញ់។", "zh": "鲜牛奶搭配温热黑糖珍珠与浓郁糖浆。" }
+  },
+  {
+    "id": "eval-en-03",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Cones",
+    "text": "Matcha Ai-Scream Cone",
+    "context": { "field": "name", "category": "Cones" },
+    "expectedTargets": { "km": "ការ៉េមតែបៃតងកោណ Ai-Scream", "zh": "抹茶爱冰淇淋甜筒" }
+  },
+  {
+    "id": "eval-en-04",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Signature",
+    "text": "Signature XXL Crispy Chicken",
+    "context": { "field": "name", "category": "Signature" },
+    "expectedTargets": { "km": "សាច់មាន់បំពង XXL ប្រចាំហាង", "zh": "招牌XXL大鸡排" }
+  },
+  {
+    "id": "eval-en-05",
+    "sourceLocale": "en",
+    "field": "description",
+    "category": "Signature",
+    "text": "Crispy fried chicken breast seasoned with Zhengda specialty spices.",
+    "context": { "field": "description", "category": "Signature", "itemName": "Signature XXL Crispy Chicken" },
+    "expectedTargets": { "km": "សាច់ទ្រូងមាន់បំពងស្រួយប្រឡាក់គ្រឿងទេសពិសេសចឹងតា។", "zh": "香脆炸鸡胸肉配正大特调香料。" }
+  },
+  {
+    "id": "eval-en-06",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Toppings",
+    "text": "Coconut Jelly",
+    "context": { "field": "name", "category": "Toppings" },
+    "expectedTargets": { "km": "ចាហួយដូង", "zh": "椰果" }
+  },
+  {
+    "id": "eval-en-07",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Fruit Tea",
+    "text": "Fruity Signature Bucket (1000ml)",
+    "context": { "field": "name", "category": "Fruit Tea" },
+    "expectedTargets": { "km": "តែផ្លែឈើធុងធំប្រចាំហាង (១០០០មល)", "zh": "招牌水果桶茶 (1000ml)" }
+  },
+  {
+    "id": "eval-en-08",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Combos",
+    "text": "4 of a Kind Combo",
+    "context": { "field": "name", "category": "Combos" },
+    "expectedTargets": { "km": "ឈុត ៤ មុខ", "zh": "四合一套餐" }
+  },
+  {
+    "id": "eval-en-09",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Rice Bowls",
+    "text": "Chicken Popcorn Ricebowl",
+    "context": { "field": "name", "category": "Rice Bowls" },
+    "expectedTargets": { "km": "បាយសាច់មាន់ប៉ុបខន", "zh": "劲脆鸡米花盖饭" }
+  },
+  {
+    "id": "eval-en-10",
+    "sourceLocale": "en",
+    "field": "name",
+    "category": "Modifier",
+    "text": "Less Ice (50%)",
+    "context": { "field": "name", "category": "Modifier" },
+    "expectedTargets": { "km": "ទឹកកកតិច (៥០%)", "zh": "少冰 (50%)" }
+  },
+  {
+    "id": "eval-km-01",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Milk Tea",
+    "text": "តែទឹកដោះគោគុជ",
+    "context": { "field": "name", "category": "Milk Tea" },
+    "expectedTargets": { "en": "Pearl Milk Tea", "zh": "珍珠奶茶" }
+  },
+  {
+    "id": "eval-km-02",
+    "sourceLocale": "km",
+    "field": "description",
+    "category": "Milk Tea",
+    "text": "តែខ្មៅឈ្ងុយឆ្ងាញ់ជាមួយទឹកដោះគោស្រស់ និងគ្រាប់គុជស្វិតស្វិត។",
+    "context": { "field": "description", "category": "Milk Tea", "itemName": "តែទឹកដោះគោគុជ" },
+    "expectedTargets": { "en": "Fragrant black tea with fresh milk and chewy tapioca pearls.", "zh": "浓郁红茶搭配鲜奶与嚼劲珍珠。" }
+  },
+  {
+    "id": "eval-km-03",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Cones",
+    "text": "ការ៉េមវ៉ានីឡាកោណ",
+    "context": { "field": "name", "category": "Cones" },
+    "expectedTargets": { "en": "Vanilla Ice Cream Cone", "zh": "香草甜筒冰淇淋" }
+  },
+  {
+    "id": "eval-km-04",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Frappe",
+    "text": "ហ្វ្រាប៉េផាសិន",
+    "context": { "field": "name", "category": "Frappe" },
+    "expectedTargets": { "en": "Passion Fruit Frappe", "zh": "百香果冰沙" }
+  },
+  {
+    "id": "eval-km-05",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Signature",
+    "text": "សាច់ភ្លៅមាន់បំពងគ្មានឆ្អឹង",
+    "context": { "field": "name", "category": "Signature" },
+    "expectedTargets": { "en": "Crispy Boneless Thigh", "zh": "香脆无骨鸡腿排" }
+  },
+  {
+    "id": "eval-km-06",
+    "sourceLocale": "km",
+    "field": "description",
+    "category": "Signature",
+    "text": "សាច់ភ្លៅមាន់បំពងស្រួយក្រៅ មានជាតិទឹកខាងក្នុង រសជាតិប្រចាំហាងចឹងតា។",
+    "context": { "field": "description", "category": "Signature", "itemName": "សាច់ភ្លៅមាន់បំពងគ្មានឆ្អឹង" },
+    "expectedTargets": { "en": "Crispy on the outside, juicy on the inside, authentic Zhengda specialty recipe.", "zh": "外酥里嫩多汁，正大招牌风味。" }
+  },
+  {
+    "id": "eval-km-07",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Toppings",
+    "text": "ចាហួយតែអ៊ូឡុង",
+    "context": { "field": "name", "category": "Toppings" },
+    "expectedTargets": { "en": "Oolong Tea Jelly", "zh": "乌龙茶冻" }
+  },
+  {
+    "id": "eval-km-08",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Combos",
+    "text": "ឈុតភ្លៅមាន់ និងដំឡូងបំពង",
+    "context": { "field": "name", "category": "Combos" },
+    "expectedTargets": { "en": "Drumstick & Fries Combo", "zh": "鸡腿薯条套餐" }
+  },
+  {
+    "id": "eval-km-09",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Modifier",
+    "text": "កម្រិតស្ករ ៣០%",
+    "context": { "field": "name", "category": "Modifier" },
+    "expectedTargets": { "en": "30% Sugar", "zh": "微糖 (30%)" }
+  },
+  {
+    "id": "eval-km-10",
+    "sourceLocale": "km",
+    "field": "name",
+    "category": "Modifier",
+    "text": "ម្សៅម៉ាឡា",
+    "context": { "field": "name", "category": "Modifier" },
+    "expectedTargets": { "en": "Mala Seasoning Powder", "zh": "麻辣撒粉" }
+  },
+  {
+    "id": "eval-zh-01",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Milk Tea",
+    "text": "珍珠奶茶",
+    "context": { "field": "name", "category": "Milk Tea" },
+    "expectedTargets": { "en": "Pearl Milk Tea", "km": "តែទឹកដោះគោគុជ" }
+  },
+  {
+    "id": "eval-zh-02",
+    "sourceLocale": "zh",
+    "field": "description",
+    "category": "Milk Tea",
+    "text": "经典浓郁奶茶搭配Q弹黑糖珍珠，香醇顺滑。",
+    "context": { "field": "description", "category": "Milk Tea", "itemName": "珍珠奶茶" },
+    "expectedTargets": { "en": "Classic rich milk tea paired with chewy brown sugar boba, smooth and fragrant.", "km": "តែទឹកដោះគោបុរាណឈ្ងុយឆ្ងាញ់ ជាមួយគុជស្ករត្នោតស្វិតល្អ រសជាតិរលូន។" }
+  },
+  {
+    "id": "eval-zh-03",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Signature",
+    "text": "招牌XXL大鸡排",
+    "context": { "field": "name", "category": "Signature" },
+    "expectedTargets": { "en": "Signature XXL Crispy Chicken", "km": "សាច់មាន់បំពង XXL ប្រចាំហាង" }
+  },
+  {
+    "id": "eval-zh-04",
+    "sourceLocale": "zh",
+    "field": "description",
+    "category": "Signature",
+    "text": "正大特选整块大鸡胸肉，外皮金黄酥脆，肉质鲜嫩多汁。",
+    "context": { "field": "description", "category": "Signature", "itemName": "招牌XXL大鸡排" },
+    "expectedTargets": { "en": "Selected whole chicken breast by Zhengda, golden crispy crust with tender juicy meat.", "km": "សាច់ទ្រូងមាន់ធំពិសេសចឹងតា ស្រួយពណ៌មាសខាងក្រៅ ទន់មានជាតិទឹកខាងក្នុង។" }
+  },
+  {
+    "id": "eval-zh-05",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Cones",
+    "text": "海盐冰淇淋甜筒",
+    "context": { "field": "name", "category": "Cones" },
+    "expectedTargets": { "en": "Sea Salt Ice Cream Cone", "km": "ការ៉េមកោណរសជាតិអំបិលសមុទ្រ" }
+  },
+  {
+    "id": "eval-zh-06",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Fruit Tea",
+    "text": "满杯百香果绿茶",
+    "context": { "field": "name", "category": "Fruit Tea" },
+    "expectedTargets": { "en": "Passion Fruit Green Tea", "km": "តែបៃតងផ្លែផាសិន" }
+  },
+  {
+    "id": "eval-zh-07",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Toppings",
+    "text": "红豆",
+    "context": { "field": "name", "category": "Toppings" },
+    "expectedTargets": { "en": "Red Bean", "km": "សណ្តែកក្រហម" }
+  },
+  {
+    "id": "eval-zh-08",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Rice Bowls",
+    "text": "香酥鸡米花饭",
+    "context": { "field": "name", "category": "Rice Bowls" },
+    "expectedTargets": { "en": "Crispy Popcorn Chicken Rice", "km": "បាយសាច់មាន់ប៉ុបខនស្រួយ" }
+  },
+  {
+    "id": "eval-zh-09",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Modifier",
+    "text": "热饮 (400ml)",
+    "context": { "field": "name", "category": "Modifier" },
+    "expectedTargets": { "en": "Hot (400ml)", "km": "ក្តៅ (៤០០មល)" }
+  },
+  {
+    "id": "eval-zh-10",
+    "sourceLocale": "zh",
+    "field": "name",
+    "category": "Modifier",
+    "text": "甘梅撒粉",
+    "context": { "field": "name", "category": "Modifier" },
+    "expectedTargets": { "en": "Plum Powder", "km": "ម្សៅផ្លែព្រូន" }
+  }
+]

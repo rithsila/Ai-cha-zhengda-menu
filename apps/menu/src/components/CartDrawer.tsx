@@ -7,6 +7,8 @@ import { formatCurrency } from '../utils/format';
 import { Button } from './ui/Button';
 import { CATALOG } from '../data/catalog';
 import { useStoreStatus } from '../utils/storeStatus';
+import { useCatalog } from '../hooks/useCatalog';
+import { resolveWithLegacyFallback } from '../utils/localizedText';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -19,7 +21,8 @@ interface CartDrawerProps {
 }
 
 export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, onEdit, onCheckout }: CartDrawerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { catalogItems } = useCatalog();
   const storeStatus = useStoreStatus();
   const total = cart.reduce((sum, item) => sum + item.totalPrice, 0);
   const dragControls = useDragControls();
@@ -100,14 +103,20 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
               ) : (
                 <div className="space-y-4">
                   {cart.map((item) => {
-                    const menuItem = CATALOG.find(i => i.id === item.menuItemId);
+                    const menuItem = catalogItems.find(i => i.id === item.menuItemId) || CATALOG.find(i => i.id === item.menuItemId);
                     const hasModifiers = menuItem && menuItem.modifiers && menuItem.modifiers.length > 0;
+                    const resolvedItemName = resolveWithLegacyFallback(
+                      menuItem?.localized?.name || item.localized?.name,
+                      i18n.language,
+                      item.name,
+                      t
+                    );
                     
                     return (
                       <div key={item.id} className="bg-tg-secondary-bg p-4 rounded-2xl flex flex-col gap-3 relative">
                         <div className="flex justify-between items-start gap-2">
                           <div className="flex-1">
-                            <div className="font-bold">{t(item.name)}</div>
+                            <div className="font-bold">{resolvedItemName}</div>
                             {menuItem?.canClaim === false && (
                               <div className="text-[10px] text-tg-hint font-normal mt-0.5">
                                 {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
@@ -123,9 +132,21 @@ export function CartDrawer({ isOpen, cart, onClose, onRemove, onUpdateQuantity, 
                             onClick={() => onEdit(item)}
                           >
                             <div>
-                              {Object.values(item.selectedModifiers).flat().map(opt => (
-                                <div key={opt.id}>• {t(opt.name)}</div>
-                              ))}
+                              {Object.entries(item.selectedModifiers).map(([groupId, opts]) => {
+                                const group = menuItem?.modifiers?.find((g: any) => g.id === groupId || g.key === groupId);
+                                return opts.map(opt => {
+                                  const catalogOpt = group?.options?.find((o: any) => o.id === opt.id || o.key === opt.id);
+                                  const optName = resolveWithLegacyFallback(
+                                    catalogOpt?.localized?.name || opt.localized?.name,
+                                    i18n.language,
+                                    opt.name,
+                                    t
+                                  );
+                                  return (
+                                    <div key={opt.id}>• {optName}</div>
+                                  );
+                                });
+                              })}
                             </div>
                             <div className="text-brand-primary font-medium px-2 py-1 bg-brand-primary/10 rounded-lg">{t('edit')}</div>
                           </div>

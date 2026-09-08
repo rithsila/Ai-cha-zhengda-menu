@@ -19,6 +19,8 @@ import { useMyOrders } from '../hooks/useMyOrders';
 import { SignInPrompt } from './SignInPrompt';
 import { useOnlinePaymentState } from '../utils/onlinePayment';
 import { KhqrPaymentPanel } from './KhqrPaymentPanel';
+import { useCatalog } from '../hooks/useCatalog';
+import { resolveWithLegacyFallback } from '../utils/localizedText';
 
 interface OrderItem {
   id: string;
@@ -73,11 +75,12 @@ function isExpiredKhqrPayment(order: Pick<Order, 'status' | 'paymentMethod' | 'p
 }
 
 export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const signedIn = hasIdentity();
   const khqrOffered = useOnlinePaymentState() === 'available';
 
   const { orders, ordersLoading: loading, mutateOrders } = useMyOrders({ poll: true });
+  const { catalogItems } = useCatalog();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [paidCode, setPaidCode] = useState<string | null>(null);
 
@@ -318,12 +321,21 @@ export function OrdersView({ onReorder, onBrowseMenu }: OrdersViewProps) {
 
               {/* Items List */}
               <ul className="space-y-1.5 mb-3 text-sm">
-                {order.items.map((item: any) => (
-                  <li key={item.id} className="flex justify-between text-tg-text">
-                    <span className="font-medium">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
-                    <span className="text-tg-hint text-xs">{formatCurrency(item.price)}</span>
-                  </li>
-                ))}
+                {order.items.map((item: any) => {
+                  const catalogItem = catalogItems.find((c: any) => c.id === item.menuItem?.id);
+                  const resolvedName = resolveWithLegacyFallback(
+                    catalogItem?.localized?.name || item.menuItem?.localized?.name,
+                    i18n.language,
+                    item.menuItem?.name || 'Item',
+                    t
+                  );
+                  return (
+                    <li key={item.id} className="flex justify-between text-tg-text">
+                      <span className="font-medium">{item.quantity}x {resolvedName}</span>
+                      <span className="text-tg-hint text-xs">{formatCurrency(item.price)}</span>
+                    </li>
+                  );
+                })}
               </ul>
 
               {/* Rewards Earned Tags */}

@@ -16,6 +16,7 @@ import { useCatalog } from './hooks/useCatalog';
 
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
+import { resolveWithLegacyFallback } from './utils/localizedText';
 
 import { BrandTabs } from './components/ui/BrandTabs';
 import { CategoryScroller } from './components/ui/CategoryScroller';
@@ -334,15 +335,18 @@ export default function App() {
       basePrice: item.basePrice,
       imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
       isSoldOut: Boolean(item.isSoldOut),
+      localized: item.localized,
       modifiers: item.modifiers?.map((g: any) => ({
         id: g.key || g.id,
         name: g.name,
         type: g.type,
         required: g.required,
+        localized: g.localized,
         options: g.options?.map((o: any) => ({
           id: o.key || o.id,
           name: o.name,
           priceDelta: o.priceDelta,
+          localized: o.localized,
         })) || [],
       })),
     }));
@@ -385,16 +389,32 @@ export default function App() {
     return ['All', ...unique];
   }, [brandItems, categoriesList, activeBrand]);
 
+  const getCategoryLabel = useCallback(
+    (categoryName: string) => {
+      if (categoryName === 'All') return t('all', 'All');
+      const catRow = categoriesList.find(
+        (c) => c.name.trim().toLowerCase() === categoryName.trim().toLowerCase()
+      );
+      return resolveWithLegacyFallback(catRow?.localized?.name, i18n.language, categoryName, t);
+    },
+    [categoriesList, i18n.language, t]
+  );
+
   // Filtered items
   const visibleItems = useMemo(() => {
     let items: typeof brandItems;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      items = dynamicCatalog.filter(
-        (i) =>
+      items = dynamicCatalog.filter((i) => {
+        const locName = resolveWithLegacyFallback(i.localized?.name, i18n.language, i.name, t).toLowerCase();
+        const locDesc = resolveWithLegacyFallback(i.localized?.description, i18n.language, i.description || '', t).toLowerCase();
+        return (
           i.name.toLowerCase().includes(q) ||
-          i.description?.toLowerCase().includes(q)
-      );
+          i.description?.toLowerCase().includes(q) ||
+          locName.includes(q) ||
+          locDesc.includes(q)
+        );
+      });
     } else if (activeCategory === 'All') {
       items = brandItems;
     } else {
@@ -406,7 +426,7 @@ export default function App() {
       const bFav = favorites.includes(b.id) ? 1 : 0;
       return bFav - aFav;
     });
-  }, [dynamicCatalog, brandItems, activeCategory, searchQuery, favorites]);
+  }, [dynamicCatalog, brandItems, activeCategory, searchQuery, favorites, i18n.language, t]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
 
@@ -476,7 +496,8 @@ export default function App() {
           quantity: 1,
           selectedModifiers: selectedOptions,
           unitPrice,
-          totalPrice: unitPrice
+          totalPrice: unitPrice,
+          localized: item.localized,
         };
         setCart([...cart, cartItem]);
       }
@@ -783,6 +804,7 @@ export default function App() {
                       categories={categories}
                       activeCategory={activeCategory}
                       onChange={setActiveCategory}
+                      getCategoryLabel={getCategoryLabel}
                     />
 
                     {/* Menu Grid */}
@@ -926,6 +948,7 @@ export default function App() {
       {previewItem && (
         <ItemPreviewModal
           item={previewItem}
+          categoryLabel={previewItem.category ? getCategoryLabel(previewItem.category) : undefined}
           isFavorite={isFavorite(previewItem.id)}
           onToggleFavorite={toggleFavorite}
           onClose={() => setPreviewItem(null)}

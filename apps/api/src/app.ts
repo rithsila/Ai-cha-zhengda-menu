@@ -38,9 +38,23 @@ import multer from 'multer';
 import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes, createPrizeClaimRecord } from './lucky-draw';
 import { uploadToR2, isR2Configured } from './r2';
 
-// The tuned SQLite client lives in db.ts; re-exported here because every
-// caller (and every test) already imports it from this module.
 export { prisma };
+
+import { createTranslationRouter } from './translations/routes.js';
+import { translationService, TranslationService } from './translations/service.js';
+import {
+  attachCatalogLocalization,
+  attachCategoryLocalization,
+  saveLocalizedEdits,
+  deleteOwnedTexts,
+  deleteOwnedTextsByKeys,
+  makeModifierGroupKey,
+  makeModifierOptionKey,
+} from './translations/repository.js';
+import { detectLocaleFromText } from './translations/provider.js';
+
+export { translationService, TranslationService };
+
 
 export const ABA_NOT_CONFIGURED =
   'ABA PayWay is not configured. Set ABA_MERCHANT_ID and ABA_API_KEY in apps/api/.env.';
@@ -633,6 +647,8 @@ export function createApp() {
     }
   });
 
+  app.use('/api/translations', createTranslationRouter());
+
   app.get('/api/catalog', async (req, res) => {
     try {
       const wantsInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
@@ -648,7 +664,8 @@ export function createApp() {
           }
         }
       });
-      res.json(catalog);
+      const localizedCatalog = await attachCatalogLocalization(catalog);
+      res.json(localizedCatalog);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch catalog' });
@@ -657,7 +674,7 @@ export function createApp() {
 
   app.post('/api/catalog', requireManager, async (req, res) => {
     try {
-      const { brand, category, name, description, basePrice, image, modifiers, earnsStamp, canClaim } = req.body || {};
+      const { brand, category, name, description, basePrice, image, modifiers, earnsStamp, canClaim, localization } = req.body || {};
       if (!name || typeof name !== 'string' || !category || typeof category !== 'string') {
         return res.status(400).json({ error: 'Name and category are required' });
       }
@@ -666,44 +683,132 @@ export function createApp() {
         return res.status(400).json({ error: 'Valid basePrice is required' });
       }
 
-      const item = await prisma.menuItem.create({
-        data: {
-          brand: typeof brand === 'string' && brand.trim() ? brand.trim().toLowerCase() : 'default',
-          category: category.trim(),
-          name: name.trim(),
-          description: typeof description === 'string' ? description.trim() : null,
-          basePrice: parsedPrice,
-          image: typeof image === 'string' && image.trim() ? image.trim() : null,
-          isActive: true,
-          isSoldOut: false,
-          earnsStamp: earnsStamp !== undefined ? Boolean(earnsStamp) : true,
-          canClaim: canClaim !== undefined ? Boolean(canClaim) : false,
-          modifiers: Array.isArray(modifiers) && modifiers.length > 0 ? {
-            create: modifiers.map((group: any) => ({
-              key: group.key || group.id || randomUUID(),
-              name: group.name,
-              type: group.type || 'single',
-              required: Boolean(group.required),
-              options: {
-                create: (group.options || []).map((opt: any) => ({
-                  key: opt.key || opt.id || randomUUID(),
-                  name: opt.name,
-                  priceDelta: Number(opt.priceDelta) || 0,
-                }))
+      // Check duplicate modifier group or option keys
+      if (Array.isArray(modifiers)) {
+        const groupKeys = new Set<string>();
+        for (const g of modifiers) {
+          const gKey = g.key || g.id;
+          if (gKey) {
+            if (groupKeys.has(gKey)) {
+              return res.status(400).json({ error: `Duplicate modifier group key: ${gKey}` });
+            }
+            groupKeys.add(gKey);
+          }
+          if (Array.isArray(g.options)) {
+            const optKeys = new Set<string>();
+            for (const opt of g.options) {
+              const optKey = opt.key || opt.id;
+              if (optKey) {
+                if (optKeys.has(optKey)) {
+                  return res.status(400).json({ error: `Duplicate modifier option key: ${optKey}` });
+                }
+                optKeys.add(optKey);
               }
-            }))
-          } : undefined
-        },
-        include: {
-          modifiers: {
-            include: {
-              options: true
             }
           }
         }
-      });
+      }
 
-      res.status(201).json(item);
+      const createdItem = await prisma.$transaction(async (tx) => {
+        const item = await tx.menuItem.create({
+          data: {
+            brand: typeof brand === 'string' && brand.trim() ? brand.trim().toLowerCase() : 'default',
+            category: category.trim(),
+            name: name.trim(),
+            description: typeof description === 'string' ? description.trim() : null,
+            basePrice: parsedPrice,
+            image: typeof image === 'string' && image.trim() ? image.trim() : null,
+            isActive: true,
+            isSoldOut: false,
+            earnsStamp: earnsStamp !== undefined ? Boolean(earnsStamp) : true,
+            canClaim: canClaim !== undefined ? Boolean(canClaim) : false,
+            modifiers: Array.isArray(modifiers) && modifiers.length > 0 ? {
+              create: modifiers.map((group: any) => ({
+                key: group.key || group.id || randomUUID(),
+                name: group.name,
+                type: group.type || 'single',
+                required: Boolean(group.required),
+                options: {
+                  create: (group.options || []).map((opt: any) => ({
+                    key: opt.key || opt.id || randomUUID(),
+                    name: opt.name,
+                    priceDelta: Number(opt.priceDelta) || 0,
+                  }))
+                }
+              }))
+            } : undefined
+          },
+          include: {
+            modifiers: {
+              include: {
+                options: true
+              }
+            }
+          }
+        });
+
+        // Save localization for item name
+        const nameSrcLocale = localization?.name?.sourceLocale || detectLocaleFromText(name).locale || 'en';
+        await saveLocalizedEdits([{
+          ownerType: 'item',
+          ownerKey: item.id,
+          field: 'name',
+          sourceLocale: nameSrcLocale,
+          cells: localization?.name?.cells || [{ locale: nameSrcLocale, text: name.trim() }],
+        }], tx);
+
+        // Save localization for item description
+        if (localization?.description || description) {
+          const descText = (description || '').trim();
+          const descSrcLocale = localization?.description?.sourceLocale || (descText ? detectLocaleFromText(descText).locale || 'en' : 'en');
+          await saveLocalizedEdits([{
+            ownerType: 'item',
+            ownerKey: item.id,
+            field: 'description',
+            sourceLocale: descSrcLocale,
+            cells: localization?.description?.cells || [{ locale: descSrcLocale, text: descText }],
+          }], tx);
+        }
+
+        // Save localization for modifiers if supplied
+        if (localization?.modifiers && Array.isArray(localization.modifiers)) {
+          const modEdits: any[] = [];
+          for (const modLoc of localization.modifiers) {
+            if (modLoc.name) {
+              const gKey = makeModifierGroupKey(item.id, modLoc.clientKey);
+              modEdits.push({
+                ownerType: 'modifierGroup',
+                ownerKey: gKey,
+                field: 'name',
+                sourceLocale: modLoc.name.sourceLocale,
+                cells: modLoc.name.cells,
+              });
+            }
+            if (Array.isArray(modLoc.options)) {
+              for (const optLoc of modLoc.options) {
+                if (optLoc.name) {
+                  const oKey = makeModifierOptionKey(item.id, modLoc.clientKey, optLoc.clientKey);
+                  modEdits.push({
+                    ownerType: 'modifierOption',
+                    ownerKey: oKey,
+                    field: 'name',
+                    sourceLocale: optLoc.name.sourceLocale,
+                    cells: optLoc.name.cells,
+                  });
+                }
+              }
+            }
+          }
+          if (modEdits.length > 0) {
+            await saveLocalizedEdits(modEdits, tx);
+          }
+        }
+
+        const [localized] = await attachCatalogLocalization([item], tx);
+        return localized;
+      }, WRITE_TX_OPTIONS);
+
+      res.status(201).json(createdItem);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to create menu item' });
@@ -713,7 +818,7 @@ export function createApp() {
   app.put('/api/catalog/:id', requireManager, async (req, res) => {
     try {
       const id = String(req.params.id);
-      const { brand, category, name, description, basePrice, image, isActive, isSoldOut, earnsStamp, canClaim, modifiers } = req.body || {};
+      const { brand, category, name, description, basePrice, image, isActive, isSoldOut, earnsStamp, canClaim, modifiers, localization } = req.body || {};
 
       const existing = await prisma.menuItem.findUnique({
         where: { id },
@@ -721,6 +826,32 @@ export function createApp() {
       });
       if (!existing) {
         return res.status(404).json({ error: 'Menu item not found' });
+      }
+
+      // Check duplicate modifier group or option keys
+      if (Array.isArray(modifiers)) {
+        const groupKeys = new Set<string>();
+        for (const g of modifiers) {
+          const gKey = g.key || g.id;
+          if (gKey) {
+            if (groupKeys.has(gKey)) {
+              return res.status(400).json({ error: `Duplicate modifier group key: ${gKey}` });
+            }
+            groupKeys.add(gKey);
+          }
+          if (Array.isArray(g.options)) {
+            const optKeys = new Set<string>();
+            for (const opt of g.options) {
+              const optKey = opt.key || opt.id;
+              if (optKey) {
+                if (optKeys.has(optKey)) {
+                  return res.status(400).json({ error: `Duplicate modifier option key: ${optKey}` });
+                }
+                optKeys.add(optKey);
+              }
+            }
+          }
+        }
       }
 
       const data: any = {};
@@ -739,10 +870,50 @@ export function createApp() {
       if (earnsStamp !== undefined) data.earnsStamp = Boolean(earnsStamp);
       if (canClaim !== undefined) data.canClaim = Boolean(canClaim);
 
-      // If modifiers are supplied, sync them (delete removed, create new)
-      if (Array.isArray(modifiers)) {
-        await prisma.$transaction(async (tx) => {
-          // Delete existing modifier groups & options for this item
+      const updatedItem = await prisma.$transaction(async (tx) => {
+        // Handle modifiers sync if supplied
+        if (Array.isArray(modifiers)) {
+          // Identify removed modifier keys to delete their translations
+          const oldGroupKeys = new Set(existing.modifiers.map(g => g.key));
+          const newGroupKeys = new Set(modifiers.map((g: any) => g.key || g.id));
+          const removedGroupKeys: Array<{ ownerType: 'modifierGroup'; ownerKey: string }> = [];
+          for (const ogk of oldGroupKeys) {
+            if (!newGroupKeys.has(ogk)) {
+              removedGroupKeys.push({ ownerType: 'modifierGroup', ownerKey: makeModifierGroupKey(id, ogk) });
+            }
+          }
+
+          const oldOptionKeys = new Set<string>();
+          for (const g of existing.modifiers) {
+            for (const o of g.options) {
+              oldOptionKeys.add(makeModifierOptionKey(id, g.key, o.key));
+            }
+          }
+          const newOptionKeys = new Set<string>();
+          for (const g of modifiers) {
+            const gKey = g.key || g.id;
+            if (Array.isArray(g.options)) {
+              for (const o of g.options) {
+                const oKey = o.key || o.id;
+                newOptionKeys.add(makeModifierOptionKey(id, gKey, oKey));
+              }
+            }
+          }
+          const removedOptionKeys: Array<{ ownerType: 'modifierOption'; ownerKey: string }> = [];
+          for (const ook of oldOptionKeys) {
+            if (!newOptionKeys.has(ook)) {
+              removedOptionKeys.push({ ownerType: 'modifierOption', ownerKey: ook });
+            }
+          }
+
+          if (removedGroupKeys.length > 0) {
+            await deleteOwnedTextsByKeys(removedGroupKeys, tx);
+          }
+          if (removedOptionKeys.length > 0) {
+            await deleteOwnedTextsByKeys(removedOptionKeys, tx);
+          }
+
+          // Delete existing modifier groups & options
           const groupIds = existing.modifiers.map(g => g.id);
           if (groupIds.length > 0) {
             await tx.modifierOption.deleteMany({
@@ -773,23 +944,100 @@ export function createApp() {
             });
           }
 
-          await tx.menuItem.update({
-            where: { id },
-            data
-          });
-        }, WRITE_TX_OPTIONS);
-      } else {
-        await prisma.menuItem.update({
+          // Save modifier translations if provided
+          if (localization?.modifiers && Array.isArray(localization.modifiers)) {
+            const modEdits: any[] = [];
+            for (const modLoc of localization.modifiers) {
+              if (modLoc.name) {
+                const gKey = makeModifierGroupKey(id, modLoc.clientKey);
+                modEdits.push({
+                  ownerType: 'modifierGroup',
+                  ownerKey: gKey,
+                  field: 'name',
+                  sourceLocale: modLoc.name.sourceLocale,
+                  cells: modLoc.name.cells,
+                });
+              }
+              if (Array.isArray(modLoc.options)) {
+                for (const optLoc of modLoc.options) {
+                  if (optLoc.name) {
+                    const oKey = makeModifierOptionKey(id, modLoc.clientKey, optLoc.clientKey);
+                    modEdits.push({
+                      ownerType: 'modifierOption',
+                      ownerKey: oKey,
+                      field: 'name',
+                      sourceLocale: optLoc.name.sourceLocale,
+                      cells: optLoc.name.cells,
+                    });
+                  }
+                }
+              }
+            }
+            if (modEdits.length > 0) {
+              await saveLocalizedEdits(modEdits, tx);
+            }
+          }
+        }
+
+        // Update item name localization if changed or provided
+        if (localization?.name) {
+          await saveLocalizedEdits([{
+            ownerType: 'item',
+            ownerKey: id,
+            field: 'name',
+            expectedRevision: localization.name.expectedRevision,
+            sourceLocale: localization.name.sourceLocale,
+            cells: localization.name.cells,
+          }], tx);
+        } else if (name !== undefined && name !== existing.name) {
+          const detected = detectLocaleFromText(name);
+          const srcLocale = detected.locale || 'en';
+          await saveLocalizedEdits([{
+            ownerType: 'item',
+            ownerKey: id,
+            field: 'name',
+            sourceLocale: srcLocale,
+            cells: [{ locale: srcLocale, text: name }],
+          }], tx);
+        }
+
+        // Update item description localization if changed or provided
+        if (localization?.description) {
+          await saveLocalizedEdits([{
+            ownerType: 'item',
+            ownerKey: id,
+            field: 'description',
+            expectedRevision: localization.description.expectedRevision,
+            sourceLocale: localization.description.sourceLocale,
+            cells: localization.description.cells,
+          }], tx);
+        } else if (description !== undefined && description !== existing.description) {
+          const descText = (description || '').trim();
+          const descSrcLocale = descText ? detectLocaleFromText(descText).locale || 'en' : 'en';
+          await saveLocalizedEdits([{
+            ownerType: 'item',
+            ownerKey: id,
+            field: 'description',
+            sourceLocale: descSrcLocale,
+            cells: [{ locale: descSrcLocale, text: descText }],
+          }], tx);
+        }
+
+        await tx.menuItem.update({
           where: { id },
           data
         });
-      }
 
-      const updated = await prisma.menuItem.findUnique({
-        where: { id },
-        include: { modifiers: { include: { options: true } } }
-      });
-      res.json(updated);
+        const updated = await tx.menuItem.findUnique({
+          where: { id },
+          include: { modifiers: { include: { options: true } } }
+        });
+
+        const [localized] = await attachCatalogLocalization([updated!], tx);
+        return localized;
+      }, WRITE_TX_OPTIONS);
+
+      res.json(updatedItem);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to update menu item' });
@@ -801,7 +1049,7 @@ export function createApp() {
       const id = String(req.params.id);
       const item = await prisma.menuItem.findUnique({
         where: { id },
-        include: { orderItems: true }
+        include: { orderItems: true, modifiers: { include: { options: true } } }
       });
       if (!item) {
         return res.status(404).json({ error: 'Menu item not found' });
@@ -816,7 +1064,7 @@ export function createApp() {
         return res.json({ ok: true, softDeleted: true });
       }
 
-      // Otherwise clean delete with modifiers
+      // Otherwise clean delete with modifiers and localization
       await prisma.$transaction(async (tx) => {
         const groups = await tx.modifierGroup.findMany({ where: { menuItemId: id } });
         const groupIds = groups.map(g => g.id);
@@ -829,6 +1077,17 @@ export function createApp() {
           });
         }
         await tx.menuItem.delete({ where: { id } });
+
+        // Delete owned localized text for item and its modifiers
+        await deleteOwnedTexts('item', id, tx);
+        for (const g of item.modifiers) {
+          const gKey = makeModifierGroupKey(id, g.key);
+          await deleteOwnedTexts('modifierGroup', gKey, tx);
+          for (const o of g.options) {
+            const oKey = makeModifierOptionKey(id, g.key, o.key);
+            await deleteOwnedTexts('modifierOption', oKey, tx);
+          }
+        }
       }, WRITE_TX_OPTIONS);
 
       res.json({ ok: true, deleted: true });
@@ -868,7 +1127,8 @@ export function createApp() {
         where,
         orderBy: { sortOrder: 'asc' },
       });
-      res.json(categories);
+      const localizedCategories = await attachCategoryLocalization(categories);
+      res.json(localizedCategories);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch categories' });
@@ -877,7 +1137,7 @@ export function createApp() {
 
   app.post('/api/categories', requireManager, async (req, res) => {
     try {
-      const { brand, name, sortOrder } = req.body || {};
+      const { brand, name, sortOrder, localization } = req.body || {};
       if (!name || typeof name !== 'string') {
         return res.status(400).json({ error: 'Name is required' });
       }
@@ -897,14 +1157,29 @@ export function createApp() {
         order = maxCategory ? maxCategory.sortOrder + 1 : 0;
       }
 
-      const category = await prisma.category.create({
-        data: {
-          brand: normalizedBrand,
-          name: normalizedName,
-          sortOrder: order,
-        },
-      });
-      res.status(201).json(category);
+      const createdCategory = await prisma.$transaction(async (tx) => {
+        const category = await tx.category.create({
+          data: {
+            brand: normalizedBrand,
+            name: normalizedName,
+            sortOrder: order,
+          },
+        });
+
+        const srcLocale = localization?.name?.sourceLocale || detectLocaleFromText(normalizedName).locale || 'en';
+        await saveLocalizedEdits([{
+          ownerType: 'category',
+          ownerKey: category.id,
+          field: 'name',
+          sourceLocale: srcLocale,
+          cells: localization?.name?.cells || [{ locale: srcLocale, text: normalizedName }],
+        }], tx);
+
+        const [localized] = await attachCategoryLocalization([category], tx);
+        return localized;
+      }, WRITE_TX_OPTIONS);
+
+      res.status(201).json(createdCategory);
     } catch (error: any) {
       console.error(error);
       if (error?.code === 'P2002') {
@@ -940,7 +1215,7 @@ export function createApp() {
   app.put('/api/categories/:id', requireManager, async (req, res) => {
     try {
       const id = String(req.params.id);
-      const { name, sortOrder, isActive } = req.body || {};
+      const { name, sortOrder, isActive, localization } = req.body || {};
 
       const existing = await prisma.category.findUnique({
         where: { id },
@@ -969,10 +1244,10 @@ export function createApp() {
         updateData.isActive = Boolean(isActive);
       }
 
-      let updated;
-      if (newName && newName !== existing.name) {
-        updated = await prisma.$transaction(async (tx) => {
-          const updatedCat = await tx.category.update({
+      const updatedCategory = await prisma.$transaction(async (tx) => {
+        let updatedCat;
+        if (newName && newName !== existing.name) {
+          updatedCat = await tx.category.update({
             where: { id },
             data: updateData,
           });
@@ -985,16 +1260,39 @@ export function createApp() {
               category: newName,
             },
           });
-          return updatedCat;
-        }, WRITE_TX_OPTIONS);
-      } else {
-        updated = await prisma.category.update({
-          where: { id },
-          data: updateData,
-        });
-      }
+        } else {
+          updatedCat = await tx.category.update({
+            where: { id },
+            data: updateData,
+          });
+        }
 
-      res.json(updated);
+        if (localization?.name) {
+          await saveLocalizedEdits([{
+            ownerType: 'category',
+            ownerKey: id,
+            field: 'name',
+            expectedRevision: localization.name.expectedRevision,
+            sourceLocale: localization.name.sourceLocale,
+            cells: localization.name.cells,
+          }], tx);
+        } else if (newName && newName !== existing.name) {
+          const detected = detectLocaleFromText(newName);
+          const srcLocale = detected.locale || 'en';
+          await saveLocalizedEdits([{
+            ownerType: 'category',
+            ownerKey: id,
+            field: 'name',
+            sourceLocale: srcLocale,
+            cells: [{ locale: srcLocale, text: newName }],
+          }], tx);
+        }
+
+        const [localized] = await attachCategoryLocalization([updatedCat], tx);
+        return localized;
+      }, WRITE_TX_OPTIONS);
+
+      res.json(updatedCategory);
     } catch (error: any) {
       console.error(error);
       if (error?.code === 'P2002') {
@@ -1028,9 +1326,12 @@ export function createApp() {
         });
       }
 
-      await prisma.category.delete({
-        where: { id },
-      });
+      await prisma.$transaction(async (tx) => {
+        await tx.category.delete({
+          where: { id },
+        });
+        await deleteOwnedTexts('category', id, tx);
+      }, WRITE_TX_OPTIONS);
 
       res.json({ ok: true });
     } catch (error) {

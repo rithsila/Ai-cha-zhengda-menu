@@ -10,13 +10,13 @@ import {
   Check,
   Layers,
   AlertCircle,
+  Languages,
 } from 'lucide-react';
-import { Button } from './ui/Button';
-import { Badge } from './ui/Badge';
-import { useToast } from './ui/Toast';
-import { Skeleton } from './ui/Skeleton';
+import { Button, Badge, useToast, Skeleton } from './ui';
 import { API_BASE, authHeaders } from '../lib/api';
 import type { MenuItemFull } from './MenuItemEditModal';
+import { TranslationEditor } from './languages/TranslationEditor';
+import type { LocalizedCellDraft, Locale } from './languages/useTranslationDraft';
 
 export interface Category {
   id: string;
@@ -24,6 +24,13 @@ export interface Category {
   name: string;
   sortOrder: number;
   isActive: boolean;
+  localized?: {
+    name?: {
+      sourceLocale: 'en' | 'km' | 'zh';
+      revision?: number;
+      cells?: Array<{ locale: 'en' | 'km' | 'zh'; text: string; status?: string }>;
+    };
+  };
 }
 
 export interface CategoryManagementModalProps {
@@ -47,11 +54,21 @@ export function CategoryManagementModal({
   // Add category state
   const [newCategoryName, setNewCategoryName] = useState('');
   const [adding, setAdding] = useState(false);
+  const [showAddTranslations, setShowAddTranslations] = useState(false);
+  const [newCatLocState, setNewCatLocState] = useState<{
+    sourceLocale: Locale | null;
+    cells: LocalizedCellDraft[];
+  } | null>(null);
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [showEditTranslations, setShowEditTranslations] = useState(false);
+  const [editingLocState, setEditingLocState] = useState<{
+    sourceLocale: Locale | null;
+    cells: LocalizedCellDraft[];
+  } | null>(null);
 
   // Reorder loading state
   const [reordering, setReordering] = useState(false);
@@ -74,6 +91,7 @@ export function CategoryManagementModal({
       if (e.key === 'Escape') {
         if (editingId) {
           setEditingId(null);
+          setShowEditTranslations(false);
         } else {
           onClose();
         }
@@ -109,6 +127,10 @@ export function CategoryManagementModal({
       fetchCategories();
       setEditingId(null);
       setNewCategoryName('');
+      setShowAddTranslations(false);
+      setShowEditTranslations(false);
+      setNewCatLocState(null);
+      setEditingLocState(null);
     }
   }, [isOpen, fetchCategories]);
 
@@ -127,16 +149,33 @@ export function CategoryManagementModal({
   // Add category
   const handleAddCategory = async (e: FormEvent) => {
     e.preventDefault();
-    const cleanName = newCategoryName.trim();
+    const primaryName = (newCatLocState?.cells.find((c) => c.locale === newCatLocState.sourceLocale)?.text || newCategoryName).trim();
+    const cleanName = primaryName || newCategoryName.trim();
     if (!cleanName) return;
 
     setAdding(true);
     setError(null);
     try {
+      const bodyPayload: any = { name: cleanName };
+      if (showAddTranslations && newCatLocState && newCatLocState.cells.some((c) => c.text.trim())) {
+        bodyPayload.localization = {
+          name: {
+            sourceLocale: newCatLocState.sourceLocale || 'en',
+            cells: newCatLocState.cells
+              .filter((c) => c.text.trim())
+              .map((c) => ({
+                locale: c.locale,
+                text: c.text.trim(),
+                status: c.reviewed ? 'reviewed' : 'draft',
+              })),
+          },
+        };
+      }
+
       const res = await fetch(`${API_BASE}/api/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ name: cleanName }),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -149,6 +188,8 @@ export function CategoryManagementModal({
         variant: 'success',
       });
       setNewCategoryName('');
+      setNewCatLocState(null);
+      setShowAddTranslations(false);
       await fetchCategories();
       onUpdated?.();
     } catch (err: any) {
@@ -212,22 +253,42 @@ export function CategoryManagementModal({
   const handleStartEdit = (cat: Category) => {
     setEditingId(cat.id);
     setEditingName(cat.name);
+    setShowEditTranslations(false);
+    setEditingLocState(null);
   };
 
   const handleSaveEdit = async (cat: Category) => {
-    const cleanName = editingName.trim();
+    const primaryName = (editingLocState?.cells.find((c) => c.locale === editingLocState.sourceLocale)?.text || editingName).trim();
+    const cleanName = primaryName || editingName.trim();
     if (!cleanName) return;
-    if (cleanName === cat.name) {
+    if (cleanName === cat.name && !showEditTranslations) {
       setEditingId(null);
       return;
     }
 
     setSavingEdit(true);
     try {
+      const bodyPayload: any = { name: cleanName };
+      if (showEditTranslations && editingLocState && editingLocState.cells.some((c) => c.text.trim())) {
+        bodyPayload.localization = {
+          name: {
+            expectedRevision: cat.localized?.name?.revision,
+            sourceLocale: editingLocState.sourceLocale || 'en',
+            cells: editingLocState.cells
+              .filter((c) => c.text.trim())
+              .map((c) => ({
+                locale: c.locale,
+                text: c.text.trim(),
+                status: c.reviewed ? 'reviewed' : 'draft',
+              })),
+          },
+        };
+      }
+
       const res = await fetch(`${API_BASE}/api/categories/${cat.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ name: cleanName }),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -235,16 +296,18 @@ export function CategoryManagementModal({
       }
 
       toast({
-        title: 'Category renamed',
-        description: `Renamed to "${cleanName}".`,
+        title: 'Category updated',
+        description: `Updated "${cleanName}".`,
         variant: 'success',
       });
       setEditingId(null);
+      setShowEditTranslations(false);
+      setEditingLocState(null);
       await fetchCategories();
       onUpdated?.();
     } catch (err: any) {
       toast({
-        title: 'Could not rename category',
+        title: 'Could not update category',
         description: err.message || 'An error occurred',
         variant: 'error',
       });
@@ -330,26 +393,55 @@ export function CategoryManagementModal({
           )}
 
           {/* Add Category Row */}
-          <form onSubmit={handleAddCategory} className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="New category name..."
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              className="h-10 flex-1 bg-surface border border-border px-3 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent font-sans transition-colors rounded-none"
-            />
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={!newCategoryName.trim() || adding}
-              loading={adding}
-              className="font-medium rounded-none"
-            >
-              <Plus className="size-4" />
-              Add
-            </Button>
-          </form>
+          <div className="space-y-2">
+            <form onSubmit={handleAddCategory} className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="New category name..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                className="h-10 flex-1 bg-surface border border-border px-3 text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent font-sans transition-colors rounded-none"
+              />
+              <button
+                type="button"
+                aria-label="Toggle category translations"
+                onClick={() => setShowAddTranslations(!showAddTranslations)}
+                className={`h-10 px-3 border border-border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  showAddTranslations ? 'bg-accent/10 border-accent text-accent' : 'bg-surface text-ink-soft hover:text-ink'
+                }`}
+                title="Add 3-language translations"
+              >
+                <Languages className="size-4 text-accent" />
+                <span className="hidden sm:inline">Translations</span>
+              </button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={!newCategoryName.trim() || adding}
+                loading={adding}
+                className="font-medium rounded-none h-10 px-4"
+              >
+                <Plus className="size-4" />
+                Add
+              </Button>
+            </form>
+
+            {showAddTranslations && (
+              <div className="p-3 border border-border bg-surface-sunken/40">
+                <TranslationEditor
+                  label="Category Name"
+                  fieldName="category name"
+                  clientKey="new-cat-name"
+                  field="name"
+                  compact
+                  initialCells={newCategoryName ? { en: { text: newCategoryName } } : undefined}
+                  onChange={setNewCatLocState}
+                  onPrimaryTextChange={setNewCategoryName}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Categories List */}
           <div className="space-y-2">
@@ -379,45 +471,89 @@ export function CategoryManagementModal({
                       className="flex items-center justify-between p-3 gap-3 transition-colors hover:bg-surface-sunken/40"
                     >
                       {isEditing ? (
-                        <div className="flex flex-1 items-center gap-2">
-                          <input
-                            type="text"
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSaveEdit(cat);
-                              } else if (e.key === 'Escape') {
+                        <div className="flex flex-col flex-1 gap-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleSaveEdit(cat);
+                                } else if (e.key === 'Escape') {
+                                  setEditingId(null);
+                                  setShowEditTranslations(false);
+                                }
+                              }}
+                              autoFocus
+                              className="h-8 flex-1 bg-surface border border-accent px-2 text-sm text-ink focus:outline-none rounded-none"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Toggle translations for category"
+                              onClick={() => setShowEditTranslations(!showEditTranslations)}
+                              className={`h-8 px-2 border border-border text-xs flex items-center gap-1 cursor-pointer ${
+                                showEditTranslations ? 'bg-accent/10 border-accent text-accent' : 'bg-surface text-ink-soft hover:text-ink'
+                              }`}
+                              title="Edit translations"
+                            >
+                              <Languages className="size-3.5 text-accent" />
+                            </button>
+                            <Button
+                              type="button"
+                              variant="primary"
+                              size="xs"
+                              aria-label="Save"
+                              loading={savingEdit}
+                              onClick={() => handleSaveEdit(cat)}
+                              className="rounded-none font-medium text-xs"
+                            >
+                              <Check className="size-3.5 mr-1" />
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              aria-label="Cancel"
+                              disabled={savingEdit}
+                              onClick={() => {
                                 setEditingId(null);
-                              }
-                            }}
-                            autoFocus
-                            className="h-8 flex-1 bg-surface border border-accent px-2 text-sm text-ink focus:outline-none rounded-none"
-                          />
-                          <Button
-                            type="button"
-                            variant="primary"
-                            size="xs"
-                            aria-label="Save"
-                            loading={savingEdit}
-                            onClick={() => handleSaveEdit(cat)}
-                            className="rounded-none font-medium text-xs"
-                          >
-                            <Check className="size-3.5 mr-1" />
-                            Save
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="xs"
-                            aria-label="Cancel"
-                            disabled={savingEdit}
-                            onClick={() => setEditingId(null)}
-                            className="rounded-none text-xs"
-                          >
-                            <X className="size-3.5" />
-                          </Button>
+                                setShowEditTranslations(false);
+                              }}
+                              className="rounded-none text-xs"
+                            >
+                              <X className="size-3.5" />
+                            </Button>
+                          </div>
+
+                          {showEditTranslations && (
+                            <div className="p-3 border border-border bg-surface-sunken/40">
+                              <TranslationEditor
+                                label="Category Name"
+                                fieldName="category name"
+                                clientKey={`cat-${cat.id}-name`}
+                                field="name"
+                                compact
+                                initialSourceLocale={cat.localized?.name?.sourceLocale || 'auto'}
+                                initialCells={
+                                  cat.localized?.name?.cells
+                                    ? Object.fromEntries(
+                                        cat.localized.name.cells.map((c: any) => [
+                                          c.locale,
+                                          { text: c.text, reviewed: c.status === 'reviewed' },
+                                        ])
+                                      )
+                                    : editingName
+                                    ? { en: { text: editingName } }
+                                    : undefined
+                                }
+                                onChange={setEditingLocState}
+                                onPrimaryTextChange={setEditingName}
+                              />
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <>

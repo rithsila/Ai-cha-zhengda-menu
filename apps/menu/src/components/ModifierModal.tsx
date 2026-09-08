@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '../utils/format';
+import { resolveWithLegacyFallback } from '../utils/localizedText';
 
 interface ModifierModalProps {
   item: MenuItem | null;
@@ -14,7 +15,7 @@ interface ModifierModalProps {
 }
 
 export function ModifierModal({ item, initialSelected, editingCartItemId, onClose, onConfirm }: ModifierModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selected, setSelected] = useState<Record<string, ModifierOption[]>>(initialSelected || {});
   const [attempted, setAttempted] = useState(false);
   const dragControls = useDragControls();
@@ -117,8 +118,14 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
             </div>
             <div className="px-4 pb-3 pt-1 flex justify-between items-start">
               <div>
-                <h2 className="text-xl font-bold">{t(item.name)}</h2>
-                {item.description && <p className="text-sm text-tg-hint">{t(item.description)}</p>}
+                <h2 className="text-xl font-bold">
+                  {resolveWithLegacyFallback(item.localized?.name, i18n.language, item.name, t)}
+                </h2>
+                {Boolean(resolveWithLegacyFallback(item.localized?.description, i18n.language, item.description || '', t)) && (
+                  <p className="text-sm text-tg-hint">
+                    {resolveWithLegacyFallback(item.localized?.description, i18n.language, item.description || '', t)}
+                  </p>
+                )}
               </div>
               <button onClick={onClose} className="p-2 bg-tg-secondary-bg rounded-full text-tg-hint cursor-pointer">
                 ✕
@@ -131,7 +138,7 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
               <div key={group.id}>
                 <div className="flex justify-between items-end mb-3">
                   <h3 className={`font-bold ${isGroupMissing(group.id) ? 'text-[#E53935]' : ''}`}>
-                    {t(group.name)}
+                    {resolveWithLegacyFallback(group.localized?.name, i18n.language, group.name, t)}
                     {isGroupMissing(group.id) && (
                       <span className="text-xs font-normal ml-2">— {t('pleaseSelect')}</span>
                     )}
@@ -157,7 +164,8 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
                       >
                         <div className="flex justify-between items-center w-full">
                           <span>
-                            {t(opt.name)} {opt.priceDelta > 0 && `(+${formatCurrency(opt.priceDelta)})`}
+                            {resolveWithLegacyFallback(opt.localized?.name, i18n.language, opt.name, t)}{' '}
+                            {opt.priceDelta > 0 && `(+${formatCurrency(opt.priceDelta)})`}
                           </span>
                         </div>
                       </button>

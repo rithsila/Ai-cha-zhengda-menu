@@ -17,6 +17,7 @@ import { useConfig, configNumber } from '../hooks/useConfig';
 import { useMyPrizes } from '../hooks/useMyPrizes';
 import { useBranches } from '../hooks/useBranches';
 import { useCatalog } from '../hooks/useCatalog';
+import { resolveWithLegacyFallback } from '../utils/localizedText';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ function initialPaymentMethod(): 'khqr' | 'cash' {
 }
 
 export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: CheckoutModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const shouldReduceMotion = useReducedMotion();
   const onlinePaymentState = useOnlinePaymentState();
   const storeStatus = useStoreStatus();
@@ -519,10 +520,16 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                         {cart.map(item => {
                           const catalogItem = catalogItems.find(i => i.id === item.menuItemId);
                           const isEligible = catalogItem?.canClaim ?? false;
+                          const resolvedItemName = resolveWithLegacyFallback(
+                            catalogItem?.localized?.name || item.localized?.name,
+                            i18n.language,
+                            item.name,
+                            t
+                          );
                           return (
                             <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
                               <div className="flex-1">
-                                <div className="font-bold text-sm">{item.quantity}x {t(item.name)}</div>
+                                <div className="font-bold text-sm">{item.quantity}x {resolvedItemName}</div>
                                 {signedIn && userStamps >= 10 && (
                                   <div className="mt-0.5">
                                     {isEligible ? (
@@ -538,7 +545,18 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                                 )}
                                 {Object.keys(item.selectedModifiers).length > 0 && (
                                   <div className="text-xs text-tg-hint mt-1">
-                                    {Object.values(item.selectedModifiers).flat().map(o => t(o.name)).join(', ')}
+                                    {Object.entries(item.selectedModifiers).flatMap(([groupId, opts]) => {
+                                      const group = catalogItem?.modifiers?.find((g: any) => g.id === groupId || g.key === groupId);
+                                      return opts.map(o => {
+                                        const catalogOpt = group?.options?.find((co: any) => co.id === o.id || co.key === o.id);
+                                        return resolveWithLegacyFallback(
+                                          catalogOpt?.localized?.name || o.localized?.name,
+                                          i18n.language,
+                                          o.name,
+                                          t
+                                        );
+                                      });
+                                    }).join(', ')}
                                   </div>
                                 )}
                               </div>

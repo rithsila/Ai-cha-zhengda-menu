@@ -5,9 +5,11 @@ import { useTranslation } from 'react-i18next';
 import type { MenuItem } from '../types';
 import { Button } from './ui/Button';
 import { formatCurrency } from '../utils/format';
+import { resolveWithLegacyFallback } from '../utils/localizedText';
 
 interface ItemPreviewModalProps {
   item: MenuItem | null;
+  categoryLabel?: string;
   isFavorite?: boolean;
   onToggleFavorite?: (id: string) => void;
   onClose: () => void;
@@ -16,12 +18,13 @@ interface ItemPreviewModalProps {
 
 export function ItemPreviewModal({
   item,
+  categoryLabel,
   isFavorite,
   onToggleFavorite,
   onClose,
   onAdd,
 }: ItemPreviewModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     if (!item) return;
@@ -51,6 +54,9 @@ export function ItemPreviewModal({
       onClose();
     }
   };
+
+  const itemName = resolveWithLegacyFallback(item.localized?.name, i18n.language, item.name, t);
+  const itemDesc = resolveWithLegacyFallback(item.localized?.description, i18n.language, item.description || '', t);
 
   return (
     <AnimatePresence>
@@ -106,7 +112,7 @@ export function ItemPreviewModal({
             {item.imageFallback ? (
               <img
                 src={item.imageFallback}
-                alt={t(item.name)}
+                alt={itemName}
                 className="w-full h-full object-contain p-4 drop-shadow-lg select-none"
                 draggable={false}
               />
@@ -162,18 +168,18 @@ export function ItemPreviewModal({
               </span>
               {item.category && (
                 <span className="text-[11px] text-tg-hint font-medium">
-                  {t(item.category)}
+                  {categoryLabel || t(item.category)}
                 </span>
               )}
             </div>
 
             <h2 className="text-xl font-extrabold text-tg-text leading-tight mb-2">
-              {t(item.name)}
+              {itemName}
             </h2>
 
-            {item.description ? (
+            {itemDesc ? (
               <p className="text-sm text-tg-hint leading-relaxed">
-                {t(item.description)}
+                {itemDesc}
               </p>
             ) : (
               <p className="text-xs text-tg-hint italic">

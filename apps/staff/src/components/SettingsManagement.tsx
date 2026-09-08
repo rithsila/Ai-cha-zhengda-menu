@@ -24,7 +24,9 @@ export type StaffAccount = {
   createdAt: string;
 };
 
-export type SettingsSubTab = 'store' | 'users';
+import { LanguageManagement } from './languages/LanguageManagement';
+
+export type SettingsSubTab = 'store' | 'users' | 'languages';
 
 export interface SettingsManagementProps {
   subTab?: SettingsSubTab;
@@ -161,6 +163,8 @@ export function SettingsManagement({
     <div className="flex flex-col gap-6">
       {subTab === 'store' ? (
         <StoreSettings />
+      ) : subTab === 'languages' ? (
+        <LanguageManagement />
       ) : (
         <div className="space-y-6">
           {/* Header + Add Action */}

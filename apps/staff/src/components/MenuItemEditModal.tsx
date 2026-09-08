@@ -11,11 +11,10 @@ import {
   AlertCircle,
   Award
 } from 'lucide-react';
-import { Button } from './ui/Button';
-import { CustomSelect } from './ui/CustomSelect';
-import { Switch } from './ui/Switch';
-import { useToast } from './ui/Toast';
+import { Button, CustomSelect, Switch, useToast } from './ui';
 import { API_BASE, apiFetch, authHeaders, resolveImageUrl } from '../lib/api';
+import { TranslationEditor } from './languages/TranslationEditor';
+import type { LocalizedCellDraft, Locale } from './languages/useTranslationDraft';
 
 import type { Category } from './CategoryManagementModal';
 
@@ -48,6 +47,18 @@ export type MenuItemFull = {
   earnsStamp?: boolean;
   canClaim?: boolean;
   modifiers?: ModifierGroupInput[];
+  localized?: {
+    name?: {
+      sourceLocale: 'en' | 'km' | 'zh';
+      revision?: number;
+      cells?: Array<{ locale: 'en' | 'km' | 'zh'; text: string; status?: string }>;
+    };
+    description?: {
+      sourceLocale: 'en' | 'km' | 'zh';
+      revision?: number;
+      cells?: Array<{ locale: 'en' | 'km' | 'zh'; text: string; status?: string }>;
+    };
+  };
 };
 
 const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
@@ -153,6 +164,14 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const [category, setCategory] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [nameLocState, setNameLocState] = useState<{
+    sourceLocale: Locale | null;
+    cells: LocalizedCellDraft[];
+  } | null>(null);
+  const [descLocState, setDescLocState] = useState<{
+    sourceLocale: Locale | null;
+    cells: LocalizedCellDraft[];
+  } | null>(null);
   const [basePrice, setBasePrice] = useState('1.50');
   const [image, setImage] = useState('');
   const [earnsStamp, setEarnsStamp] = useState(true);
@@ -258,6 +277,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     }
     setIsAddingCategory(false);
     setNewCategoryName('');
+    setNameLocState(null);
+    setDescLocState(null);
     setError(null);
   }, [item, isOpen]);
 
@@ -574,7 +595,8 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
-    const cleanName = name.trim();
+    const primaryName = (nameLocState?.cells.find((c) => c.locale === nameLocState.sourceLocale)?.text || name).trim();
+    const cleanName = primaryName || name.trim();
     const cleanCategory = category.trim();
     const parsedPrice = Number(basePrice);
 
@@ -594,11 +616,41 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     setSaving(true);
     setError(null);
 
-    const payload = {
+    const primaryDesc = (descLocState?.cells.find((c) => c.locale === descLocState.sourceLocale)?.text ?? description).trim();
+
+    const localizationPayload: any = {};
+    if (nameLocState && nameLocState.cells.some((c) => c.text.trim())) {
+      localizationPayload.name = {
+        expectedRevision: item?.localized?.name?.revision,
+        sourceLocale: nameLocState.sourceLocale || 'en',
+        cells: nameLocState.cells
+          .filter((c) => c.text.trim())
+          .map((c) => ({
+            locale: c.locale,
+            text: c.text.trim(),
+            status: c.reviewed ? 'reviewed' : 'draft',
+          })),
+      };
+    }
+    if (descLocState && descLocState.cells.some((c) => c.text.trim())) {
+      localizationPayload.description = {
+        expectedRevision: item?.localized?.description?.revision,
+        sourceLocale: descLocState.sourceLocale || 'en',
+        cells: descLocState.cells
+          .filter((c) => c.text.trim())
+          .map((c) => ({
+            locale: c.locale,
+            text: c.text.trim(),
+            status: c.reviewed ? 'reviewed' : 'draft',
+          })),
+      };
+    }
+
+    const payload: any = {
       brand,
       category: cleanCategory,
       name: cleanName,
-      description: description.trim() || undefined,
+      description: primaryDesc || undefined,
       basePrice: parsedPrice,
       image: image.trim() || undefined,
       earnsStamp,
@@ -615,6 +667,10 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         })),
       })),
     };
+
+    if (Object.keys(localizationPayload).length > 0) {
+      payload.localization = localizationPayload;
+    }
 
     try {
       const url = isEditing
@@ -814,24 +870,37 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
           </div>
 
           {/* Name & Base Price */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 items-start">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-                Item Name
-              </label>
-              <input
-                type="text"
+              <TranslationEditor
+                key={`item-name-${item?.id || 'new'}`}
+                label="Item Name"
+                fieldName="item name"
+                clientKey={item?.id ? `item-${item.id}-name` : 'new-item-name'}
+                field="name"
                 required
                 placeholder="e.g. Brown Sugar Boba Milk"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-medium text-ink focus:border-accent outline-none"
+                initialSourceLocale={item?.localized?.name?.sourceLocale || 'auto'}
+                initialCells={
+                  item?.localized?.name?.cells
+                    ? Object.fromEntries(
+                        item.localized.name.cells.map((c: any) => [
+                          c.locale,
+                          { text: c.text, reviewed: c.status === 'reviewed' },
+                        ])
+                      )
+                    : name
+                    ? { en: { text: name } }
+                    : undefined
+                }
+                onChange={setNameLocState}
+                onPrimaryTextChange={setName}
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-                Base Price ($)
+                Base Price ($) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -841,22 +910,36 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 placeholder="1.50"
                 value={basePrice}
                 onChange={(e) => setBasePrice(e.target.value)}
-                className="h-10 w-full rounded-none border border-border bg-surface px-3 text-sm font-bold text-ink focus:border-accent outline-none tabular-nums"
+                className="h-9 w-full rounded border border-border bg-surface px-3 text-sm font-bold text-ink focus:border-accent outline-none tabular-nums"
               />
             </div>
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-ink-soft mb-1.5">
-              Description (Optional)
-            </label>
-            <textarea
-              rows={2}
+            <TranslationEditor
+              key={`item-desc-${item?.id || 'new'}`}
+              label="Description (Optional)"
+              fieldName="description"
+              fieldType="textarea"
+              clientKey={item?.id ? `item-${item.id}-desc` : 'new-item-desc'}
+              field="description"
               placeholder="Short appetizing description..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-none border border-border bg-surface p-3 text-sm font-medium text-ink focus:border-accent outline-none"
+              initialSourceLocale={item?.localized?.description?.sourceLocale || 'auto'}
+              initialCells={
+                item?.localized?.description?.cells
+                  ? Object.fromEntries(
+                      item.localized.description.cells.map((c: any) => [
+                        c.locale,
+                        { text: c.text, reviewed: c.status === 'reviewed' },
+                      ])
+                    )
+                  : description
+                  ? { en: { text: description } }
+                  : undefined
+              }
+              onChange={setDescLocState}
+              onPrimaryTextChange={setDescription}
             />
           </div>
 

@@ -6,9 +6,10 @@ interface CategoryScrollerProps {
   activeCategory: string;
   onChange: (cat: string) => void;
   brand: Brand;
+  getCategoryLabel?: (cat: string) => string;
 }
 
-export function CategoryScroller({ categories, activeCategory, onChange, brand }: CategoryScrollerProps) {
+export function CategoryScroller({ categories, activeCategory, onChange, brand, getCategoryLabel }: CategoryScrollerProps) {
   const { t } = useTranslation();
   const activeBg = brand === 'ai-cha' ? 'bg-brand-primary' : 'bg-brand-zhengda';
 
@@ -25,7 +26,7 @@ export function CategoryScroller({ categories, activeCategory, onChange, brand }
                 : 'bg-tg-secondary-bg text-tg-text'
             }`}
           >
-            {t(cat)}
+            {getCategoryLabel ? getCategoryLabel(cat) : t(cat)}
           </button>
         ))}
       </div>

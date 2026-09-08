@@ -21,7 +21,19 @@ const STORAGE_KEY = 'staff-theme';
  * the inline boot script in index.html reads it the same way.
  */
 
-const media = window.matchMedia('(prefers-color-scheme: dark)');
+const media: MediaQueryList =
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)')
+    : ({
+        matches: false,
+        media: '(prefers-color-scheme: dark)',
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      } as unknown as MediaQueryList);
 
 function readStoredMode(): ThemeMode {
   try {

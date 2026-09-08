@@ -272,4 +272,49 @@ describe('CategoryManagementModal', () => {
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(3);
   });
+
+  it('supports adding a category with multilingual translations', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await waitFor(() => {
+      expect(screen.getByText('Milk Tea')).toBeDefined();
+    });
+
+    // Click Translations toggle
+    const toggleBtn = screen.getByRole('button', { name: /Toggle category translations/i });
+    await user.click(toggleBtn);
+
+    // Three language fields should appear
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: 'English category name' })).toBeDefined();
+      expect(screen.getByRole('textbox', { name: 'Khmer category name' })).toBeDefined();
+      expect(screen.getByRole('textbox', { name: 'Chinese category name' })).toBeDefined();
+    });
+
+    const enInput = screen.getByRole('textbox', { name: 'English category name' });
+    fireEvent.change(enInput, { target: { value: 'Seasonal Specials' } });
+
+    const zhInput = screen.getByRole('textbox', { name: 'Chinese category name' });
+    fireEvent.change(zhInput, { target: { value: '季节特饮' } });
+
+    const addBtn = screen.getByRole('button', { name: /^Add$/i });
+    await user.click(addBtn);
+
+    await waitFor(() => {
+      const fetchMock = globalThis.fetch as any;
+      const postCall = fetchMock.mock.calls.find((call: any[]) =>
+        String(call[0]).endsWith('/api/categories') && call[1]?.method === 'POST'
+      );
+      expect(postCall).toBeDefined();
+      const body = JSON.parse(postCall[1].body);
+      expect(body.name).toBe('Seasonal Specials');
+      expect(body.localization?.name?.cells).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ locale: 'en', text: 'Seasonal Specials' }),
+          expect.objectContaining({ locale: 'zh', text: '季节特饮' }),
+        ])
+      );
+    });
+  });
 });
