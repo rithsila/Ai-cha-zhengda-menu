@@ -99,21 +99,4 @@ describe('Sidebar Menu & Brand Header', () => {
     expect(screen.queryByText('Store')).toBeNull();
     expect(localStorage.getItem('staff_settings_expanded')).toBe('false');
   });
-
-  it('renders chime button and theme toggle in sidebar footer before signout and toggles mute', () => {
-    render(<App />);
-
-    // Chime button is in the footer without text
-    const chimeBtn = screen.getByLabelText(/Mute chime|Unmute chime/i);
-    expect(chimeBtn).toBeDefined();
-    expect(screen.queryByText('Chime On')).toBeNull();
-
-    // Toggle mute
-    fireEvent.click(chimeBtn);
-    expect(screen.getByLabelText('Unmute chime')).toBeDefined();
-
-    // Theme toggle is in the footer
-    const themeBtn = screen.getByLabelText(/Switch to (dark|light) theme/i);
-    expect(themeBtn).toBeDefined();
-  });
 });

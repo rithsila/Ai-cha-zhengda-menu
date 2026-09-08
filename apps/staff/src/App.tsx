@@ -758,7 +758,6 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             type="button"
             onClick={() => setMobileMenuOpen(false)}
             className="rounded-none p-1 text-ink-soft hover:bg-surface-sunken lg:hidden"
-            aria-label="Close sidebar"
           >
             <X className="size-5" />
           </button>
@@ -1058,24 +1057,28 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             </button>
           </div>
 
-          {/* Icon-only Chime & Dark/Light Mode Toggles */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
             <Button
               variant="ghost"
               size="md"
               onClick={toggleMute}
-              className="flex-1 justify-center rounded-none border border-border"
+              className="flex-1 justify-start gap-2 text-xs font-bold"
               aria-label={muted ? 'Unmute chime' : 'Mute chime'}
-              title={muted ? 'Chime is muted (click to unmute)' : 'Chime is on (click to mute)'}
             >
               {muted ? (
-                <BellOff className="size-4 text-ink-faint" />
+                <>
+                  <BellOff className="size-4 text-ink-faint" />
+                  <span>Muted</span>
+                </>
               ) : (
-                <Bell className="size-4 text-accent" />
+                <>
+                  <Bell className="size-4 text-accent" />
+                  <span>Chime On</span>
+                </>
               )}
             </Button>
 
-            <ThemeToggle className="flex-1 justify-center rounded-none border border-border" />
+            <ThemeToggle />
           </div>
 
           <Button
