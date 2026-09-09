@@ -916,10 +916,15 @@ export function CustomerEditModal({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-xs font-bold text-ink">
-                            #{order.id.slice(-6).toUpperCase()}
+                            {order.pickupCode || `#${order.id.slice(0, 6).toUpperCase()}`}
                           </span>
+                          {order.pickupCode && (
+                            <span className="font-mono text-xs text-ink-faint">
+                              #{order.id.slice(0, 6).toUpperCase()}
+                            </span>
+                          )}
                           <Badge
                             variant={
                               order.status === 'completed' || order.status === 'paid'
