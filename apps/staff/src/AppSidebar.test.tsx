@@ -99,6 +99,8 @@ describe('Sidebar Menu & Brand Header', () => {
     expect(screen.queryByText('Store')).toBeNull();
     expect(screen.queryByText('Languages')).toBeNull();
     expect(localStorage.getItem('staff_settings_expanded')).toBe('false');
+  });
+
   it('renders Languages subtab in settings submenu and navigates to Languages view', () => {
     render(<App />);
 
