@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
     "start": "prisma db push --skip-generate && node dist/index.js",
-    "test": "DATABASE_URL=file:./test.db npx prisma db push --skip-generate --accept-data-loss && DATABASE_URL=file:./test.db ALLOW_UNVERIFIED_TELEGRAM=1 vitest run --no-file-parallelism",
+    "test": "rm -f prisma/test.db && DATABASE_URL=file:./test.db npx prisma db push --skip-generate --accept-data-loss && DATABASE_URL=file:./test.db ALLOW_UNVERIFIED_TELEGRAM=1 vitest run --no-file-parallelism",
     "translations:backfill": "tsx src/translations/backfill.ts"
   },
   "keywords": [],
