@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '../utils/format';
 import { resolveWithLegacyFallback } from '../utils/localizedText';
+import { calculateItemUnitPrice } from '../utils/pricing';
 
 interface ModifierModalProps {
   item: MenuItem | null;
@@ -69,11 +70,7 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
   };
 
   const calculateTotal = () => {
-    let total = item.basePrice;
-    Object.values(selected).forEach(options => {
-      options.forEach(opt => total += opt.priceDelta);
-    });
-    return total;
+    return calculateItemUnitPrice(item, selected);
   };
 
   const isGroupMissing = (groupId: string) =>
@@ -134,46 +131,65 @@ export function ModifierModal({ item, initialSelected, editingCartItemId, onClos
           </div>
 
           <div className="p-4 space-y-6">
-            {item.modifiers?.map(group => (
-              <div key={group.id}>
-                <div className="flex justify-between items-end mb-3">
-                  <h3 className={`font-bold ${isGroupMissing(group.id) ? 'text-[#E53935]' : ''}`}>
-                    {resolveWithLegacyFallback(group.localized?.name, i18n.language, group.name, t)}
-                    {isGroupMissing(group.id) && (
-                      <span className="text-xs font-normal ml-2">— {t('pleaseSelect')}</span>
-                    )}
-                  </h3>
-                  <span className={`text-xs ${isGroupMissing(group.id) ? 'text-[#E53935] font-bold' : 'text-tg-hint'}`}>
-                    {group.required ? t('required') : t('optional')} {group.type === 'single' ? t('pick1') : t('multi')}
-                  </span>
+            {item.modifiers?.map(group => {
+              const freeCount = group.type === 'multiple' ? (group.freeCount ?? 0) : 0;
+              const groupSelections = selected[group.id] || [];
+              const freeOptionIds = new Set<string>();
+              if (freeCount > 0) {
+                const sortedSelected = [...groupSelections].sort((a, b) => a.priceDelta - b.priceDelta);
+                sortedSelected.slice(0, freeCount).forEach(o => freeOptionIds.add(o.id));
+              }
+
+              return (
+                <div key={group.id}>
+                  <div className="flex justify-between items-end mb-3">
+                    <h3 className={`font-bold ${isGroupMissing(group.id) ? 'text-[#E53935]' : ''}`}>
+                      {resolveWithLegacyFallback(group.localized?.name, i18n.language, group.name, t)}
+                      {isGroupMissing(group.id) && (
+                        <span className="text-xs font-normal ml-2">— {t('pleaseSelect')}</span>
+                      )}
+                    </h3>
+                    <span className={`text-xs ${isGroupMissing(group.id) ? 'text-[#E53935] font-bold' : 'text-tg-hint'}`}>
+                      {group.required ? t('required') : t('optional')} {group.type === 'single' ? t('pick1') : t('multi')}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.options.map(opt => {
+                      const isSelected = groupSelections.some(o => o.id === opt.id);
+                      const isFreeSelected = isSelected && freeOptionIds.has(opt.id);
+
+                      let priceText = '';
+                      if (isFreeSelected) {
+                        priceText = ` (${t('Free') || 'Free'})`;
+                      } else if (opt.priceDelta > 0) {
+                        priceText = ` (+${formatCurrency(opt.priceDelta)})`;
+                      }
+
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => handleToggle(group, opt)}
+                          className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
+                            isSelected 
+                              ? 'border-brand-primary text-brand-primary bg-brand-primary/10 font-bold'
+                              : isGroupMissing(group.id)
+                                ? 'border-brand-primary/40 text-tg-text bg-tg-secondary-bg'
+                                : 'border-tg-hint/20 text-tg-text bg-tg-secondary-bg'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center w-full">
+                            <span>
+                              {resolveWithLegacyFallback(opt.localized?.name, i18n.language, opt.name, t)}
+                              {priceText}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {group.options.map(opt => {
-                    const isSelected = (selected[group.id] || []).some(o => o.id === opt.id);
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => handleToggle(group, opt)}
-                        className={`px-4 py-2 rounded-xl text-sm border transition-colors ${
-                          isSelected 
-                            ? 'border-brand-primary text-brand-primary bg-brand-primary/10 font-bold'
-                            : isGroupMissing(group.id)
-                              ? 'border-brand-primary/40 text-tg-text bg-tg-secondary-bg'
-                              : 'border-tg-hint/20 text-tg-text bg-tg-secondary-bg'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center w-full">
-                          <span>
-                            {resolveWithLegacyFallback(opt.localized?.name, i18n.language, opt.name, t)}{' '}
-                            {opt.priceDelta > 0 && `(+${formatCurrency(opt.priceDelta)})`}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="sticky bottom-0 bg-tg-bg p-4 border-t border-tg-hint/20 pb-8">

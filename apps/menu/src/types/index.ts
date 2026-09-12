@@ -47,6 +47,7 @@ export interface ModifierGroup {
   type: 'single' | 'multiple';
   options: ModifierOption[];
   required?: boolean;
+  freeCount?: number;
   localized?: {
     name?: LocalizedText;
   };

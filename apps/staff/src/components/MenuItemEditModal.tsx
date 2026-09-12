@@ -30,6 +30,7 @@ export type ModifierGroupInput = {
   key?: string;
   name: string;
   type: 'single' | 'multiple';
+  freeCount?: number;
   required: boolean;
   options: ModifierOptionInput[];
 };
@@ -65,6 +66,7 @@ const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
   {
     name: 'Size / Cup Type',
     type: 'single',
+    freeCount: 0,
     required: true,
     options: [
       { name: 'Hot (400ml)', priceDelta: 0 },
@@ -75,6 +77,7 @@ const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
   {
     name: 'Ice Level',
     type: 'single',
+    freeCount: 0,
     required: true,
     options: [
       { name: 'No Ice', priceDelta: 0 },
@@ -86,6 +89,7 @@ const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
   {
     name: 'Sugar Level',
     type: 'single',
+    freeCount: 0,
     required: true,
     options: [
       { name: '0%', priceDelta: 0 },
@@ -98,6 +102,7 @@ const DEFAULT_DRINK_MODIFIERS: ModifierGroupInput[] = [
   {
     name: 'Toppings',
     type: 'multiple',
+    freeCount: 2,
     required: false,
     options: [
       { name: 'Boba Pearl', priceDelta: 0.25 },
@@ -114,6 +119,7 @@ const DEFAULT_FOOD_MODIFIERS: ModifierGroupInput[] = [
   {
     name: 'Flavor Powder',
     type: 'single',
+    freeCount: 0,
     required: true,
     options: [
       { name: 'Signature', priceDelta: 0 },
@@ -125,6 +131,7 @@ const DEFAULT_FOOD_MODIFIERS: ModifierGroupInput[] = [
   {
     name: 'Signature Sauce',
     type: 'single',
+    freeCount: 0,
     required: false,
     options: [
       { name: 'No Sauce', priceDelta: 0 },
@@ -140,6 +147,7 @@ function cloneModifierPreset(preset: ModifierGroupInput[]): ModifierGroupInput[]
     key: `group_${Date.now()}_${gIdx}`,
     name: g.name,
     type: g.type,
+    freeCount: g.freeCount ?? 0,
     required: g.required,
     options: g.options.map((o, oIdx) => ({
       key: `opt_${Date.now()}_${gIdx}_${oIdx}`,
@@ -255,6 +263,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
           key: g.key,
           name: g.name,
           type: g.type,
+          freeCount: g.freeCount ?? 0,
           required: g.required,
           options: g.options.map((o) => ({
             id: o.id,
@@ -531,6 +540,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         key: `group_${Date.now()}`,
         name: 'New Custom Group',
         type: 'single',
+        freeCount: 0,
         required: false,
         options: [{ key: `opt_${Date.now()}`, name: 'Option 1', priceDelta: 0 }],
       },
@@ -659,6 +669,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
         key: g.key || `group_${Date.now()}`,
         name: g.name.trim(),
         type: g.type,
+        freeCount: g.type === 'multiple' ? Math.max(0, Number(g.freeCount) || 0) : 0,
         required: g.required,
         options: g.options.map((o) => ({
           key: o.key || `opt_${Date.now()}`,
@@ -1146,7 +1157,12 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                         />
                         <CustomSelect<'single' | 'multiple'>
                           value={group.type}
-                          onChange={(val) => updateGroup(gIdx, 'type', val)}
+                          onChange={(val) => {
+                            updateGroup(gIdx, 'type', val);
+                            if (val === 'multiple' && (group.freeCount === undefined || group.freeCount === 0)) {
+                              updateGroup(gIdx, 'freeCount', 2);
+                            }
+                          }}
                           options={[
                             { value: 'single', label: 'Single Choice' },
                             { value: 'multiple', label: 'Multiple Choice (e.g. Toppings)' },
@@ -1155,6 +1171,27 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                           fullWidth={false}
                           className="min-w-44"
                         />
+                        {group.type === 'multiple' && (
+                          <div className="flex items-center gap-1 bg-surface border border-border px-2 h-8">
+                            <span className="text-xs text-ink-soft whitespace-nowrap">Free:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="99"
+                              value={group.freeCount ?? 0}
+                              onChange={(e) =>
+                                updateGroup(
+                                  gIdx,
+                                  'freeCount',
+                                  Math.max(0, parseInt(e.target.value, 10) || 0)
+                                )
+                              }
+                              placeholder="0"
+                              className="h-6 w-12 bg-transparent text-center text-xs font-bold text-ink focus:text-accent outline-none tabular-nums"
+                              title="Number of free options before charging"
+                            />
+                          </div>
+                        )}
                         <label className="flex items-center gap-1 text-xs text-ink-soft cursor-pointer">
                           <input
                             type="checkbox"
