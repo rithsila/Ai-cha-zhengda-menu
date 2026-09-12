@@ -57,7 +57,7 @@ describe('CustomSelect component', () => {
 
     const options = screen.getAllByRole('option');
     expect(options.length).toBe(3);
-    options.forEach((opt) => {
+    options.forEach((opt: HTMLElement) => {
       expect(opt.className).toContain('rounded-none');
     });
   });
