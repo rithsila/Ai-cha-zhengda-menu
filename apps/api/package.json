@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "prisma generate && tsx watch src/index.ts",
+    "prisma:generate": "prisma generate",
     "build": "prisma generate && tsc",
     "start": "prisma db push --skip-generate && node dist/index.js",
     "test": "rm -f prisma/test.db && DATABASE_URL=file:./test.db npx prisma db push --skip-generate --accept-data-loss && DATABASE_URL=file:./test.db ALLOW_UNVERIFIED_TELEGRAM=1 vitest run --no-file-parallelism --max-concurrency=1",
