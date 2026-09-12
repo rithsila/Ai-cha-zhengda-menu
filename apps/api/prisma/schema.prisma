@@ -68,6 +68,7 @@ model ModifierGroup {
   key        String           // stable id from the static catalog, e.g. "toppings"
   name       String
   type       String           // "single" | "multiple"
+  freeCount  Int              @default(0)
   required   Boolean          @default(false)
   menuItemId String
   menuItem   MenuItem         @relation(fields: [menuItemId], references: [id])

@@ -75,4 +75,62 @@ describe('server-side totals', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('correctly prices multiple choice modifiers with free count', async () => {
+    const multiItemId = `multi-item-${randomUUID()}`;
+    await prisma.menuItem.create({
+      data: {
+        id: multiItemId, brand: 'ai-cha', category: 'Test', name: 'Topping Tea', basePrice: 2.0,
+        modifiers: {
+          create: [{
+            key: 'toppings', name: 'Toppings', type: 'multiple', freeCount: 2,
+            options: {
+              create: [
+                { key: 'top1', name: 'Boba', priceDelta: 0.25 },
+                { key: 'top2', name: 'Jelly', priceDelta: 0.25 },
+                { key: 'top3', name: 'Oats', priceDelta: 0.25 },
+              ],
+            },
+          }],
+        },
+      },
+      include: { modifiers: { include: { options: true } } },
+    });
+
+    const itemRecord = await prisma.menuItem.findUnique({
+      where: { id: multiItemId },
+      include: { modifiers: { include: { options: true } } },
+    });
+    const opts = itemRecord!.modifiers[0].options;
+
+    // Test 1: Select 2 toppings (within freeCount of 2) -> $2.00 total
+    const res2 = await request(app).post('/api/orders').send({
+      items: [{
+        menuItemId: multiItemId, quantity: 1,
+        selectedModifiers: {
+          toppings: [{ id: opts[0].id }, { id: opts[1].id }],
+        },
+      }],
+      totalAmount: 2.0,
+      paymentMethod: 'cash',
+      orderType: 'pickup',
+    });
+    expect(res2.status).toBe(200);
+    expect(res2.body.totalAmount).toBe(2.0);
+
+    // Test 2: Select 3 toppings (freeCount 2 -> 1 charged at 0.25) -> $2.25 total
+    const res3 = await request(app).post('/api/orders').send({
+      items: [{
+        menuItemId: multiItemId, quantity: 1,
+        selectedModifiers: {
+          toppings: [{ id: opts[0].id }, { id: opts[1].id }, { id: opts[2].id }],
+        },
+      }],
+      totalAmount: 2.25,
+      paymentMethod: 'cash',
+      orderType: 'pickup',
+    });
+    expect(res3.status).toBe(200);
+    expect(res3.body.totalAmount).toBe(2.25);
+  });
 });

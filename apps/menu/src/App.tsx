@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useFavorites } from './hooks/useFavorites';
 import { useTelegramTheme } from './hooks/useTelegramTheme';
 import { formatCurrency } from './utils/format';
+import { calculateItemUnitPrice } from './utils/pricing';
 import { hasIdentity, apiFetch } from './utils/api';
 import { refreshOnlinePaymentState } from './utils/onlinePayment';
 import { useStoreStatus, refreshStoreStatus } from './utils/storeStatus';
@@ -338,6 +339,7 @@ export default function App() {
         id: g.key || g.id,
         name: g.name,
         type: g.type,
+        freeCount: g.freeCount ?? 0,
         required: g.required,
         options: g.options?.map((o: any) => ({
           id: o.key || o.id,
@@ -450,8 +452,7 @@ export default function App() {
   };
 
   const addToCart = (item: MenuItem, selectedOptions: Record<string, ModifierOption[]>, editingId?: string | null) => {
-    let unitPrice = item.basePrice;
-    Object.values(selectedOptions).forEach(opts => opts.forEach(o => unitPrice += o.priceDelta));
+    const unitPrice = calculateItemUnitPrice(item, selectedOptions);
 
     if (editingId) {
       setCart(cart.map(c => 

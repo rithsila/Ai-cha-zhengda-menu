@@ -369,6 +369,29 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
       expect(uploadCall).toBeDefined();
     });
   });
+
+  it('renders Free count input for multiple choice modifier groups and updates payload', async () => {
+    const user = userEvent.setup();
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={null} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Toppings')).toBeDefined();
+    });
+
+    // Toppings group is 'multiple' by default in drink preset and has Free: 2
+    const freeInput = screen.getByTitle(/Number of free options before charging/i) as HTMLInputElement;
+    expect(freeInput).toBeDefined();
+    expect(freeInput.value).toBe('2');
+
+    // Change free count to 1
+    await user.clear(freeInput);
+    await user.type(freeInput, '1');
+    expect(freeInput.value).toBe('1');
+  });
 });
 
 

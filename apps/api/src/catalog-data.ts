@@ -17,6 +17,7 @@ export interface ModifierGroup {
   type: 'single' | 'multiple';
   options: ModifierOption[];
   required?: boolean;
+  freeCount?: number;
 }
 
 export interface MenuItem {
@@ -72,6 +73,7 @@ const DRINK_MODIFIERS: ModifierGroup[] = [
     id: 'toppings',
     name: 'Toppings',
     type: 'multiple',
+    freeCount: 2,
     options: [
       { id: 'boba', name: 'Boba Pearl', priceDelta: 0.25 },
       { id: 'coconut_jelly', name: 'Coconut Jelly', priceDelta: 0.25 },

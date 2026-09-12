@@ -457,6 +457,14 @@ export function createApp() {
     res.json({ status: 'ok', message: 'Ai-Cha & Zhengda API is running' });
   });
 
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   app.get('/api/branches', async (req, res) => {
     try {
       const branches = await prisma.branch.findMany({
@@ -683,6 +691,7 @@ export function createApp() {
               key: group.key || group.id || randomUUID(),
               name: group.name,
               type: group.type || 'single',
+              freeCount: group.type === 'multiple' ? Math.max(0, parseInt(group.freeCount, 10) || 0) : 0,
               required: Boolean(group.required),
               options: {
                 create: (group.options || []).map((opt: any) => ({
@@ -760,6 +769,7 @@ export function createApp() {
                 key: group.key || group.id || randomUUID(),
                 name: group.name,
                 type: group.type || 'single',
+                freeCount: group.type === 'multiple' ? Math.max(0, parseInt(group.freeCount, 10) || 0) : 0,
                 required: Boolean(group.required),
                 menuItemId: id,
                 options: {
@@ -1096,19 +1106,36 @@ export function createApp() {
         // those in `key` and a generated uuid in `id`. Match either one.
         for (const [groupKey, groupSelection] of Object.entries(selected)) {
           const group = menuItem.modifiers.find(
-            (g) => g.key === groupKey || g.id === groupKey || g.name === groupKey
+            (g: any) => g.key === groupKey || g.id === groupKey || g.name === groupKey
           );
-          const pool = group ? group.options : menuItem.modifiers.flatMap((g) => g.options);
+          const pool: any[] = group ? group.options : menuItem.modifiers.flatMap((g: any) => g.options);
+          const matchedOptions: any[] = [];
           for (const chosen of ([] as any[]).concat(groupSelection ?? [])) {
             const oid = chosen?.id;
             if (!oid) continue;
-            const opt = pool.find((o) => o.key === oid || o.id === oid);
+            const opt = pool.find((o: any) => o.key === oid || o.id === oid);
             if (!opt) {
               // Never silently drop an option — that is how a cart total and the
               // charged total drift apart.
               return res.status(400).json({ error: `Unknown modifier option: ${groupKey}/${oid}` });
             }
-            unitPrice += opt.priceDelta;   // DB price, never the client's
+            matchedOptions.push(opt);
+          }
+
+          if (group && group.type === 'multiple' && (group.freeCount ?? 0) > 0) {
+            let freeRemaining = group.freeCount ?? 0;
+            const sorted = [...matchedOptions].sort((a, b) => a.priceDelta - b.priceDelta);
+            for (const opt of sorted) {
+              if (freeRemaining > 0) {
+                freeRemaining--;
+              } else {
+                unitPrice += opt.priceDelta;
+              }
+            }
+          } else {
+            for (const opt of matchedOptions) {
+              unitPrice += opt.priceDelta;
+            }
           }
         }
         const lineTotal = Math.round(unitPrice * quantity * 100) / 100;
