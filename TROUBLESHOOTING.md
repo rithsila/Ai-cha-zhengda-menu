@@ -1,122 +1,171 @@
-# Ai-Cha & Zhengda — Services Restart & Troubleshooting Guide
+# Ai-Cha & Zhengda — Runbook & Troubleshooting Guide
 
-This guide provides simple, step-by-step commands to restart services, fix stuck ports, and deploy staging.
+Simple runbook to check services, read logs, find bugs, restart services, and deploy.
 
 ---
 
-## 1. Quick Health Check
+## 1. Quick Health Checks
 
-### Live Staging URLs:
-- **API**: `https://staging-api.aichazhengdaarakawa.com/api/payment/methods` (should return `200 OK`)
-- **Customer Menu**: `https://staging-menu.aichazhengdaarakawa.com`
-- **Staff Dashboard**: `https://staging-staff.aichazhengdaarakawa.com`
-
-### Run one command to test all 3 live staging endpoints:
+### Check Staging (all 3 endpoints)
 ```bash
-curl -I https://staging-api.aichazhengdaarakawa.com/api/payment/methods && \
+curl -I https://staging-api.aichazhengdaarakawa.com/health && \
 curl -I https://staging-menu.aichazhengdaarakawa.com && \
 curl -I https://staging-staff.aichazhengdaarakawa.com
 ```
 
----
-
-## 2. Local Development: How to Start and Restart
-
-### Option A: Start all 3 services together
-Run this in project root:
+### Check Production (all 3 endpoints)
 ```bash
-npm run dev
+curl -I https://api.aichazhengdaarakawa.com/health && \
+curl -I https://menu.aichazhengdaarakawa.com && \
+curl -I https://staff.aichazhengdaarakawa.com
 ```
-- API starts at: `http://localhost:4000`
-- Customer Menu starts at: `http://localhost:5173`
-- Staff Dashboard starts at: `http://localhost:5174`
 
-### Option B: Start services separately (in 3 terminal tabs)
+### Check Payment API Status (Must show `online: true`)
+```bash
+# Staging
+curl -s https://staging-api.aichazhengdaarakawa.com/api/payment/methods
 
-1. **Tab 1: API backend**
-   ```bash
-   npm --prefix apps/api run dev
-   ```
-
-2. **Tab 2: Customer Menu**
-   ```bash
-   npm --prefix apps/menu run dev
-   ```
-
-3. **Tab 3: Staff Dashboard**
-   ```bash
-   npm --prefix apps/staff run dev
-   ```
+# Production
+curl -s https://api.aichazhengdaarakawa.com/api/payment/methods
+```
+*Expected result:* `{"cash":true,"online":true}`
 
 ---
 
-## 3. How to Fix Stuck Ports (EADDRINUSE)
+## 2. Check Railway Logs & Status
 
-If you see `Error: listen EADDRINUSE: address already in use :::4000` (or `5173`, `5174`):
+Use these commands to view real-time server logs and find errors.
 
-### Kill all stuck dev ports in one command:
+### 1. View live server logs
 ```bash
+# Production live logs
+npx @railway/cli logs -e production
+
+# Staging live logs
+npx @railway/cli logs -e staging
+```
+
+### 2. View recent build logs (if deployment failed)
+```bash
+# Production build logs
+npx @railway/cli logs -e production --build
+
+# Staging build logs
+npx @railway/cli logs -e staging --build
+```
+
+### 3. Check deployment status
+```bash
+# Production latest deployment
+npx @railway/cli deployment list -e production --json | jq '.[0] | {id, status, createdAt}'
+
+# Staging latest deployment
+npx @railway/cli deployment list -e staging --json | jq '.[0] | {id, status, createdAt}'
+```
+
+### 4. Check environment variables
+```bash
+# List variable keys in production
+npx @railway/cli variables -e production --json | jq 'keys'
+
+# List variable keys in staging
+npx @railway/cli variables -e staging --json | jq 'keys'
+```
+
+---
+
+## 3. How to Restart Services
+
+### Restart Railway API (trigger fresh redeploy)
+```bash
+# Restart Production API
+npx @railway/cli redeploy --environment production --yes --from-source
+
+# Restart Staging API
+npx @railway/cli redeploy --environment staging --yes --from-source
+```
+
+### Restart Local Development Services
+```bash
+# 1. Kill any stuck dev ports (4000, 5173, 5174)
 lsof -ti:4000,5173,5174 | xargs kill -9
-```
 
-Then restart:
-```bash
+# 2. Start all services again
 npm run dev
 ```
 
 ---
 
-## 4. How to Deploy to Staging
+## 4. Top 5 Issues & Fixes
 
-### Step 1: Deploy API (Railway)
-Pushing to the `staging` git branch automatically deploys the API to Railway:
-```bash
-git push origin staging
-```
-
-### Step 2: Build & Deploy Frontend (Cloudflare Workers)
-Run this single command from root:
-```bash
-npm run deploy:staging
-```
-*Note: This automatically sets `VITE_API_URL="https://staging-api.aichazhengdaarakawa.com"` before building so the frontend connects to the live backend.*
-
----
-
-## 5. Top 5 Common Issues & Exact Fixes
-
-### Issue 1: "App loads blank or cannot reach API"
-- **Cause**: Frontend was built without `VITE_API_URL`, defaulting to `http://localhost:4000`.
+### Issue 1: "No payment methods available right now" / ABA KHQR fails
+- **Cause**: Production is missing `ABA_MERCHANT_ID`, `ABA_API_KEY`, or `ABA_BASE_URL`.
 - **Fix (1 minute)**:
-  ```bash
-  npm run deploy:staging
-  ```
+  1. Test the payment endpoint:
+     ```bash
+     curl -s https://api.aichazhengdaarakawa.com/api/payment/methods
+     ```
+  2. If `online` is `false`, set the ABA keys in Railway:
+     ```bash
+     npx @railway/cli variable set --environment production "ABA_MERCHANT_ID=ec460802"
+     npx @railway/cli variable set --environment production "ABA_BASE_URL=https://checkout-sandbox.payway.com.kh"
+     ```
+  3. Redeploy:
+     ```bash
+     npx @railway/cli redeploy --environment production --yes --from-source
+     ```
 
-### Issue 2: "Database error or missing tables"
-- **Cause**: SQLite database schema is out of sync.
+### Issue 2: "Cannot read properties of undefined (reading 'findMany')"
+- **Cause**: Prisma client is outdated after schema changes.
 - **Fix (30 seconds)**:
   ```bash
-  npx --prefix apps/api prisma db push
+  cd apps/api && npx prisma generate && npx prisma db push
   ```
 
-### Issue 3: "Port 4000/5173/5174 already in use"
-- **Cause**: An old process is still running in the background.
+### Issue 3: "Port 4000/5173/5174 already in use (EADDRINUSE)"
+- **Cause**: A previous dev server process did not shut down.
 - **Fix (10 seconds)**:
   ```bash
   lsof -ti:4000,5173,5174 | xargs kill -9
   ```
 
-### Issue 4: "Telegram login fails or Mini App blank"
-- **Cause**: Missing `TELEGRAM_BOT_TOKEN` in `apps/api/.env` or `WEBAPP_URL` mismatch.
-- **Fix**: Verify `apps/api/.env` contains:
-  ```env
-  TELEGRAM_BOT_TOKEN="your-bot-token"
-  WEBAPP_URL="https://staging-menu.aichazhengdaarakawa.com"
+### Issue 4: "npm ci fails: package.json and package-lock.json out of sync"
+- **Cause**: Package lock file differs across sub-apps in the monorepo.
+- **Fix (1 minute)**:
+  ```bash
+  npm install --package-lock-only
+  ```
+  *(Note: `.npmrc` has `legacy-peer-deps=true` so CI never crashes on peer deps).*
+
+### Issue 5: "Frontend loads blank or cannot connect to backend"
+- **Cause**: Frontend was built with wrong `VITE_API_URL`.
+- **Fix (1 minute)**:
+  ```bash
+  # For Staging:
+  npm run deploy:staging
+
+  # For Production:
+  npm run deploy:prod
   ```
 
-### Issue 5: "ABA KHQR returns 503 or Wrong Hash"
-- **Cause**: `ABA_MERCHANT_ID` or `ABA_API_KEY` missing or wrong in Railway variables.
-- **Fix**: Open Railway dashboard → API service → Variables. Ensure:
-  - `ABA_MERCHANT_ID` matches your ABA merchant account
-  - `ABA_API_KEY` matches your ABA API key
-  - `ABA_BASE_URL=https://checkout-sandbox.payway.com.kh`
+---
+
+## 5. Deployment Commands
+
+### Deploy to Staging:
+```bash
+# 1. API: push code to staging branch
+git push origin staging
+
+# 2. Frontend: deploy Customer Menu & Staff to Cloudflare
+npm run deploy:staging
+```
+
+### Deploy to Production:
+```bash
+# 1. API: push code to main branch
+git push origin main
+
+# 2. Frontend: deploy Customer Menu & Staff to Cloudflare
+npm run deploy:prod
+```
