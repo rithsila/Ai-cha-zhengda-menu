@@ -55,6 +55,7 @@ model MenuItem {
   description String?
   basePrice   Float
   image       String?
+  imageFit    String?         @default("contain")
   isSoldOut   Boolean         @default(false)
   isActive    Boolean         @default(true)
   earnsStamp  Boolean         @default(true)

@@ -74,6 +74,7 @@ export interface StoreConfigState {
   orderLateReadyMins: number;
   orderReminderSeconds: number;
   orderAlertSoundEnabled: boolean;
+  menuCardImageFit: 'contain' | 'cover';
 }
 
 const DEFAULT_TABS: MenuTabItem[] = [
@@ -121,6 +122,7 @@ const DEFAULT_CONFIG: StoreConfigState = {
   orderLateReadyMins: 20,
   orderReminderSeconds: 60,
   orderAlertSoundEnabled: true,
+  menuCardImageFit: 'contain',
 };
 
 function renderSocialIcon(id: string) {
@@ -305,6 +307,16 @@ function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState)
       oldDisplay: `${activeSavedCount} active tab${activeSavedCount > 1 ? 's' : ''}`,
       newDisplay: `${activeDraftCount} active tab${activeDraftCount > 1 ? 's' : ''}`,
       rawNewValue: JSON.stringify(draft.menuTabsConfig),
+    });
+  }
+
+  if (draft.menuCardImageFit !== saved.menuCardImageFit) {
+    changes.push({
+      key: 'menuCardImageFit',
+      label: 'Menu Card Image Style',
+      oldDisplay: saved.menuCardImageFit === 'contain' ? 'Transparent Fit (Option A)' : 'Edge-to-Edge Photo (Option B)',
+      newDisplay: draft.menuCardImageFit === 'contain' ? 'Transparent Fit (Option A)' : 'Edge-to-Edge Photo (Option B)',
+      rawNewValue: draft.menuCardImageFit,
     });
   }
 
@@ -548,6 +560,7 @@ export function StoreSettings() {
         orderLateReadyMins: Number(configMap.get('orderLateReadyMins') ?? 20),
         orderReminderSeconds: Number(configMap.get('orderReminderSeconds') ?? 60),
         orderAlertSoundEnabled: (configMap.get('orderAlertSoundEnabled') ?? '1') !== '0',
+        menuCardImageFit: (statusRes.menuCardImageFit || configMap.get('menuCardImageFit') || 'contain') as 'contain' | 'cover',
       };
 
       setSavedConfig(loadedConfig);
@@ -1656,6 +1669,64 @@ export function StoreSettings() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Menu Item Card Image Style Section */}
+        <div className="flex flex-col gap-3 pt-4 border-t border-border">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-ink-faint block">
+              Menu Item Card Image Style
+            </label>
+            <span className="text-xs text-ink-soft">
+              Choose how item images adapt to customer menu cards.
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setConfig((prev) => ({ ...prev, menuCardImageFit: 'contain' }))}
+              className={`p-4 text-left border flex flex-col gap-2 transition-all cursor-pointer rounded-none ${
+                config.menuCardImageFit === 'contain'
+                  ? 'border-accent bg-accent/5 ring-1 ring-accent text-ink'
+                  : 'border-border bg-surface hover:bg-surface-raised text-ink-soft'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-ink">Option A: Transparent Fit</span>
+                {config.menuCardImageFit === 'contain' ? (
+                  <Badge variant="success" className="text-[10px] font-bold">Active</Badge>
+                ) : (
+                  <span className="text-[11px] text-ink-faint">Select</span>
+                )}
+              </div>
+              <p className="text-xs text-ink-soft leading-relaxed">
+                Clean white card. Best for transparent PNG cutouts (drinks &amp; cones). Removes the gray box.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setConfig((prev) => ({ ...prev, menuCardImageFit: 'cover' }))}
+              className={`p-4 text-left border flex flex-col gap-2 transition-all cursor-pointer rounded-none ${
+                config.menuCardImageFit === 'cover'
+                  ? 'border-accent bg-accent/5 ring-1 ring-accent text-ink'
+                  : 'border-border bg-surface hover:bg-surface-raised text-ink-soft'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-ink">Option B: Edge-to-Edge Photo</span>
+                {config.menuCardImageFit === 'cover' ? (
+                  <Badge variant="success" className="text-[10px] font-bold">Active</Badge>
+                ) : (
+                  <span className="text-[11px] text-ink-faint">Select</span>
+                )}
+              </div>
+              <p className="text-xs text-ink-soft leading-relaxed">
+                Full-bleed photo. Best for square food/drink photos with background. Fills card top edge-to-edge.
+              </p>
+            </button>
           </div>
         </div>
       </Card>

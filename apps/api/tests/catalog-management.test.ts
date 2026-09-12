@@ -43,6 +43,7 @@ describe('Manager Catalog CRUD API', () => {
         description: 'Fresh mango tea with custom boba',
         basePrice: 2.50,
         image: '/images/mango.png',
+        imageFit: 'cover',
         modifiers: [
           {
             name: 'Ice Level',
@@ -68,6 +69,7 @@ describe('Manager Catalog CRUD API', () => {
 
     expect(res.body.name).toBe('Special Mango Boba');
     expect(res.body.basePrice).toBe(2.50);
+    expect(res.body.imageFit).toBe('cover');
     expect(res.body.earnsStamp).toBe(true);
     expect(res.body.canClaim).toBe(false);
     expect(res.body.modifiers.length).toBe(2);

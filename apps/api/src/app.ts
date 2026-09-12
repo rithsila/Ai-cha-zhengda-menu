@@ -682,7 +682,7 @@ export function createApp() {
 
   app.post('/api/catalog', requireManager, async (req, res) => {
     try {
-      const { brand, category, name, description, basePrice, image, modifiers, earnsStamp, canClaim, localization } = req.body || {};
+      const { brand, category, name, description, basePrice, image, imageFit, modifiers, earnsStamp, canClaim, localization } = req.body || {};
       if (!name || typeof name !== 'string' || !category || typeof category !== 'string') {
         return res.status(400).json({ error: 'Name and category are required' });
       }
@@ -726,6 +726,7 @@ export function createApp() {
             description: typeof description === 'string' ? description.trim() : null,
             basePrice: parsedPrice,
             image: typeof image === 'string' && image.trim() ? image.trim() : null,
+            imageFit: imageFit === 'cover' ? 'cover' : 'contain',
             isActive: true,
             isSoldOut: false,
             earnsStamp: earnsStamp !== undefined ? Boolean(earnsStamp) : true,
@@ -827,7 +828,7 @@ export function createApp() {
   app.put('/api/catalog/:id', requireManager, async (req, res) => {
     try {
       const id = String(req.params.id);
-      const { brand, category, name, description, basePrice, image, isActive, isSoldOut, earnsStamp, canClaim, modifiers, localization } = req.body || {};
+      const { brand, category, name, description, basePrice, image, imageFit, isActive, isSoldOut, earnsStamp, canClaim, modifiers, localization } = req.body || {};
 
       const existing = await prisma.menuItem.findUnique({
         where: { id },
@@ -874,6 +875,7 @@ export function createApp() {
         data.basePrice = parsed;
       }
       if (image !== undefined) data.image = image ? String(image).trim() : null;
+      if (imageFit !== undefined) data.imageFit = imageFit === 'cover' ? 'cover' : 'contain';
       if (isActive !== undefined) data.isActive = Boolean(isActive);
       if (isSoldOut !== undefined) data.isSoldOut = Boolean(isSoldOut);
       if (earnsStamp !== undefined) data.earnsStamp = Boolean(earnsStamp);

@@ -68,6 +68,10 @@ describe('Store Config - Helpers & Validation', () => {
     expect(validateConfig('deliveryFee', '0').valid).toBe(true);
     expect(validateConfig('deliveryFee', '1.5').valid).toBe(true);
     expect(validateConfig('deliveryFee', '-1').valid).toBe(false);
+
+    expect(validateConfig('menuCardImageFit', 'contain').valid).toBe(true);
+    expect(validateConfig('menuCardImageFit', 'cover').valid).toBe(true);
+    expect(validateConfig('menuCardImageFit', 'invalid').valid).toBe(false);
   });
 });
 
@@ -137,6 +141,12 @@ describe('GET /api/store/status and PUT /api/config', () => {
     const multiRes = await request(app).get('/api/store/status');
     expect(multiRes.body.menuBannerUrls).toBe(JSON.stringify(multipleBanners));
     expect(multiRes.body.menuBannerUrl).toBe('/banner1.webp');
+
+    // Test menuCardImageFit
+    expect(multiRes.body.menuCardImageFit).toBe('contain');
+    await putConfig({ key: 'menuCardImageFit', value: 'cover' });
+    const coverRes = await request(app).get('/api/store/status');
+    expect(coverRes.body.menuCardImageFit).toBe('cover');
 
     // Reject > 5 banners
     const resOverLimit = await request(app)

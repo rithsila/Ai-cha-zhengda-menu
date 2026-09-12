@@ -64,6 +64,7 @@ export interface MenuItem {
   isSoldOut?: boolean;
   earnsStamp?: boolean;
   canClaim?: boolean;
+  imageFit?: 'contain' | 'cover';
   modifiers?: ModifierGroup[];
   localized?: {
     name?: LocalizedText;

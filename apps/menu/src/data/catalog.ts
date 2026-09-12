@@ -175,8 +175,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-scream Cone Sea Salt',
     description: 'Sea salt flavored ice cream cone with a unique sweet-savory taste.',
     basePrice: 0.50,
-    imageFallback: '/images/ai-scream-cone-sea-salt.webp'
-    
+    imageFallback: '/images/ai-scream-cone-sea-salt.webp',
+    imageFit: 'contain'
   },
   {
     id: 'a11',
@@ -185,8 +185,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-scream Cone Matcha',
     description: 'Delicious matcha-flavored cone ice cream.',
     basePrice: 0.50,
-    imageFallback: '/images/ai-scream-cone-matcha.webp'
-    
+    imageFallback: '/images/ai-scream-cone-matcha.webp',
+    imageFit: 'contain'
   },
   {
     id: 'a12',
@@ -195,8 +195,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Ai-scream Cone Vanilla',
     description: 'Sweet vanilla-flavored cone ice cream.',
     basePrice: 0.50,
-    imageFallback: '/images/ai-scream-cone-vanilla.webp'
-    
+    imageFallback: '/images/ai-scream-cone-vanilla.webp',
+    imageFit: 'contain'
   },
   {
     id: 'a13',
@@ -205,8 +205,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Boba',
     description: 'Sundae ice cream with the indulgence of brown sugar syrup and chewy boba toppings.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-boba.webp'
-    
+    imageFallback: '/images/sund-ai-boba.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a14',
@@ -215,8 +215,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Strawberry',
     description: 'Sundae ice cream with strawberry jam and a delightful special topping at the bottom.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-strawberry.webp'
-    
+    imageFallback: '/images/sund-ai-strawberry.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a15',
@@ -225,8 +225,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Chocolate',
     description: 'Sundae ice cream with delicious chocolate syrup and a special topping at the bottom.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-chocolate.webp'
-    
+    imageFallback: '/images/sund-ai-chocolate.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a16',
@@ -235,8 +235,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Blueberry',
     description: 'Sundae ice cream blended with blueberry jam.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-blueberry.webp'
-    
+    imageFallback: '/images/sund-ai-blueberry.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a17',
@@ -245,8 +245,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Peach Jam',
     description: 'Sundae ice cream with peach jam and yellow peach jelly toppings.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-peach-jam.webp'
-    
+    imageFallback: '/images/sund-ai-peach-jam.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a18',
@@ -255,8 +255,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Grape',
     description: 'Sundae ice cream with fresh and delicious grape jam.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-grape.webp'
-    
+    imageFallback: '/images/sund-ai-grape.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a19',
@@ -265,8 +265,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Red Bean',
     description: 'Sundae ice cream with red bean sprinkles and strawberry jam.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-red-bean.webp'
-    
+    imageFallback: '/images/sund-ai-red-bean.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a20',
@@ -275,8 +275,8 @@ export const CATALOG: MenuItem[] = [
     name: 'Sund-ai Mango',
     description: 'Sundae ice cream with refreshing mango jam.',
     basePrice: 1.00,
-    imageFallback: '/images/sund-ai-mango.webp'
-    
+    imageFallback: '/images/sund-ai-mango.webp',
+    imageFit: 'cover'
   },
   {
     id: 'a21',

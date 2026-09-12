@@ -468,5 +468,44 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     await user.type(freeInput, '1');
     expect(freeInput.value).toBe('1');
   });
+
+  it('submits selected imageFit Option B (cover) in catalog payload', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={null} onClose={onClose} onSaved={onSaved} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /category/i })).toBeDefined();
+    });
+
+    const nameInput = screen.getByPlaceholderText(/e\.g\. Brown Sugar Boba Milk/i);
+    await user.type(nameInput, 'Crispy Drumstick');
+
+    // Click Option B: Edge-to-Edge Photo
+    const optionBBtn = screen.getByRole('button', { name: /Option B: Edge-to-Edge Photo/i });
+    await user.click(optionBBtn);
+
+    const submitBtn = screen.getByRole('button', { name: /Create Menu Item/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(onSaved).toHaveBeenCalled();
+    });
+
+    const fetchMock = globalThis.fetch as any;
+    const catalogCall = fetchMock.mock.calls.find((call: any[]) =>
+      String(call[0]).endsWith('/api/catalog') && call[1]?.method === 'POST'
+    );
+    expect(catalogCall).toBeDefined();
+    const body = JSON.parse(catalogCall[1].body);
+    expect(body.imageFit).toBe('cover');
+  });
 });
+
 

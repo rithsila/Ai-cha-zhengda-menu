@@ -35,6 +35,7 @@ export interface StoreStatus {
   shopDeliveryNote: string;
   shopSocialsEnabled: boolean;
   shopSocialLinks: string;
+  menuCardImageFit?: 'contain' | 'cover';
 }
 
 export const CONFIG_DEFAULTS: Record<string, string | number> = {
@@ -83,6 +84,7 @@ export const CONFIG_DEFAULTS: Record<string, string | number> = {
   orderLateReadyMins: 20,
   orderReminderSeconds: 60,
   orderAlertSoundEnabled: '1',
+  menuCardImageFit: 'contain',
 };
 
 /**
@@ -278,6 +280,7 @@ export async function getStoreStatus(prisma: PrismaClient, now: Date = new Date(
     shopDeliveryNote,
     shopSocialsEnabled,
     shopSocialLinks,
+    menuCardImageFit: (configMap.get('menuCardImageFit') ?? CONFIG_DEFAULTS.menuCardImageFit) as 'contain' | 'cover',
   };
 }
 
@@ -330,6 +333,14 @@ export function validateConfig(key: string, value: unknown): { valid: boolean; n
   if (key === 'storeStatus') {
     if (strVal !== 'auto' && strVal !== 'open' && strVal !== 'closed') {
       return { valid: false, normalizedValue: '', error: 'storeStatus must be "auto", "open", or "closed"' };
+    }
+    return { valid: true, normalizedValue: strVal };
+  }
+
+  // Menu card image fit mode
+  if (key === 'menuCardImageFit') {
+    if (strVal !== 'contain' && strVal !== 'cover') {
+      return { valid: false, normalizedValue: '', error: 'menuCardImageFit must be "contain" or "cover"' };
     }
     return { valid: true, normalizedValue: strVal };
   }

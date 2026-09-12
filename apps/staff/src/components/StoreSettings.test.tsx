@@ -328,4 +328,32 @@ describe('StoreSettings strict layer', () => {
       expect(putRequests).toContainEqual({ key: 'deliveryFee', value: '1.5' });
     });
   });
+
+  it('allows manager to change menu card image style between contain and cover', async () => {
+    render(
+      <ToastProvider>
+        <StoreSettings />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Menu Banner & Brand Tabs')).toBeDefined();
+    });
+
+    const coverOption = screen.getByRole('button', { name: /Edge-to-Edge/i });
+    fireEvent.click(coverOption);
+
+    const saveBtn = screen.getByRole('button', { name: /^Save$/i });
+    fireEvent.click(saveBtn);
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm & Apply to Menu/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(putRequests).toContainEqual({
+        key: 'menuCardImageFit',
+        value: 'cover',
+      });
+    });
+  });
 });

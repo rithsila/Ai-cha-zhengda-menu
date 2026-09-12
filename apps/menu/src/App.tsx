@@ -18,6 +18,7 @@ import { useCatalog } from './hooks/useCatalog';
 import type { Brand, MenuItem, CartItem, ModifierOption } from './types';
 import { CATALOG } from './data/catalog';
 import { resolveWithLegacyFallback } from './utils/localizedText';
+import { useConfig, configString } from './hooks/useConfig';
 
 import { BrandTabs } from './components/ui/BrandTabs';
 import { CategoryScroller } from './components/ui/CategoryScroller';
@@ -191,6 +192,8 @@ const WebLogin = ({ onContinueAsGuest }: { onContinueAsGuest: () => void }) => {
 export default function App() {
   const { t, i18n } = useTranslation();
   useTelegramTheme();
+  const { configRows } = useConfig();
+  const menuCardImageFit = (configString(configRows, 'menuCardImageFit', 'contain') as 'contain' | 'cover') || 'contain';
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
   const [activeBrand, setActiveBrand] = useState<Brand>('ai-cha');
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -335,6 +338,7 @@ export default function App() {
       description: item.description,
       basePrice: item.basePrice,
       imageFallback: item.image || CATALOG.find((c) => c.id === item.id)?.imageFallback,
+      imageFit: item.imageFit || CATALOG.find((c) => c.id === item.id)?.imageFit,
       isSoldOut: Boolean(item.isSoldOut),
       localized: item.localized,
       modifiers: item.modifiers?.map((g: any) => ({
@@ -826,6 +830,7 @@ export default function App() {
                             isFavorite={isFavorite(item.id)}
                             onToggleFavorite={toggleFavorite}
                             onPreview={setPreviewItem}
+                            imageFit={menuCardImageFit}
                           />
                         ))}
                       </div>
@@ -851,6 +856,7 @@ export default function App() {
                   isFavorite={isFavorite(item.id)}
                   onToggleFavorite={toggleFavorite}
                   onPreview={setPreviewItem}
+                  imageFit={menuCardImageFit}
                 />
               ))}
             </div>
@@ -954,6 +960,7 @@ export default function App() {
           onToggleFavorite={toggleFavorite}
           onClose={() => setPreviewItem(null)}
           onAdd={handleAddItem}
+          imageFit={menuCardImageFit}
         />
       )}
 

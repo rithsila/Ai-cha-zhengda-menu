@@ -14,6 +14,7 @@ interface ItemPreviewModalProps {
   onToggleFavorite?: (id: string) => void;
   onClose: () => void;
   onAdd: (item: MenuItem) => void;
+  imageFit?: 'contain' | 'cover';
 }
 
 export function ItemPreviewModal({
@@ -23,6 +24,7 @@ export function ItemPreviewModal({
   onToggleFavorite,
   onClose,
   onAdd,
+  imageFit = 'contain',
 }: ItemPreviewModalProps) {
   const { t, i18n } = useTranslation();
 
@@ -46,7 +48,6 @@ export function ItemPreviewModal({
   if (!item) return null;
 
   const isAiCha = item.brand === 'ai-cha';
-  const brandBg = isAiCha ? 'bg-brand-primary/10' : 'bg-brand-zhengda/10';
 
   const handleAdd = () => {
     if (!item.isSoldOut) {
@@ -57,6 +58,7 @@ export function ItemPreviewModal({
 
   const itemName = resolveWithLegacyFallback(item.localized?.name, i18n.language, item.name, t);
   const itemDesc = resolveWithLegacyFallback(item.localized?.description, i18n.language, item.description || '', t);
+  const effectiveFit = item.imageFit || imageFit;
 
   return (
     <AnimatePresence>
@@ -106,14 +108,16 @@ export function ItemPreviewModal({
           {/* Large Image Preview Area */}
           <div
             className={`relative w-full h-64 sm:h-72 flex items-center justify-center overflow-hidden ${
-              item.imageFallback ? 'bg-tg-hint/10' : brandBg
+              effectiveFit === 'cover' ? 'bg-slate-100' : 'bg-transparent'
             }`}
           >
             {item.imageFallback ? (
               <img
                 src={item.imageFallback}
                 alt={itemName}
-                className="w-full h-full object-contain p-4 drop-shadow-lg select-none"
+                className={`w-full h-full select-none ${
+                  effectiveFit === 'cover' ? 'object-cover' : 'object-contain p-4 drop-shadow-lg'
+                }`}
                 draggable={false}
               />
             ) : (

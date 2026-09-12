@@ -13,14 +13,18 @@ interface MenuItemCardProps {
   onToggleFavorite?: (id: string) => void;
   onAdd: (item: MenuItem) => void;
   onPreview?: (item: MenuItem) => void;
+  imageFit?: 'contain' | 'cover';
 }
 
-export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPreview }: MenuItemCardProps) {
+export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPreview, imageFit = 'contain' }: MenuItemCardProps) {
   const { t, i18n } = useTranslation();
   const isAiCha = item.brand === 'ai-cha';
-  const brandBg = isAiCha ? 'bg-brand-primary/10' : 'bg-brand-zhengda/10';
   const itemName = resolveWithLegacyFallback(item.localized?.name, i18n.language, item.name, t);
   const itemDesc = resolveWithLegacyFallback(item.localized?.description, i18n.language, item.description || '', t);
+
+  const effectiveFit = item.imageFit || imageFit;
+  const isCover = effectiveFit === 'cover';
+  const containerBg = isCover ? 'bg-slate-100 overflow-hidden' : 'bg-transparent';
 
   const longPressProps = useLongPress({
     onLongPress: () => onPreview?.(item),
@@ -36,14 +40,16 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPrev
         item.isSoldOut ? 'opacity-60 grayscale-[0.5]' : ''
       }`}
     >
-      <div className={`h-32 flex items-center justify-center relative ${item.imageFallback ? 'bg-tg-hint/10' : brandBg}`}>
+      <div className={`h-32 flex items-center justify-center relative ${containerBg}`}>
          {item.imageFallback ? (
            <img 
              src={item.imageFallback} 
              alt={itemName} 
              loading="lazy"
              decoding="async"
-             className="w-full h-full object-contain p-2 pointer-events-none" 
+             className={`w-full h-full pointer-events-none ${
+               isCover ? 'object-cover' : 'object-contain p-2'
+             }`} 
            />
          ) : (
            <div className="p-2.5 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-white/50 ring-1 ring-black/5 pointer-events-none">

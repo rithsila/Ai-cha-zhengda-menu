@@ -18,6 +18,7 @@ export interface RawCatalogItem {
   description?: string;
   basePrice: number;
   image?: string;
+  imageFit?: 'contain' | 'cover';
   isSoldOut?: boolean;
   canClaim?: boolean;
   earnsStamp?: boolean;

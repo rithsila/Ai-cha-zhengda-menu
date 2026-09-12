@@ -43,6 +43,7 @@ export type MenuItemFull = {
   description?: string | null;
   basePrice: number;
   image?: string | null;
+  imageFit?: 'contain' | 'cover';
   isSoldOut?: boolean;
   isActive?: boolean;
   earnsStamp?: boolean;
@@ -182,6 +183,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   } | null>(null);
   const [basePrice, setBasePrice] = useState('1.50');
   const [image, setImage] = useState('');
+  const [imageFit, setImageFit] = useState<'contain' | 'cover'>('contain');
   const [earnsStamp, setEarnsStamp] = useState(true);
   const [canClaim, setCanClaim] = useState(false);
   const [modifiers, setModifiers] = useState<ModifierGroupInput[]>([]);
@@ -255,6 +257,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setDescription(item.description || '');
       setBasePrice(String(item.basePrice ?? '1.50'));
       setImage(item.image || '');
+      setImageFit(item.imageFit === 'cover' ? 'cover' : 'contain');
       setEarnsStamp(item.earnsStamp !== undefined ? Boolean(item.earnsStamp) : true);
       setCanClaim(item.canClaim !== undefined ? Boolean(item.canClaim) : false);
       setModifiers(
@@ -280,6 +283,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setDescription('');
       setBasePrice('1.50');
       setImage('');
+      setImageFit('contain');
       setEarnsStamp(true);
       setCanClaim(false);
       setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
@@ -663,6 +667,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       description: primaryDesc || undefined,
       basePrice: parsedPrice,
       image: image.trim() || undefined,
+      imageFit,
       earnsStamp,
       canClaim,
       modifiers: modifiers.map((g) => ({
@@ -1022,6 +1027,55 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 <p className="text-[11px] text-ink-soft">
                   Press <kbd className="px-1 py-0.5 rounded-xs bg-surface border border-border font-mono text-[10px] text-ink">Ctrl+V</kbd> or <kbd className="px-1 py-0.5 rounded-xs bg-surface border border-border font-mono text-[10px] text-ink">⌘V</kbd> to paste screenshot / image, or drag &amp; drop here.
                 </p>
+              </div>
+            </div>
+
+            {/* Image Display Style (Option A vs Option B) */}
+            <div className="mt-3 flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-ink">Image Card Style</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImageFit('contain')}
+                  className={`flex flex-col items-start p-2.5 border text-left transition-all cursor-pointer rounded-none ${
+                    imageFit === 'contain'
+                      ? 'border-accent bg-accent/10 ring-1 ring-accent text-ink'
+                      : 'border-border bg-surface-sunken/40 text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className={`text-xs font-semibold ${imageFit === 'contain' ? 'text-accent' : 'text-ink'}`}>
+                      Option A: Transparent Fit
+                    </span>
+                    {imageFit === 'contain' && (
+                      <span className="text-[10px] font-bold text-accent bg-accent/15 px-1.5 py-0.5 rounded-none">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-normal text-ink-soft">For cutout PNG cones &amp; drinks</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageFit('cover')}
+                  className={`flex flex-col items-start p-2.5 border text-left transition-all cursor-pointer rounded-none ${
+                    imageFit === 'cover'
+                      ? 'border-accent bg-accent/10 ring-1 ring-accent text-ink'
+                      : 'border-border bg-surface-sunken/40 text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className={`text-xs font-semibold ${imageFit === 'cover' ? 'text-accent' : 'text-ink'}`}>
+                      Option B: Edge-to-Edge Photo
+                    </span>
+                    {imageFit === 'cover' && (
+                      <span className="text-[10px] font-bold text-accent bg-accent/15 px-1.5 py-0.5 rounded-none">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-normal text-ink-soft">For full photo with background</span>
+                </button>
               </div>
             </div>
           </div>
