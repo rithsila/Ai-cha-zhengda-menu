@@ -225,3 +225,22 @@ model LocalizedTextValue {
   @@index([textId])
 }
 
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorType   String   // "staff" | "manager" | "customer" | "system"
+  actorId     String?  // StaffAccount.id, telegramUserId, or "aba-webhook"
+  actorName   String?  // e.g. "Sophea (Staff)", "Admin", "Customer"
+  action      String   // "PAYMENT_INITIATED", "PAYMENT_APPROVED", "PAYMENT_MISMATCH", "ORDER_STATUS_CHANGED", "PRICE_UPDATE", "ITEM_SOLD_OUT_TOGGLED"
+  entityType  String   // "order", "payment", "menu_item", "category", "staff"
+  entityId    String?  // Order ID, Menu Item ID, etc.
+  oldValue    String?  // JSON snapshot before change
+  newValue    String?  // JSON snapshot after change
+  metadata    String?  // JSON extra details (tranId, amounts, raw error, IP)
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
