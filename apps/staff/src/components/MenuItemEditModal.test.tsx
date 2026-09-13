@@ -487,8 +487,8 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     const nameInput = screen.getByPlaceholderText(/e\.g\. Brown Sugar Boba Milk/i);
     await user.type(nameInput, 'Crispy Drumstick');
 
-    // Click Option B: Edge-to-Edge Photo
-    const optionBBtn = screen.getByRole('button', { name: /Option B: Edge-to-Edge Photo/i });
+    // Click Cover (Fill)
+    const optionBBtn = screen.getByRole('button', { name: /Cover \(Fill\)/i });
     await user.click(optionBBtn);
 
     const submitBtn = screen.getByRole('button', { name: /Create Menu Item/i });

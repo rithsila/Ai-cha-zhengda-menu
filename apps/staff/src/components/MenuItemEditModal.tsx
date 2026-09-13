@@ -1030,9 +1030,9 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               </div>
             </div>
 
-            {/* Image Display Style (Option A vs Option B) */}
+            {/* Image Display Style */}
             <div className="mt-3 flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-ink">Image Card Style</label>
+              <label className="text-xs font-medium text-ink">Card Image Fit</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -1045,7 +1045,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 >
                   <div className="flex items-center justify-between w-full">
                     <span className={`text-xs font-semibold ${imageFit === 'contain' ? 'text-accent' : 'text-ink'}`}>
-                      Option A: Transparent Fit
+                      Contain (Fit)
                     </span>
                     {imageFit === 'contain' && (
                       <span className="text-[10px] font-bold text-accent bg-accent/15 px-1.5 py-0.5 rounded-none">
@@ -1053,7 +1053,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] font-normal text-ink-soft">For cutout PNG cones &amp; drinks</span>
+                  <span className="text-[11px] font-normal text-ink-soft">Fit image with padding</span>
                 </button>
                 <button
                   type="button"
@@ -1066,7 +1066,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 >
                   <div className="flex items-center justify-between w-full">
                     <span className={`text-xs font-semibold ${imageFit === 'cover' ? 'text-accent' : 'text-ink'}`}>
-                      Option B: Edge-to-Edge Photo
+                      Cover (Fill)
                     </span>
                     {imageFit === 'cover' && (
                       <span className="text-[10px] font-bold text-accent bg-accent/15 px-1.5 py-0.5 rounded-none">
@@ -1074,7 +1074,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] font-normal text-ink-soft">For full photo with background</span>
+                  <span className="text-[11px] font-normal text-ink-soft">Fill edge-to-edge photo</span>
                 </button>
               </div>
             </div>

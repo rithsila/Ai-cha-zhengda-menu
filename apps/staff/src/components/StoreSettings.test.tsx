@@ -340,7 +340,7 @@ describe('StoreSettings strict layer', () => {
       expect(screen.getByText('Menu Banner & Brand Tabs')).toBeDefined();
     });
 
-    const coverOption = screen.getByRole('button', { name: /Edge-to-Edge/i });
+    const coverOption = screen.getByRole('button', { name: /Cover \(Fill\)/i });
     fireEvent.click(coverOption);
 
     const saveBtn = screen.getByRole('button', { name: /^Save$/i });

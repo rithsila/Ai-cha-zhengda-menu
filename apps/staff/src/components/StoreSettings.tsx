@@ -314,8 +314,8 @@ function getStoreConfigChanges(saved: StoreConfigState, draft: StoreConfigState)
     changes.push({
       key: 'menuCardImageFit',
       label: 'Menu Card Image Style',
-      oldDisplay: saved.menuCardImageFit === 'contain' ? 'Transparent Fit (Option A)' : 'Edge-to-Edge Photo (Option B)',
-      newDisplay: draft.menuCardImageFit === 'contain' ? 'Transparent Fit (Option A)' : 'Edge-to-Edge Photo (Option B)',
+      oldDisplay: saved.menuCardImageFit === 'contain' ? 'Contain (Fit)' : 'Cover (Fill)',
+      newDisplay: draft.menuCardImageFit === 'contain' ? 'Contain (Fit)' : 'Cover (Fill)',
       rawNewValue: draft.menuCardImageFit,
     });
   }
@@ -1679,7 +1679,7 @@ export function StoreSettings() {
               Menu Item Card Image Style
             </label>
             <span className="text-xs text-ink-soft">
-              Choose how item images adapt to customer menu cards.
+              Choose how item images display on customer menu cards.
             </span>
           </div>
 
@@ -1694,7 +1694,7 @@ export function StoreSettings() {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-ink">Option A: Transparent Fit</span>
+                <span className="font-bold text-sm text-ink">Contain (Fit)</span>
                 {config.menuCardImageFit === 'contain' ? (
                   <Badge variant="success" className="text-[10px] font-bold">Active</Badge>
                 ) : (
@@ -1702,7 +1702,7 @@ export function StoreSettings() {
                 )}
               </div>
               <p className="text-xs text-ink-soft leading-relaxed">
-                Clean white card. Best for transparent PNG cutouts (drinks &amp; cones). Removes the gray box.
+                Fit image with padding. Best for transparent PNG cutouts.
               </p>
             </button>
 
@@ -1716,7 +1716,7 @@ export function StoreSettings() {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-ink">Option B: Edge-to-Edge Photo</span>
+                <span className="font-bold text-sm text-ink">Cover (Fill)</span>
                 {config.menuCardImageFit === 'cover' ? (
                   <Badge variant="success" className="text-[10px] font-bold">Active</Badge>
                 ) : (
@@ -1724,7 +1724,7 @@ export function StoreSettings() {
                 )}
               </div>
               <p className="text-xs text-ink-soft leading-relaxed">
-                Full-bleed photo. Best for square food/drink photos with background. Fills card top edge-to-edge.
+                Fill card top edge-to-edge. Best for standard photos.
               </p>
             </button>
           </div>
