@@ -348,7 +348,10 @@ export function KhqrPaymentPanel({
             if (!cancelled) setStartError('unavailable');
             return;
           }
-          if (!cancelled) setStartError('failed');
+          if (!cancelled) {
+            sessionStorage.removeItem('ai_cha_active_payment');
+            setStartError('failed');
+          }
           return;
         }
 
@@ -368,6 +371,7 @@ export function KhqrPaymentPanel({
         });
       } catch {
         if (cancelled) return;
+        sessionStorage.removeItem('ai_cha_active_payment');
         setStartError('failed');
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -503,6 +507,11 @@ export function KhqrPaymentPanel({
     }
   };
 
+  const handleBackToOrder = () => {
+    sessionStorage.removeItem('ai_cha_active_payment');
+    onCancel?.();
+  };
+
   const cancelButton = onCancel ? (
     <button
       type="button"
@@ -539,12 +548,17 @@ export function KhqrPaymentPanel({
             {t('orderSavedPayCash', 'Your order is saved. Please pay with cash at the counter.')}
           </p>
         )}
-        {startError === 'failed' && (
-          <Button onClick={handleRetry} className="w-full">
-            {t('tryAgain', 'Try again')}
+        {onCancel ? (
+          <Button onClick={handleBackToOrder} className="w-full">
+            {t('backToOrder', 'Back to order')}
           </Button>
+        ) : (
+          startError === 'failed' && (
+            <Button onClick={handleRetry} className="w-full">
+              {t('tryAgain', 'Try again')}
+            </Button>
+          )
         )}
-        {cancelButton}
       </div>
     );
   }
@@ -601,10 +615,15 @@ export function KhqrPaymentPanel({
         <p className="text-sm text-tg-hint max-w-xs">
           {t('paymentDeclinedHint', 'Your bank declined this transaction. Please try again or pay with cash.')}
         </p>
-        <Button onClick={handleRetry} className="w-full mt-2">
-          {t('tryAgain', 'Try again')}
-        </Button>
-        {cancelButton}
+        {onCancel ? (
+          <Button onClick={handleBackToOrder} className="w-full mt-2">
+            {t('backToOrder', 'Back to order')}
+          </Button>
+        ) : (
+          <Button onClick={handleRetry} className="w-full mt-2">
+            {t('tryAgain', 'Try again')}
+          </Button>
+        )}
       </div>
     );
   }
@@ -644,10 +663,15 @@ export function KhqrPaymentPanel({
         <p className="text-sm text-tg-hint max-w-xs">
           {t('paymentExpiredHint', 'Your order is still saved. Get a new QR code to pay.')}
         </p>
-        <Button onClick={handleRetry} className="w-full mt-2">
-          {t('tryAgain', 'Try again')}
-        </Button>
-        {cancelButton}
+        {onCancel ? (
+          <Button onClick={handleBackToOrder} className="w-full mt-2">
+            {t('backToOrder', 'Back to order')}
+          </Button>
+        ) : (
+          <Button onClick={handleRetry} className="w-full mt-2">
+            {t('tryAgain', 'Try again')}
+          </Button>
+        )}
       </div>
     );
   }

@@ -314,6 +314,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                   setIsViewingKhqr(false);
                 } else if (step === 2) {
                   setStep(1);
+                  setPaymentOrderId(null);
+                  sessionStorage.removeItem('ai_cha_active_payment');
                 } else {
                   onClose();
                 }
@@ -358,7 +360,6 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                 onExpired={() => {
                   setStep(1);
                   setPaymentOrderId(null);
-                  onClose();
                 }}
                 onCancel={() => {
                   setStep(1);
