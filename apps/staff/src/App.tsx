@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock,
   Dices,
+  FileText,
   Globe,
   LayoutDashboard,
   ListPlus,
@@ -33,6 +34,7 @@ import { MenuManagement } from './components/MenuManagement';
 import { SalesAnalytics } from './components/SalesAnalytics';
 import { CustomerCrm } from './components/crm/CustomerCrm';
 import { CustomerFeedback } from './components/CustomerFeedback';
+import { AuditLogView } from './components/AuditLogView';
 import { RewardManagement } from './components/RewardManagement';
 import type { RewardSubTab } from './components/RewardManagement';
 import { SettingsManagement } from './components/SettingsManagement';
@@ -94,6 +96,7 @@ type TabId =
   | 'analytics'
   | 'customers'
   | 'feedback'
+  | 'audit'
   | 'rewards'
   | 'settings';
 
@@ -220,6 +223,7 @@ function BoardLegend({ thresholds }: { thresholds?: ThresholdConfig }) {
                 ['5', 'Switch to Feedback'],
                 ['6', 'Switch to Rewards'],
                 ['7', 'Switch to Settings'],
+                ['8', 'Switch to Audit Logs'],
                 ['R', 'Force Refresh data'],
                 ['M', 'Toggle Alert Chime'],
               ].map(([key, what]) => (
@@ -676,6 +680,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       else if (key === '5') setActiveTab('feedback');
       else if (key === '6') setActiveTab('rewards');
       else if (key === '7') setActiveTab('settings');
+      else if (key === '8') setActiveTab('audit');
       else if (key === 'r') fetchOrders(true);
       else if (key === 'm') toggleMute();
       else return;
@@ -719,6 +724,12 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       label: 'Feedback',
       icon: <MessageSquare className="size-5" />,
       shortcut: '5',
+    },
+    {
+      id: 'audit' as TabId,
+      label: 'Audit Logs',
+      icon: <FileText className="size-5" />,
+      shortcut: '8',
     },
   ];
 
@@ -1140,15 +1151,17 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                           ? 'Customers'
                           : activeTab === 'feedback'
                             ? 'Feedback'
-                            : activeTab === 'rewards'
-                              ? rewardsSubTab === 'luckydraw'
-                                ? 'Lucky Draw Wheel'
-                                : 'Rewards Catalog'
-                              : settingsSubTab === 'users'
-                                ? 'Users'
-                                : settingsSubTab === 'languages'
-                                  ? 'Languages'
-                                  : 'Store Settings'}
+                            : activeTab === 'audit'
+                              ? 'Audit Logs'
+                              : activeTab === 'rewards'
+                                ? rewardsSubTab === 'luckydraw'
+                                  ? 'Lucky Draw Wheel'
+                                  : 'Rewards Catalog'
+                                : settingsSubTab === 'users'
+                                  ? 'Users'
+                                  : settingsSubTab === 'languages'
+                                    ? 'Languages'
+                                    : 'Store Settings'}
                 </h2>
               </div>
               <p className="hidden text-xs text-ink-soft sm:block">
@@ -1162,7 +1175,9 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
                         ? 'Customer points, stamps, and loyalty CRM'
                         : activeTab === 'feedback'
                           ? 'Issues and customer support reports'
-                          : activeTab === 'rewards'
+                          : activeTab === 'audit'
+                            ? 'Track system transactions, price changes, and payment records'
+                            : activeTab === 'rewards'
                             ? rewardsSubTab === 'luckydraw'
                               ? 'Lucky draw prizes, probabilities, and ticket rules'
                               : 'Manage loyalty prizes customer can redeem'
@@ -1257,6 +1272,8 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             <CustomerCrm />
           ) : activeTab === 'feedback' ? (
             <CustomerFeedback />
+          ) : activeTab === 'audit' ? (
+            <AuditLogView />
           ) : activeTab === 'rewards' ? (
             <RewardManagement
               subTab={rewardsSubTab}

@@ -3642,5 +3642,54 @@ export function createApp() {
     }
   });
 
+  // Staff / Manager: Query audit logs with search, action prefix filter, and pagination
+  app.get('/api/audit-logs', requireStaff, async (req, res) => {
+    try {
+      const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+      const actionQuery = typeof req.query.action === 'string' ? req.query.action.trim() : '';
+      const entityType = typeof req.query.entityType === 'string' ? req.query.entityType.trim() : '';
+
+      const rawLimit = Number(req.query.limit);
+      const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 50;
+
+      const rawOffset = req.query.offset !== undefined
+        ? Number(req.query.offset)
+        : req.query.page !== undefined
+          ? (Math.max(1, Number(req.query.page)) - 1) * limit
+          : 0;
+      const offset = Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+
+      const where: any = {};
+      if (entityType) {
+        where.entityType = entityType;
+      }
+      if (actionQuery && actionQuery.toUpperCase() !== 'ALL') {
+        where.action = { startsWith: actionQuery };
+      }
+      if (search) {
+        where.OR = [
+          { entityId: { contains: search } },
+          { actorName: { contains: search } },
+          { metadata: { contains: search } },
+        ];
+      }
+
+      const [logs, total] = await Promise.all([
+        prisma.auditLog.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.auditLog.count({ where }),
+      ]);
+
+      res.json({ logs, total });
+    } catch (err) {
+      console.error('Failed to fetch audit logs:', err);
+      res.status(500).json({ error: 'Failed to fetch audit logs' });
+    }
+  });
+
   return app;
 }

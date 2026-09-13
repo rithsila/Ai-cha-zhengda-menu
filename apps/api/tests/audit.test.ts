@@ -474,4 +474,177 @@ describe('Catalog & Menu Audit Logging', () => {
   });
 });
 
+describe('GET /api/audit-logs Endpoint', () => {
+  const app = createApp();
+
+  beforeEach(async () => {
+    await prisma.auditLog.deleteMany({});
+    clearSessions();
+  });
+
+  it('rejects unauthenticated requests with 401', async () => {
+    const res = await request(app).get('/api/audit-logs');
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects customer requests without staff session with 401', async () => {
+    const res = await request(app)
+      .get('/api/audit-logs')
+      .set(asCustomer('tg-customer-1'));
+    expect(res.status).toBe(401);
+  });
+
+  it('allows staff or manager to fetch audit logs', async () => {
+    const { token: staffToken } = issueToken('staff', { name: 'Staff John' });
+    const res = await request(app)
+      .get('/api/audit-logs')
+      .set('Authorization', `Bearer ${staffToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('logs');
+    expect(res.body).toHaveProperty('total');
+    expect(Array.isArray(res.body.logs)).toBe(true);
+    expect(res.body.total).toBe(0);
+  });
+
+  it('supports pagination with limit and offset', async () => {
+    const { token } = issueToken('manager', { name: 'Manager Mike' });
+
+    for (let i = 1; i <= 5; i++) {
+      await prisma.auditLog.create({
+        data: {
+          actorType: 'manager',
+          actorName: 'Manager Mike',
+          action: `ACTION_${i}`,
+          entityType: 'menu_item',
+          entityId: `item-${i}`,
+          createdAt: new Date(Date.now() - (10 - i) * 1000),
+        },
+      });
+    }
+
+    const resPage1 = await request(app)
+      .get('/api/audit-logs?limit=2&offset=0')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resPage1.status).toBe(200);
+    expect(resPage1.body.total).toBe(5);
+    expect(resPage1.body.logs).toHaveLength(2);
+    expect(resPage1.body.logs[0].action).toBe('ACTION_5');
+    expect(resPage1.body.logs[1].action).toBe('ACTION_4');
+
+    const resPage2 = await request(app)
+      .get('/api/audit-logs?limit=2&offset=2')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resPage2.status).toBe(200);
+    expect(resPage2.body.total).toBe(5);
+    expect(resPage2.body.logs).toHaveLength(2);
+    expect(resPage2.body.logs[0].action).toBe('ACTION_3');
+    expect(resPage2.body.logs[1].action).toBe('ACTION_2');
+
+    const resCapped = await request(app)
+      .get('/api/audit-logs?limit=500')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resCapped.status).toBe(200);
+    expect(resCapped.body.logs).toHaveLength(5);
+  });
+
+  it('filters by action prefix or exact action', async () => {
+    const { token } = issueToken('staff', { name: 'Staff John' });
+
+    await prisma.auditLog.createMany({
+      data: [
+        { actorType: 'system', action: 'PAYMENT_INITIATED', entityType: 'payment' },
+        { actorType: 'system', action: 'PAYMENT_APPROVED', entityType: 'payment' },
+        { actorType: 'staff', action: 'ITEM_PRICE_UPDATE', entityType: 'menu_item' },
+        { actorType: 'staff', action: 'ITEM_SOLD_OUT_TOGGLED', entityType: 'menu_item' },
+      ],
+    });
+
+    const resPayments = await request(app)
+      .get('/api/audit-logs?action=PAYMENT_')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resPayments.status).toBe(200);
+    expect(resPayments.body.total).toBe(2);
+    expect(resPayments.body.logs.map((l: any) => l.action)).toEqual(
+      expect.arrayContaining(['PAYMENT_INITIATED', 'PAYMENT_APPROVED'])
+    );
+
+    const resExact = await request(app)
+      .get('/api/audit-logs?action=ITEM_SOLD_OUT_TOGGLED')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resExact.status).toBe(200);
+    expect(resExact.body.total).toBe(1);
+    expect(resExact.body.logs[0].action).toBe('ITEM_SOLD_OUT_TOGGLED');
+  });
+
+  it('filters by entityType', async () => {
+    const { token } = issueToken('staff', { name: 'Staff John' });
+
+    await prisma.auditLog.createMany({
+      data: [
+        { actorType: 'system', action: 'PAYMENT_APPROVED', entityType: 'payment' },
+        { actorType: 'staff', action: 'ITEM_PRICE_UPDATE', entityType: 'menu_item' },
+      ],
+    });
+
+    const res = await request(app)
+      .get('/api/audit-logs?entityType=menu_item')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.logs[0].entityType).toBe('menu_item');
+  });
+
+  it('searches across entityId, actorName, and metadata (including ABA transaction ID)', async () => {
+    const { token } = issueToken('staff', { name: 'Staff John' });
+
+    const abaTranId = 'ABA-TRAN-987654321';
+    await prisma.auditLog.createMany({
+      data: [
+        {
+          actorType: 'system',
+          action: 'PAYMENT_APPROVED',
+          entityType: 'payment',
+          entityId: 'ord-abc-123',
+          metadata: JSON.stringify({ tranId: abaTranId, amount: 15.5 }),
+        },
+        {
+          actorType: 'staff',
+          actorName: 'Sophea Staff',
+          action: 'ORDER_STATUS_CHANGED',
+          entityType: 'order',
+          entityId: 'ord-xyz-999',
+        },
+        {
+          actorType: 'manager',
+          actorName: 'Admin Bob',
+          action: 'ITEM_PRICE_UPDATE',
+          entityType: 'menu_item',
+          entityId: 'menu-item-42',
+        },
+      ],
+    });
+
+    const resAba = await request(app)
+      .get(`/api/audit-logs?search=${abaTranId}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(resAba.status).toBe(200);
+    expect(resAba.body.total).toBe(1);
+    expect(resAba.body.logs[0].entityId).toBe('ord-abc-123');
+
+    const resActor = await request(app)
+      .get('/api/audit-logs?search=Sophea')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resActor.status).toBe(200);
+    expect(resActor.body.total).toBe(1);
+    expect(resActor.body.logs[0].actorName).toBe('Sophea Staff');
+
+    const resEntity = await request(app)
+      .get('/api/audit-logs?search=menu-item-42')
+      .set('Authorization', `Bearer ${token}`);
+    expect(resEntity.status).toBe(200);
+    expect(resEntity.body.total).toBe(1);
+    expect(resEntity.body.logs[0].entityId).toBe('menu-item-42');
+  });
+});
+
 
