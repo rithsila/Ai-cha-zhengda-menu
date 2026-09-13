@@ -337,7 +337,7 @@ describe('End-to-End System & Workflow Validation', () => {
     await request(app)
       .put(`/api/catalog/${drinkItemId}`)
       .set(managerAuth())
-      .send({ earnsStamp: true, canClaim: true })
+      .send({ earnsStamp: true, canClaim: true, claimStampCost: 10 })
       .expect(200);
 
     // 2. Manager configures Snack to NOT earn stamps (earnsStamp = false) and NOT claimable (canClaim = false)
