@@ -146,7 +146,7 @@ export function ItemPreviewModal({
               {item.canClaim && !item.isSoldOut && (
                 <span className="bg-brand-primary text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md flex items-center gap-1">
                   <span>🎁</span>
-                  <span>10 Stamps</span>
+                  <span>{item.claimStampCost || 10} Stamps</span>
                 </span>
               )}
             </div>

@@ -682,7 +682,7 @@ export function createApp() {
 
   app.post('/api/catalog', requireManager, async (req, res) => {
     try {
-      const { brand, category, name, description, basePrice, image, imageFit, modifiers, earnsStamp, canClaim, localization } = req.body || {};
+      const { brand, category, name, description, basePrice, image, imageFit, modifiers, earnsStamp, canClaim, claimStampCost, localization } = req.body || {};
       if (!name || typeof name !== 'string' || !category || typeof category !== 'string') {
         return res.status(400).json({ error: 'Name and category are required' });
       }
@@ -717,6 +717,10 @@ export function createApp() {
         }
       }
 
+      const parsedClaimStampCost = canClaim
+        ? Math.max(1, Math.round(Number(claimStampCost) || 10))
+        : 10;
+
       const createdItem = await prisma.$transaction(async (tx) => {
         const item = await tx.menuItem.create({
           data: {
@@ -731,6 +735,7 @@ export function createApp() {
             isSoldOut: false,
             earnsStamp: earnsStamp !== undefined ? Boolean(earnsStamp) : true,
             canClaim: canClaim !== undefined ? Boolean(canClaim) : false,
+            claimStampCost: parsedClaimStampCost,
             modifiers: Array.isArray(modifiers) && modifiers.length > 0 ? {
               create: modifiers.map((group: any) => ({
                 key: group.key || group.id || randomUUID(),
@@ -828,7 +833,7 @@ export function createApp() {
   app.put('/api/catalog/:id', requireManager, async (req, res) => {
     try {
       const id = String(req.params.id);
-      const { brand, category, name, description, basePrice, image, imageFit, isActive, isSoldOut, earnsStamp, canClaim, modifiers, localization } = req.body || {};
+      const { brand, category, name, description, basePrice, image, imageFit, isActive, isSoldOut, earnsStamp, canClaim, claimStampCost, modifiers, localization } = req.body || {};
 
       const existing = await prisma.menuItem.findUnique({
         where: { id },
@@ -880,6 +885,9 @@ export function createApp() {
       if (isSoldOut !== undefined) data.isSoldOut = Boolean(isSoldOut);
       if (earnsStamp !== undefined) data.earnsStamp = Boolean(earnsStamp);
       if (canClaim !== undefined) data.canClaim = Boolean(canClaim);
+      if (claimStampCost !== undefined) {
+        data.claimStampCost = Math.max(1, Math.round(Number(claimStampCost) || 10));
+      }
 
       const updatedItem = await prisma.$transaction(async (tx) => {
         // Handle modifiers sync if supplied
@@ -1577,36 +1585,45 @@ export function createApp() {
           let pointsRedeemed = 0;
           let discountApplied = 0;
 
-          // 10-stamp free reward item claim (supports multiple items if customer has enough stamps)
-          const stampCostForFreeItem = Math.round(POINTS_PER_DOLLAR); // e.g. 100 points = 10 stamps
-          const claimableUnits: { name: string; unitPrice: number }[] = [];
+          // Free reward item claim (supports per-item stamp cost)
+          const pointsPerStamp = Math.max(1, Math.round(POINTS_PER_DOLLAR / 10));
+          const claimableUnits: { name: string; unitPrice: number; stampsCost: number; pointsCost: number }[] = [];
           for (const p of pricedItems) {
             const m = menuItems.find((item) => item.id === p.menuItemId);
             if (m && m.canClaim) {
               const unitPrice = Math.round((p.price / p.quantity) * 100) / 100;
+              const stampsCost = m.claimStampCost && m.claimStampCost > 0 ? m.claimStampCost : 10;
+              const pointsCost = stampsCost * pointsPerStamp;
               for (let i = 0; i < p.quantity; i++) {
-                claimableUnits.push({ name: m.name, unitPrice });
+                claimableUnits.push({ name: m.name, unitPrice, stampsCost, pointsCost });
               }
             }
           }
           // Sort descending so highest value claimable items get discounted first
           claimableUnits.sort((a, b) => b.unitPrice - a.unitPrice);
 
-          const maxStampsAvailable = Math.floor(available / stampCostForFreeItem);
-          const maxClaimableCount = Math.min(claimableUnits.length, maxStampsAvailable);
-
-          let claimCount = 0;
+          let requestedClaimCount = 0;
           if (typeof claimReward === 'number' && claimReward > 0) {
-            claimCount = Math.min(Math.floor(claimReward), maxClaimableCount);
+            requestedClaimCount = Math.max(0, Math.floor(claimReward));
           } else if (Boolean(claimReward)) {
-            claimCount = Math.min(1, maxClaimableCount);
+            requestedClaimCount = 1;
           }
 
+          const eligibleClaimedUnits: { name: string; unitPrice: number; stampsCost: number; pointsCost: number }[] = [];
+          let remainingPoints = available;
+          for (const unit of claimableUnits) {
+            if (eligibleClaimedUnits.length >= requestedClaimCount) break;
+            if (remainingPoints >= unit.pointsCost) {
+              eligibleClaimedUnits.push(unit);
+              remainingPoints -= unit.pointsCost;
+            }
+          }
+
+          const claimCount = eligibleClaimedUnits.length;
           if (claimCount > 0) {
-            const claimedUnits = claimableUnits.slice(0, claimCount);
-            const totalClaimDiscount = claimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
+            const totalClaimDiscount = eligibleClaimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
             discountApplied = Math.min(totalClaimDiscount, serverTotal);
-            pointsRedeemed = claimCount * stampCostForFreeItem;
+            pointsRedeemed = eligibleClaimedUnits.reduce((sum, u) => sum + u.pointsCost, 0);
           } else if (requestedPoints > 0) {
             pointsRedeemed = Math.max(0, Math.min(requestedPoints, available, maxByTotal));
             discountApplied = pointsRedeemed / POINTS_PER_DOLLAR;
@@ -1639,7 +1656,6 @@ export function createApp() {
           }, 0);
 
           const paidEligibleCount = Math.max(0, eligibleItemsCount - claimCount);
-          const pointsPerStamp = Math.max(1, Math.round(POINTS_PER_DOLLAR / 10));
           const pointsEarned = paidEligibleCount * pointsPerStamp;
 
           if (telegramUserId && pointsRedeemed > 0) {

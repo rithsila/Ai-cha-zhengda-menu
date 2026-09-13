@@ -163,25 +163,40 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
   const userStamps = Math.floor(userPoints / pointsPerStamp);
 
   // List all individual claimable units in cart
-  const claimableCartUnits: { name: string; unitPrice: number; menuItemId: string }[] = [];
+  const claimableCartUnits: { name: string; unitPrice: number; menuItemId: string; stampCost: number }[] = [];
   for (const c of cart) {
     const item = catalogItems.find((i) => i.id === c.menuItemId);
     if (item && item.canClaim) {
+      const stampCost = item.claimStampCost && item.claimStampCost > 0 ? item.claimStampCost : 10;
       for (let q = 0; q < c.quantity; q++) {
-        claimableCartUnits.push({ name: c.name, unitPrice: c.unitPrice, menuItemId: c.menuItemId });
+        claimableCartUnits.push({ name: c.name, unitPrice: c.unitPrice, menuItemId: c.menuItemId, stampCost });
       }
     }
   }
   // Sort descending by unitPrice so most expensive items get discounted first
   claimableCartUnits.sort((a, b) => b.unitPrice - a.unitPrice);
 
+  let affordableUnits = 0;
+  let runningStamps = 0;
+  for (const u of claimableCartUnits) {
+    if (runningStamps + u.stampCost <= userStamps) {
+      runningStamps += u.stampCost;
+      affordableUnits++;
+    } else {
+      break;
+    }
+  }
+
   const totalClaimableUnits = claimableCartUnits.length;
-  const maxStampsCanClaim = Math.floor(userStamps / 10);
-  const maxClaimableCount = Math.min(totalClaimableUnits, maxStampsCanClaim);
+  const maxClaimableCount = affordableUnits;
 
   const effectiveClaimCount = Math.min(claimedCount, maxClaimableCount);
   const claimedUnits = claimableCartUnits.slice(0, effectiveClaimCount);
   const discountApplied = claimedUnits.reduce((sum, u) => sum + u.unitPrice, 0);
+  const totalStampsUsed = claimedUnits.reduce((sum, u) => sum + u.stampCost, 0);
+  const minStampCostInCart = claimableCartUnits.length > 0
+    ? Math.min(...claimableCartUnits.map((u) => u.stampCost))
+    : 10;
 
   // Prize voucher discount: discount 1 highest-priced unit
   const highestUnitPrice = cart.reduce((max, c) => Math.max(max, c.unitPrice), 0);
@@ -531,17 +546,17 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                             <div key={item.id} className="flex justify-between items-start gap-4 py-2 border-b border-tg-hint/5 last:border-0">
                               <div className="flex-1">
                                 <div className="font-bold text-sm">{item.quantity}x {resolvedItemName}</div>
-                                {signedIn && userStamps >= 10 && (
+                                {signedIn && (
                                   <div className="mt-0.5">
                                     {isEligible ? (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-md">
-                                        🎁 {t('eligibleForStamps', 'Stamp reward eligible')}
+                                        🎁 {catalogItem?.claimStampCost || 10} stamps to claim
                                       </span>
-                                    ) : (
+                                    ) : userStamps >= 1 ? (
                                       <span className="inline-flex items-center text-[10px] font-medium text-tg-hint bg-tg-bg/70 px-1.5 py-0.5 rounded-md border border-tg-hint/10">
                                         {t('notEligibleForStamps', 'Not eligible for stamp rewards')}
                                       </span>
-                                    )}
+                                    ) : null}
                                   </div>
                                 )}
                                 {Object.keys(item.selectedModifiers).length > 0 && (
@@ -587,7 +602,7 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                             </div>
                             <div>
                               <div className="font-bold text-sm text-tg-text">
-                                {t('claimFreeDrink', 'Claim Free Item (10 Stamps each)')}
+                                {t('claimFreeDrink', 'Claim Free Reward Item')}
                               </div>
                               <div className="text-xs text-tg-hint">
                                 {t('stampsAvailableCount', '{{stamps}} stamps available (can claim up to {{max}} free)', {
@@ -641,13 +656,13 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                           <div className="text-xs font-bold text-brand-primary mt-3 flex flex-col gap-1 border-t border-brand-primary/20 pt-2">
                             {claimedUnits.map((u, idx) => (
                               <div key={idx} className="flex items-center justify-between">
-                                <span>🎁 {u.name} (Free)</span>
+                                <span>🎁 {u.name} (Free • {u.stampCost} stamps)</span>
                                 <span>-{formatCurrency(u.unitPrice)}</span>
                               </div>
                             ))}
                             <div className="text-[11px] text-tg-hint font-normal mt-0.5">
                               {t('stampsDeducted', 'Using {{stamps}} stamps', {
-                                stamps: effectiveClaimCount * 10,
+                                stamps: totalStampsUsed,
                               })}
                             </div>
                           </div>
@@ -655,8 +670,8 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       </div>
                     )}
 
-                    {/* Case 2: Customer has >= 10 stamps, but NO claimable items in cart */}
-                    {userStamps >= 10 && totalClaimableUnits === 0 && (
+                    {/* Case 2: Customer has stamps, but NO claimable items in cart */}
+                    {userStamps >= 1 && totalClaimableUnits === 0 && (
                       <div className="rounded-2xl p-4 bg-tg-secondary-bg border border-tg-hint/15 flex items-start gap-3">
                         <div className="flex size-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 text-lg shrink-0 mt-0.5">
                           🎁
@@ -675,11 +690,11 @@ export function CheckoutModal({ isOpen, total, cart, onClose, onSuccess }: Check
                       </div>
                     )}
 
-                    {/* Case 3: Customer has less than 10 stamps */}
-                    {userStamps < 10 && userStamps > 0 && (
+                    {/* Case 3: Customer has claimable items in cart, but not enough stamps to claim */}
+                    {totalClaimableUnits > 0 && userStamps > 0 && maxClaimableCount === 0 && (
                       <div className="rounded-2xl p-3 bg-tg-secondary-bg border border-tg-hint/10 flex items-center justify-between text-xs text-tg-hint">
-                        <span>🥣 {t('yourStamps', 'Your Stamps')}: <strong className="text-tg-text">{userStamps}/10</strong></span>
-                        <span>{t('needMoreStampsCount', '{{count}} more for free item', { count: 10 - userStamps })}</span>
+                        <span>🥣 {t('yourStamps', 'Your Stamps')}: <strong className="text-tg-text">{userStamps} stamps</strong></span>
+                        <span>{t('needMoreStampsCount', '{{count}} more for free item', { count: Math.max(1, minStampCostInCart - userStamps) })}</span>
                       </div>
                     )}
                   </>

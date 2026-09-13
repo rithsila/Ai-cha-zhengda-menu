@@ -72,7 +72,7 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPrev
          {item.canClaim && !item.isSoldOut && (
            <div className="absolute bottom-2 left-2 bg-brand-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
              <span>🎁</span>
-             <span>10 Stamps</span>
+             <span>{item.claimStampCost || 10} Stamps</span>
            </div>
          )}
           {onToggleFavorite && (

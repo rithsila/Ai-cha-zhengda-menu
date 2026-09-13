@@ -317,7 +317,7 @@ export function MenuManagement() {
                             )}
                             {item.canClaim && (
                               <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-bold bg-purple-500/10 border border-purple-500/20 text-purple-500 dark:text-purple-400">
-                                🎁 Free Claim
+                                🎁 Free Claim ({item.claimStampCost || 10} stamps)
                               </span>
                             )}
                           </div>

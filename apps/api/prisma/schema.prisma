@@ -58,9 +58,10 @@ model MenuItem {
   imageFit    String?         @default("contain")
   isSoldOut   Boolean         @default(false)
   isActive    Boolean         @default(true)
-  earnsStamp  Boolean         @default(true)
-  canClaim    Boolean         @default(false)
-  modifiers   ModifierGroup[]
+  earnsStamp     Boolean         @default(true)
+  canClaim       Boolean         @default(false)
+  claimStampCost Int             @default(10)
+  modifiers      ModifierGroup[]
   orderItems  OrderItem[]
 }
 

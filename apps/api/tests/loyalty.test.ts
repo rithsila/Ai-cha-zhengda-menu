@@ -96,6 +96,38 @@ describe('order creation reserves points', () => {
     const user = await prisma.user.findUnique({ where: { telegramUserId: multiUid } });
     expect(user?.loyaltyPoints).toBe(50); // 250 - 200 = 50 remaining (5 stamps)
   });
+
+  it('respects per-item claimStampCost (e.g. 5 stamps = 50 points)', async () => {
+    const customCostUid = `test-custom-cost-${randomUUID()}`;
+    const customItemId = `test-custom-item-${randomUUID()}`;
+    await prisma.user.create({ data: { telegramUserId: customCostUid, loyaltyPoints: 80 } }); // 8 stamps
+    await prisma.menuItem.create({
+      data: {
+        id: customItemId,
+        brand: 'ai-cha',
+        category: 'Ice Cream',
+        name: 'Ai-Scream Cone',
+        basePrice: 0.5,
+        canClaim: true,
+        claimStampCost: 5, // Only 5 stamps needed
+        earnsStamp: true,
+      },
+    });
+
+    const res = await request(app).post('/api/orders').set(asCustomer(customCostUid)).send({
+      items: [{ menuItemId: customItemId, quantity: 1, totalPrice: 0.5, selectedModifiers: {} }],
+      paymentMethod: 'khqr',
+      orderType: 'pickup',
+      claimReward: 1,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.pointsRedeemed).toBe(50); // 5 stamps = 50 points
+    expect(res.body.discountApplied).toBe(0.5);
+    expect(res.body.totalAmount).toBe(0);
+    const user = await prisma.user.findUnique({ where: { telegramUserId: customCostUid } });
+    expect(user?.loyaltyPoints).toBe(30); // 80 - 50 = 30 remaining (3 stamps)
+  });
 });
 
 describe('settlement on completion (cash path)', () => {

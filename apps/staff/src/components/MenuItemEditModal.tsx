@@ -48,6 +48,7 @@ export type MenuItemFull = {
   isActive?: boolean;
   earnsStamp?: boolean;
   canClaim?: boolean;
+  claimStampCost?: number;
   modifiers?: ModifierGroupInput[];
   localized?: {
     name?: {
@@ -186,6 +187,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
   const [imageFit, setImageFit] = useState<'contain' | 'cover'>('contain');
   const [earnsStamp, setEarnsStamp] = useState(true);
   const [canClaim, setCanClaim] = useState(false);
+  const [claimStampCost, setClaimStampCost] = useState('10');
   const [modifiers, setModifiers] = useState<ModifierGroupInput[]>([]);
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -260,6 +262,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setImageFit(item.imageFit === 'cover' ? 'cover' : 'contain');
       setEarnsStamp(item.earnsStamp !== undefined ? Boolean(item.earnsStamp) : true);
       setCanClaim(item.canClaim !== undefined ? Boolean(item.canClaim) : false);
+      setClaimStampCost(item.claimStampCost !== undefined ? String(item.claimStampCost) : '10');
       setModifiers(
         item.modifiers?.map((g) => ({
           id: g.id,
@@ -286,6 +289,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       setImageFit('contain');
       setEarnsStamp(true);
       setCanClaim(false);
+      setClaimStampCost('10');
       setModifiers(cloneModifierPreset(DEFAULT_DRINK_MODIFIERS));
     }
     setIsAddingCategory(false);
@@ -670,6 +674,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
       imageFit,
       earnsStamp,
       canClaim,
+      claimStampCost: canClaim ? Math.max(1, Math.round(Number(claimStampCost) || 10)) : 10,
       modifiers: modifiers.map((g) => ({
         key: g.key || `group_${Date.now()}`,
         name: g.name.trim(),
@@ -1100,16 +1105,37 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-none border border-border bg-surface-sunken/40 p-3.5">
-                <div className="pr-3">
-                  <p className="text-xs font-bold text-ink">Free Claim Item</p>
-                  <p className="text-[11px] text-ink-soft">Can be claimed with 10 stamps</p>
+              <div className="flex flex-col justify-between rounded-none border border-border bg-surface-sunken/40 p-3.5 gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="pr-3">
+                    <p className="text-xs font-bold text-ink">Free Claim Item</p>
+                    <p className="text-[11px] text-ink-soft">Can be claimed with stamps</p>
+                  </div>
+                  <Switch
+                    checked={canClaim}
+                    onChange={setCanClaim}
+                    srLabel="Allow free claim with stamps"
+                  />
                 </div>
-                <Switch
-                  checked={canClaim}
-                  onChange={setCanClaim}
-                  srLabel="Allow free claim with stamps"
-                />
+                {canClaim && (
+                  <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-2">
+                    <label htmlFor="claim-stamp-cost-input" className="text-xs font-bold text-ink">
+                      Stamps Needed
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        id="claim-stamp-cost-input"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={claimStampCost}
+                        onChange={(e) => setClaimStampCost(e.target.value)}
+                        className="h-8 w-20 rounded-none border border-border bg-surface px-2 text-right text-xs font-bold text-ink outline-none focus:border-accent"
+                      />
+                      <span className="text-xs text-ink-soft">stamps</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

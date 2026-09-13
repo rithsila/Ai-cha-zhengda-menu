@@ -87,23 +87,27 @@ describe('Manager Catalog CRUD API', () => {
         basePrice: 1.50,
         earnsStamp: true,
         canClaim: true,
+        claimStampCost: 7,
       })
       .expect(201);
 
     expect(res.body.earnsStamp).toBe(true);
     expect(res.body.canClaim).toBe(true);
+    expect(res.body.claimStampCost).toBe(7);
 
     const updateRes = await request(app)
       .put(`/api/catalog/${res.body.id}`)
       .set('Authorization', `Bearer ${managerToken}`)
       .send({
         earnsStamp: false,
-        canClaim: false,
+        canClaim: true,
+        claimStampCost: 12,
       })
       .expect(200);
 
     expect(updateRes.body.earnsStamp).toBe(false);
-    expect(updateRes.body.canClaim).toBe(false);
+    expect(updateRes.body.canClaim).toBe(true);
+    expect(updateRes.body.claimStampCost).toBe(12);
   });
 
   it('allows manager to update an existing menu item and its modifiers', async () => {

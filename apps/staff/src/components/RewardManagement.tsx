@@ -98,22 +98,27 @@ export function RewardManagement({
     };
   }, [itemDropdownOpen]);
 
+  const claimableCatalogItems = useMemo(() => {
+    return catalogItems.filter((item) => Boolean(item.canClaim));
+  }, [catalogItems]);
+
   const filteredCatalogItems = useMemo(() => {
-    if (!catalogSearch.trim()) return catalogItems.slice(0, 10);
+    if (!catalogSearch.trim()) return claimableCatalogItems.slice(0, 10);
     const q = catalogSearch.toLowerCase();
-    return catalogItems.filter(
+    return claimableCatalogItems.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
         (item.category && item.category.toLowerCase().includes(q)) ||
         (item.brand && item.brand.toLowerCase().includes(q)),
     );
-  }, [catalogItems, catalogSearch]);
+  }, [claimableCatalogItems, catalogSearch]);
 
   const handleSelectCatalogItem = (item: MenuItemFull) => {
     setSelectedCatalogItem(item);
     setNewName(`Free ${item.name}`);
     setNewDescription(item.description || `${item.category} • Redeemable for loyalty points`);
     setNewImage(item.image || null);
+    setNewCost(String(item.claimStampCost || 10));
     setItemDropdownOpen(false);
     setCatalogSearch('');
   };
@@ -277,13 +282,14 @@ export function RewardManagement({
                           setNewName('');
                           setNewDescription('');
                           setNewImage(null);
+                          setNewCost('');
                         }}
                         className="text-xs font-bold text-danger hover:underline"
                       >
                         Clear selected item
                       </button>
                     ) : (
-                      <span className="text-[11px] text-ink-faint">Pick an item to auto-fill</span>
+                      <span className="text-[11px] text-ink-faint">Pick a free claim item to auto-fill</span>
                     )}
                   </div>
 
@@ -292,7 +298,7 @@ export function RewardManagement({
                       <Search className="absolute left-3 size-4 text-ink-faint pointer-events-none" />
                       <input
                         type="text"
-                        placeholder="Search menu item (e.g. Milk Tea, Sundae, Fries...)"
+                        placeholder="Search eligible item (e.g. Milk Tea, Sundae, Fries...)"
                         value={catalogSearch}
                         onFocus={() => setItemDropdownOpen(true)}
                         onChange={(e) => {
@@ -305,8 +311,10 @@ export function RewardManagement({
 
                     {itemDropdownOpen && (
                       <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-none border border-border bg-surface shadow-xl p-1 space-y-1">
-                        {catalogItems.length === 0 ? (
-                          <p className="p-3 text-center text-xs text-ink-soft">No menu items found</p>
+                        {claimableCatalogItems.length === 0 ? (
+                          <p className="p-3 text-center text-xs text-ink-soft">
+                            No free claim items found. Enable "Free Claim Item" in Menu first.
+                          </p>
                         ) : filteredCatalogItems.length === 0 ? (
                           <p className="p-3 text-center text-xs text-ink-soft">No matching items</p>
                         ) : (
@@ -370,7 +378,7 @@ export function RewardManagement({
                           Selected: {selectedCatalogItem.name}
                         </p>
                         <p className="text-[10px] text-ink-soft capitalize">
-                          {selectedCatalogItem.brand} • {selectedCatalogItem.category} • Base Price: ${Number(selectedCatalogItem.basePrice || 0).toFixed(2)}
+                          {selectedCatalogItem.brand} • {selectedCatalogItem.category} • Base Price: ${Number(selectedCatalogItem.basePrice || 0).toFixed(2)} • Claim Cost: {selectedCatalogItem.claimStampCost || 10} stamps
                         </p>
                       </div>
                     </div>

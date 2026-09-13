@@ -21,6 +21,7 @@ export interface RawCatalogItem {
   imageFit?: 'contain' | 'cover';
   isSoldOut?: boolean;
   canClaim?: boolean;
+  claimStampCost?: number;
   earnsStamp?: boolean;
   modifiers?: any[];
   localized?: {
