@@ -1076,6 +1076,49 @@ export function createApp() {
         return localized;
       }, WRITE_TX_OPTIONS);
 
+      const staff = getStaffSessionInfo(req as any);
+      if (data.basePrice !== undefined && data.basePrice !== existing.basePrice) {
+        await recordAuditLog(prisma, {
+          actorType: (staff?.role as any) || 'manager',
+          actorId: staff?.id || staff?.telegramUserId || null,
+          actorName: staff?.name || (staff?.role === 'manager' ? 'Admin' : 'Staff'),
+          action: 'ITEM_PRICE_UPDATE',
+          entityType: 'menu_item',
+          entityId: id,
+          oldValue: { basePrice: existing.basePrice },
+          newValue: { basePrice: data.basePrice },
+        });
+      }
+
+      const changedOld: Record<string, any> = {};
+      const changedNew: Record<string, any> = {};
+      for (const key of ['name', 'description', 'category', 'brand', 'image', 'imageFit', 'isActive', 'isSoldOut', 'earnsStamp', 'canClaim', 'claimStampCost'] as const) {
+        if (data[key] !== undefined && data[key] !== (existing as any)[key]) {
+          changedOld[key] = (existing as any)[key];
+          changedNew[key] = data[key];
+        }
+      }
+      if (modifiers !== undefined) {
+        changedOld.modifiers = existing.modifiers;
+        changedNew.modifiers = modifiers;
+      }
+      if (localization !== undefined) {
+        changedNew.localization = localization;
+      }
+
+      if (Object.keys(changedNew).length > 0) {
+        await recordAuditLog(prisma, {
+          actorType: (staff?.role as any) || 'manager',
+          actorId: staff?.id || staff?.telegramUserId || null,
+          actorName: staff?.name || (staff?.role === 'manager' ? 'Admin' : 'Staff'),
+          action: 'ITEM_UPDATE',
+          entityType: 'menu_item',
+          entityId: id,
+          oldValue: changedOld,
+          newValue: changedNew,
+        });
+      }
+
       res.json(updatedItem);
     } catch (error) {
       console.error(error);
@@ -1094,11 +1137,24 @@ export function createApp() {
         return res.status(404).json({ error: 'Menu item not found' });
       }
 
+      const staff = getStaffSessionInfo(req as any);
+
       // If it was ordered before, soft delete to preserve receipts
       if (item.orderItems && item.orderItems.length > 0) {
         await prisma.menuItem.update({
           where: { id },
           data: { isActive: false }
+        });
+        await recordAuditLog(prisma, {
+          actorType: (staff?.role as any) || 'manager',
+          actorId: staff?.id || staff?.telegramUserId || null,
+          actorName: staff?.name || (staff?.role === 'manager' ? 'Admin' : 'Staff'),
+          action: 'ITEM_ARCHIVED',
+          entityType: 'menu_item',
+          entityId: id,
+          oldValue: { isActive: item.isActive },
+          newValue: { isActive: false },
+          metadata: { name: item.name, reason: 'Preserved receipts' },
         });
         return res.json({ ok: true, softDeleted: true });
       }
@@ -1129,6 +1185,17 @@ export function createApp() {
         }
       }, WRITE_TX_OPTIONS);
 
+      await recordAuditLog(prisma, {
+        actorType: (staff?.role as any) || 'manager',
+        actorId: staff?.id || staff?.telegramUserId || null,
+        actorName: staff?.name || (staff?.role === 'manager' ? 'Admin' : 'Staff'),
+        action: 'ITEM_DELETED',
+        entityType: 'menu_item',
+        entityId: id,
+        oldValue: { name: item.name, category: item.category, basePrice: item.basePrice },
+        newValue: null,
+      });
+
       res.json({ ok: true, deleted: true });
     } catch (error) {
       console.error(error);
@@ -1142,9 +1209,24 @@ export function createApp() {
       // ever match one segment. Same coercion the user routes below use.
       const id = String(req.params.id);
       const { isSoldOut } = req.body;
+      const existing = await prisma.menuItem.findUnique({
+        where: { id },
+        select: { isSoldOut: true },
+      });
       const item = await prisma.menuItem.update({
         where: { id },
         data: { isSoldOut }
+      });
+      const staff = getStaffSessionInfo(req as any);
+      await recordAuditLog(prisma, {
+        actorType: (staff?.role as any) || 'staff',
+        actorId: staff?.id || staff?.telegramUserId || null,
+        actorName: staff?.name || (staff?.role === 'manager' ? 'Admin' : 'Staff'),
+        action: 'ITEM_SOLD_OUT_TOGGLED',
+        entityType: 'menu_item',
+        entityId: id,
+        oldValue: { isSoldOut: existing ? existing.isSoldOut : !isSoldOut },
+        newValue: { isSoldOut: Boolean(isSoldOut) },
       });
       res.json(item);
     } catch (error) {

@@ -298,3 +298,180 @@ describe('Payment & Order Lifecycle Audit Logging', () => {
   });
 });
 
+describe('Catalog & Menu Audit Logging', () => {
+  const app = createApp();
+
+  beforeEach(async () => {
+    await prisma.auditLog.deleteMany({});
+  });
+
+  it('records ITEM_PRICE_UPDATE when manager updates basePrice', async () => {
+    const item = await prisma.menuItem.create({
+      data: {
+        brand: 'ai-cha',
+        category: 'Milk Tea',
+        name: 'Classic Milk Tea',
+        basePrice: 2.0,
+      },
+    });
+
+    const { token } = issueToken('manager', { name: 'Manager Alice', telegramUserId: 'mgr-1' });
+
+    const res = await request(app)
+      .put(`/api/catalog/${item.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ basePrice: 2.50 });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ITEM_PRICE_UPDATE', entityId: item.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('manager');
+    expect(logs[0].actorName).toBe('Manager Alice');
+    expect(logs[0].entityType).toBe('menu_item');
+    expect(JSON.parse(logs[0].oldValue!)).toEqual({ basePrice: 2.0 });
+    expect(JSON.parse(logs[0].newValue!)).toEqual({ basePrice: 2.5 });
+  });
+
+  it('records ITEM_UPDATE when manager updates name or other attributes without basePrice', async () => {
+    const item = await prisma.menuItem.create({
+      data: {
+        brand: 'ai-cha',
+        category: 'Milk Tea',
+        name: 'Original Milk Tea',
+        basePrice: 2.0,
+      },
+    });
+
+    const { token } = issueToken('manager', { name: 'Manager Bob', telegramUserId: 'mgr-2' });
+
+    const res = await request(app)
+      .put(`/api/catalog/${item.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Renamed Milk Tea', description: 'Freshly brewed' });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ITEM_UPDATE', entityId: item.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('manager');
+    expect(logs[0].actorName).toBe('Manager Bob');
+    expect(logs[0].entityType).toBe('menu_item');
+    expect(JSON.parse(logs[0].oldValue!)).toMatchObject({ name: 'Original Milk Tea' });
+    expect(JSON.parse(logs[0].newValue!)).toMatchObject({ name: 'Renamed Milk Tea', description: 'Freshly brewed' });
+
+    const priceLogs = await prisma.auditLog.findMany({
+      where: { action: 'ITEM_PRICE_UPDATE', entityId: item.id },
+    });
+    expect(priceLogs).toHaveLength(0);
+  });
+
+  it('records ITEM_SOLD_OUT_TOGGLED when staff toggles sold-out status', async () => {
+    const item = await prisma.menuItem.create({
+      data: {
+        brand: 'ai-cha',
+        category: 'Milk Tea',
+        name: 'Sold Out Tea',
+        basePrice: 2.0,
+        isSoldOut: false,
+      },
+    });
+
+    const { token } = issueToken('staff', { name: 'Staff Charlie', telegramUserId: 'staff-1' });
+
+    const res = await request(app)
+      .put(`/api/catalog/${item.id}/sold-out`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ isSoldOut: true });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ITEM_SOLD_OUT_TOGGLED', entityId: item.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('staff');
+    expect(logs[0].actorName).toBe('Staff Charlie');
+    expect(logs[0].entityType).toBe('menu_item');
+    expect(JSON.parse(logs[0].oldValue!)).toEqual({ isSoldOut: false });
+    expect(JSON.parse(logs[0].newValue!)).toEqual({ isSoldOut: true });
+  });
+
+  it('records ITEM_DELETED when manager deletes an un-ordered item', async () => {
+    const item = await prisma.menuItem.create({
+      data: {
+        brand: 'ai-cha',
+        category: 'Snack',
+        name: 'Temporary Snack',
+        basePrice: 1.5,
+      },
+    });
+
+    const { token } = issueToken('manager', { name: 'Manager Dan', telegramUserId: 'mgr-3' });
+
+    const res = await request(app)
+      .delete(`/api/catalog/${item.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(true);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ITEM_DELETED', entityId: item.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('manager');
+    expect(logs[0].actorName).toBe('Manager Dan');
+    expect(logs[0].entityType).toBe('menu_item');
+    expect(JSON.parse(logs[0].oldValue!)).toMatchObject({ name: 'Temporary Snack', basePrice: 1.5 });
+  });
+
+  it('records ITEM_ARCHIVED when manager deletes an item with order history (soft delete)', async () => {
+    const item = await prisma.menuItem.create({
+      data: {
+        brand: 'ai-cha',
+        category: 'Snack',
+        name: 'Ordered Snack',
+        basePrice: 1.5,
+      },
+    });
+
+    await prisma.order.create({
+      data: {
+        totalAmount: 1.5,
+        pickupCode: '999',
+        status: 'completed',
+        orderType: 'pickup',
+        paymentMethod: 'cash',
+        items: {
+          create: [{
+            menuItemId: item.id,
+            price: 1.5,
+            quantity: 1,
+            modifiers: '{}',
+          }],
+        },
+      },
+    });
+
+    const { token } = issueToken('manager', { name: 'Manager Dan', telegramUserId: 'mgr-3' });
+
+    const res = await request(app)
+      .delete(`/api/catalog/${item.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.softDeleted).toBe(true);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ITEM_ARCHIVED', entityId: item.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('manager');
+    expect(logs[0].actorName).toBe('Manager Dan');
+    expect(logs[0].entityType).toBe('menu_item');
+    expect(JSON.parse(logs[0].oldValue!)).toEqual({ isActive: true });
+    expect(JSON.parse(logs[0].newValue!)).toEqual({ isActive: false });
+  });
+});
+
+
