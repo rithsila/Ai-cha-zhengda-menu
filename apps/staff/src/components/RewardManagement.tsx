@@ -150,6 +150,21 @@ export function RewardManagement({
           isActive: true,
         }),
       });
+
+      const targetItem = selectedCatalogItem || catalogItems.find(
+        (i) => i.name.trim().toLowerCase() === name.replace(/^Free\s+/i, '').trim().toLowerCase()
+      );
+      if (targetItem?.id) {
+        await apiFetch(`/api/catalog/${targetItem.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            canClaim: true,
+            claimStampCost: cost,
+          }),
+        }).catch(() => {});
+      }
+
       setRewards((prev) => [created, ...prev]);
       toast({ title: 'Reward added', variant: 'success' });
       setNewName('');
@@ -181,6 +196,15 @@ export function RewardManagement({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: nextActive }),
       });
+      const cleanName = reward.name.replace(/^Free\s+/i, '').trim().toLowerCase();
+      const match = catalogItems.find((i) => i.name.trim().toLowerCase() === cleanName);
+      if (match?.id) {
+        await apiFetch(`/api/catalog/${match.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ canClaim: nextActive }),
+        }).catch(() => {});
+      }
       setRewards((prev) => prev.map((r) => (r.id === reward.id ? updated : r)));
       toast({
         title: nextActive ? 'Reward activated' : 'Reward deactivated',
@@ -208,6 +232,15 @@ export function RewardManagement({
       await apiFetch(`/api/rewards/${reward.id}`, {
         method: 'DELETE',
       });
+      const cleanName = reward.name.replace(/^Free\s+/i, '').trim().toLowerCase();
+      const match = catalogItems.find((i) => i.name.trim().toLowerCase() === cleanName);
+      if (match?.id) {
+        await apiFetch(`/api/catalog/${match.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ canClaim: false }),
+        }).catch(() => {});
+      }
       setRewards((prev) => prev.filter((r) => r.id !== reward.id));
       toast({
         title: 'Reward deleted',

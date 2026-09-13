@@ -662,6 +662,24 @@ export function createApp() {
       const wantsInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
       const isStaff = Boolean(staffRoleOf(req as any));
       const includeInactive = wantsInactive && isStaff;
+
+      // Sync active rewards to menu items so Rewards Catalog settings automatically apply to menu items
+      const activeRewards = await prisma.reward.findMany({ where: { isActive: true } });
+      if (activeRewards.length > 0) {
+        const allItems = await prisma.menuItem.findMany({ select: { id: true, name: true } });
+        for (const r of activeRewards) {
+          const cleanName = r.name.replace(/^Free\s+/i, '').trim().toLowerCase();
+          const stampCost = Math.max(1, Math.round(r.pointsCost / 10));
+          const matches = allItems.filter(item => item.name.trim().toLowerCase() === cleanName);
+          for (const m of matches) {
+            await prisma.menuItem.update({
+              where: { id: m.id },
+              data: { canClaim: true, claimStampCost: stampCost }
+            });
+          }
+        }
+      }
+
       const catalog = await prisma.menuItem.findMany({
         where: includeInactive ? undefined : { isActive: true },
         include: {
@@ -2412,6 +2430,26 @@ export function createApp() {
     }
   });
 
+  async function syncRewardToMenuItem(rewardName: string, pointsCost: number, isActive: boolean) {
+    try {
+      const cleanName = rewardName.replace(/^Free\s+/i, '').trim().toLowerCase();
+      const allItems = await prisma.menuItem.findMany({ select: { id: true, name: true } });
+      const matches = allItems.filter((item) => item.name.trim().toLowerCase() === cleanName);
+      const stampCost = Math.max(1, Math.round(pointsCost / 10));
+      for (const m of matches) {
+        await prisma.menuItem.update({
+          where: { id: m.id },
+          data: {
+            canClaim: isActive,
+            claimStampCost: stampCost,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to sync reward to menuItem:', err);
+    }
+  }
+
   app.post('/api/rewards', requireManager, async (req, res) => {
     try {
       const { name, description, pointsCost, image } = req.body || {};
@@ -2421,6 +2459,7 @@ export function createApp() {
       const reward = await prisma.reward.create({
         data: { name: name.trim(), description: description || null, pointsCost, image: image || null }
       });
+      await syncRewardToMenuItem(reward.name, reward.pointsCost, true);
       res.json(reward);
     } catch (err) {
       res.status(500).json({ error: 'Failed to create reward' });
@@ -2470,6 +2509,7 @@ export function createApp() {
         where: { id: String(req.params.id) },
         data
       });
+      await syncRewardToMenuItem(reward.name, reward.pointsCost, reward.isActive);
       res.json(reward);
     } catch (err) {
       res.status(500).json({ error: 'Failed to update reward' });
@@ -2478,7 +2518,11 @@ export function createApp() {
 
   app.delete('/api/rewards/:id', requireManager, async (req, res) => {
     try {
+      const existing = await prisma.reward.findUnique({ where: { id: String(req.params.id) } });
       await prisma.reward.delete({ where: { id: String(req.params.id) } });
+      if (existing) {
+        await syncRewardToMenuItem(existing.name, existing.pointsCost, false);
+      }
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: 'Failed to delete reward' });
