@@ -753,6 +753,48 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
     }
   };
 
+  const initialNameCells = useMemo(() => {
+    const result: Record<string, { text: string; reviewed: boolean; origin?: any }> = {};
+    const fallback = item?.name || name;
+    if (fallback) {
+      result.en = { text: fallback, reviewed: true, origin: 'original' };
+    }
+    if (item?.localized?.name?.cells) {
+      for (const cell of item.localized.name.cells) {
+        const c = cell as any;
+        if (c.text) {
+          result[c.locale] = {
+            text: c.text,
+            reviewed: c.reviewed ?? (c.status === 'reviewed'),
+            origin: c.origin || (c.locale === (item.localized.name.sourceLocale || 'en') ? 'original' : 'manual'),
+          };
+        }
+      }
+    }
+    return Object.keys(result).length > 0 ? (result as any) : undefined;
+  }, [item?.id, item?.name, item?.localized?.name, name]);
+
+  const initialDescCells = useMemo(() => {
+    const result: Record<string, { text: string; reviewed: boolean; origin?: any }> = {};
+    const fallback = item?.description || description;
+    if (fallback) {
+      result.en = { text: fallback, reviewed: true, origin: 'original' };
+    }
+    if (item?.localized?.description?.cells) {
+      for (const cell of item.localized.description.cells) {
+        const c = cell as any;
+        if (c.text) {
+          result[c.locale] = {
+            text: c.text,
+            reviewed: c.reviewed ?? (c.status === 'reviewed'),
+            origin: c.origin || (c.locale === (item.localized.description.sourceLocale || 'en') ? 'original' : 'manual'),
+          };
+        }
+      }
+    }
+    return Object.keys(result).length > 0 ? (result as any) : undefined;
+  }, [item?.id, item?.description, item?.localized?.description, description]);
+
   if (!isOpen) return null;
 
   return (
@@ -902,18 +944,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
                 required
                 placeholder="e.g. Brown Sugar Boba Milk"
                 initialSourceLocale={item?.localized?.name?.sourceLocale || 'auto'}
-                initialCells={
-                  item?.localized?.name?.cells
-                    ? Object.fromEntries(
-                        item.localized.name.cells.map((c: any) => [
-                          c.locale,
-                          { text: c.text, reviewed: c.status === 'reviewed' },
-                        ])
-                      )
-                    : name
-                    ? { en: { text: name } }
-                    : undefined
-                }
+                initialCells={initialNameCells}
                 onChange={setNameLocState}
                 onPrimaryTextChange={setName}
               />
@@ -947,18 +978,7 @@ export function MenuItemEditModal({ isOpen, item, onClose, onSaved }: Props) {
               field="description"
               placeholder="Short appetizing description..."
               initialSourceLocale={item?.localized?.description?.sourceLocale || 'auto'}
-              initialCells={
-                item?.localized?.description?.cells
-                  ? Object.fromEntries(
-                      item.localized.description.cells.map((c: any) => [
-                        c.locale,
-                        { text: c.text, reviewed: c.status === 'reviewed' },
-                      ])
-                    )
-                  : description
-                  ? { en: { text: description } }
-                  : undefined
-              }
+              initialCells={initialDescCells}
               onChange={setDescLocState}
               onPrimaryTextChange={setDescription}
             />

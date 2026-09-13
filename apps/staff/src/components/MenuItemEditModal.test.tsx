@@ -506,6 +506,33 @@ describe('MenuItemEditModal Category Dropdown & Quick Add', () => {
     const body = JSON.parse(catalogCall[1].body);
     expect(body.imageFit).toBe('cover');
   });
+
+  it('prepopulates English name and description for legacy items that do not have localized database rows', async () => {
+    const legacyItem = {
+      id: 'legacy-1',
+      brand: 'ai-cha',
+      name: 'Ai-Scream Cone Vanilla',
+      description: 'Sweet vanilla-flavored cone ice cream.',
+      category: 'Ice Cream',
+      basePrice: 0.5,
+      localized: {},
+    } as any;
+
+    render(
+      <ToastProvider>
+        <MenuItemEditModal isOpen={true} item={legacyItem} onClose={vi.fn()} onSaved={vi.fn()} />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      const nameInput = screen.getByRole('textbox', { name: 'English item name' }) as HTMLInputElement;
+      expect(nameInput.value).toBe('Ai-Scream Cone Vanilla');
+
+      const descInput = screen.getByRole('textbox', { name: 'English description' }) as HTMLTextAreaElement;
+      expect(descInput.value).toBe('Sweet vanilla-flavored cone ice cream.');
+    });
+  });
 });
+
 
 

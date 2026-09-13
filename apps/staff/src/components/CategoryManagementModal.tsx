@@ -545,8 +545,8 @@ export function CategoryManagementModal({
                                           { text: c.text, reviewed: c.status === 'reviewed' },
                                         ])
                                       )
-                                    : editingName
-                                    ? { en: { text: editingName } }
+                                    : (cat.name || editingName)
+                                    ? { en: { text: cat.name || editingName } }
                                     : undefined
                                 }
                                 onChange={setEditingLocState}
