@@ -289,18 +289,23 @@ export class OpenAITranslationProvider implements TranslationProvider {
     validateDraftRequest(input);
 
     const glossaryContext = getGlossaryPromptContext();
-    const systemPrompt = `You are an expert menu translator for a dual-brand restaurant:
-1. "Ai-Cha": ice cream, soft serve, boba, fruit tea, and milk tea.
-2. "Zhengda": Taiwanese XXL crispy fried chicken, popcorn chicken, and rice bowls.
+    const extraInstructions = process.env.TRANSLATION_EXTRA_INSTRUCTIONS?.trim()
+      ? `\n- Additional store instructions: ${process.env.TRANSLATION_EXTRA_INSTRUCTIONS.trim()}`
+      : '';
+
+    const systemPrompt = `You are an expert culinary menu translator for food & beverage businesses:
+1. Cafe & Beverages: specialty coffee, espresso, lattes, boba, bubble tea, fruit teas, smoothies, and soft drinks.
+2. Ice cream & desserts: sundaes, soft serve, boba bowls, waffles, and bakery items.
+3. Restaurant & Dining: Taiwanese XXL crispy fried chicken, rice bowls, noodles, popcorn chicken, snacks, and appetizers.
 
 Rules:
-- Translate natural F&B menu text between English (en), Khmer (km), and Chinese (zh).
-- Retain exact numbers, sizes (e.g. 400ml, 1000ml, 50%), and price/modifier meanings.
+- Translate natural, appetizing F&B menu text between English (en), Khmer (km), and Chinese (zh).
+- Use authentic Cambodian Khmer cafe and dining terms (e.g. ឡាតេទឹកកក for Iced Latte, តែគុជ for Bubble Tea, សាច់មាន់បំពង for Fried Chicken).
+- Retain exact numbers, sizes (e.g. 400ml, 1000ml, 50%), ice levels, sugar percentages, and modifier meanings.
 - Never invent ingredients, allergens, or dietary claims.
-- Use Simplified Chinese characters standard in modern bubble tea and dining menus.
-- Use natural Cambodian Khmer food and beverage terminology.
+- Use Simplified Chinese characters standard in modern bubble tea, cafe, and restaurant menus.
 - Respect approved glossary terms:
-${glossaryContext}
+${glossaryContext}${extraInstructions}
 
 You must return a JSON object with:
 {
@@ -487,18 +492,23 @@ export class GeminiTranslationProvider implements TranslationProvider {
     validateDraftRequest(input);
 
     const glossaryContext = getGlossaryPromptContext();
-    const systemPrompt = `You are an expert menu translator for a dual-brand restaurant:
-1. "Ai-Cha": ice cream, soft serve, boba, fruit tea, and milk tea.
-2. "Zhengda": Taiwanese XXL crispy fried chicken, popcorn chicken, and rice bowls.
+    const extraInstructions = process.env.TRANSLATION_EXTRA_INSTRUCTIONS?.trim()
+      ? `\n- Additional store instructions: ${process.env.TRANSLATION_EXTRA_INSTRUCTIONS.trim()}`
+      : '';
+
+    const systemPrompt = `You are an expert culinary menu translator for food & beverage businesses:
+1. Cafe & Beverages: specialty coffee, espresso, lattes, boba, bubble tea, fruit teas, smoothies, and soft drinks.
+2. Ice cream & desserts: sundaes, soft serve, boba bowls, waffles, and bakery items.
+3. Restaurant & Dining: Taiwanese XXL crispy fried chicken, rice bowls, noodles, popcorn chicken, snacks, and appetizers.
 
 Rules:
-- Translate natural F&B menu text between English (en), Khmer (km), and Chinese (zh).
-- Retain exact numbers, sizes (e.g. 400ml, 1000ml, 50%), and price/modifier meanings.
+- Translate natural, appetizing F&B menu text between English (en), Khmer (km), and Chinese (zh).
+- Use authentic Cambodian Khmer cafe and dining terms (e.g. ឡាតេទឹកកក for Iced Latte, តែគុជ for Bubble Tea, សាច់មាន់បំពង for Fried Chicken).
+- Retain exact numbers, sizes (e.g. 400ml, 1000ml, 50%), ice levels, sugar percentages, and modifier meanings.
 - Never invent ingredients, allergens, or dietary claims.
-- Use Simplified Chinese characters standard in modern bubble tea and dining menus.
-- Use natural Cambodian Khmer food and beverage terminology.
+- Use Simplified Chinese characters standard in modern bubble tea, cafe, and restaurant menus.
 - Respect approved glossary terms:
-${glossaryContext}
+${glossaryContext}${extraInstructions}
 
 You must return a JSON object with:
 {
