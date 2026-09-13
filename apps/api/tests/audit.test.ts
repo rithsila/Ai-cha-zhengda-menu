@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { prisma } from '../src/app';
+import { describe, it, expect, beforeEach, afterEach, afterAll, beforeAll, vi } from 'vitest';
+import request from 'supertest';
+import { randomUUID, createHmac } from 'crypto';
+import { createApp, prisma } from '../src/app';
 import { recordAuditLog } from '../src/audit';
 import { issueToken, clearSessions, getStaffSessionInfo } from '../src/auth';
+import { enableAba, disableAba, stubAbaFetch, approvedStatus, ABA_ENV } from './helpers/aba';
+import { asCustomer } from './helpers/customer';
 
 describe('Audit Logging System', () => {
   beforeEach(async () => {
@@ -87,3 +91,210 @@ describe('Audit Logging System', () => {
     expect(getStaffSessionInfo({ headers: { authorization: 'Bearer invalid-token' } })).toBeNull();
   });
 });
+
+describe('Payment & Order Lifecycle Audit Logging', () => {
+  const app = createApp();
+  const uid = `audit-user-${randomUUID()}`;
+  const itemId = `audit-item-${randomUUID()}`;
+  const ITEM_PRICE = 5.0;
+
+  function signWebhookPayload(payload: Record<string, any>, key: string = ABA_ENV.ABA_API_KEY) {
+    const sortedKeys = Object.keys(payload).sort();
+    const concatenated = sortedKeys.map((k) => String(payload[k])).join('');
+    return createHmac('sha512', key).update(concatenated).digest('base64');
+  }
+
+  async function makeOrder() {
+    const res = await request(app).post('/api/orders').set(asCustomer(uid)).send({
+      items: [{ menuItemId: itemId, quantity: 1, selectedModifiers: {} }],
+      paymentMethod: 'khqr',
+      orderType: 'pickup',
+      pointsToUse: 0,
+    });
+    expect(res.status).toBe(200);
+    return res.body as { id: string; totalAmount: number; pickupCode: string; status: string };
+  }
+
+  beforeAll(async () => {
+    await prisma.user.create({ data: { telegramUserId: uid, loyaltyPoints: 0 } });
+    await prisma.menuItem.create({
+      data: { id: itemId, brand: 'ai-cha', category: 'Test', name: 'Audit Test Tea', basePrice: ITEM_PRICE },
+    });
+  });
+
+  beforeEach(async () => {
+    await prisma.auditLog.deleteMany({});
+    clearSessions();
+    enableAba();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterAll(async () => {
+    disableAba();
+  });
+
+  it('records PAYMENT_INITIATED when creating ABA payment', async () => {
+    stubAbaFetch();
+    const order = await makeOrder();
+    const res = await request(app)
+      .post('/api/payment/aba/create')
+      .set(asCustomer(uid))
+      .send({ orderId: order.id });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'PAYMENT_INITIATED', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].entityType).toBe('payment');
+    const metadata = JSON.parse(logs[0].metadata!);
+    expect(metadata.amount).toBe(order.totalAmount);
+    expect(metadata.tranId).toBeDefined();
+  });
+
+  it('records PAYMENT_APPROVED when ABA payment is confirmed', async () => {
+    const order = await makeOrder();
+    const transactionId = `tx-${randomUUID()}`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { transactionId, paymentExpiresAt: new Date(Date.now() + 3 * 60 * 1000) },
+    });
+    stubAbaFetch({ status: approvedStatus(order.totalAmount) });
+
+    const res = await request(app)
+      .get(`/api/payment/aba/status/${order.id}`)
+      .set(asCustomer(uid));
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('APPROVED');
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'PAYMENT_APPROVED', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].entityType).toBe('payment');
+    const metadata = JSON.parse(logs[0].metadata!);
+    expect(metadata.tranId).toBe(transactionId);
+    expect(metadata.amount).toBe(order.totalAmount);
+    expect(metadata.pickupCode).toBe(order.pickupCode);
+  });
+
+  it('records PAYMENT_MISMATCH when paid amount does not match', async () => {
+    const order = await makeOrder();
+    const transactionId = `tx-${randomUUID()}`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { transactionId, paymentExpiresAt: new Date(Date.now() + 3 * 60 * 1000) },
+    });
+    stubAbaFetch({ status: approvedStatus(order.totalAmount + 2.0) });
+
+    const res = await request(app)
+      .get(`/api/payment/aba/status/${order.id}`)
+      .set(asCustomer(uid));
+    expect(res.status).toBe(400);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'PAYMENT_MISMATCH', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].entityType).toBe('payment');
+    const metadata = JSON.parse(logs[0].metadata!);
+    expect(metadata.tranId).toBe(transactionId);
+    expect(metadata.expectedAmount).toBe(order.totalAmount);
+    expect(metadata.receivedAmount).toBe(order.totalAmount + 2.0);
+  });
+
+  it('records PAYMENT_WEBHOOK_RECEIVED when webhook callback is processed', async () => {
+    const order = await makeOrder();
+    const transactionId = `tx-${randomUUID()}`;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { transactionId, paymentExpiresAt: new Date(Date.now() + 3 * 60 * 1000) },
+    });
+    stubAbaFetch({ status: approvedStatus(order.totalAmount) });
+
+    const payload = {
+      tran_id: transactionId,
+      return_params: order.id,
+      status: '0',
+    };
+    const signature = signWebhookPayload(payload);
+
+    const res = await request(app)
+      .post('/api/payment/aba/callback')
+      .set('X-PayWay-HMAC-SHA512', signature)
+      .send(payload);
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'PAYMENT_WEBHOOK_RECEIVED', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('system');
+    expect(logs[0].actorId).toBe('aba-webhook');
+    const metadata = JSON.parse(logs[0].metadata!);
+    expect(metadata.tranId || metadata.tran_id).toBe(transactionId);
+  });
+
+  it('records ORDER_STATUS_CHANGED with staff actor details on PUT /api/orders/:id/status', async () => {
+    const order = await makeOrder();
+    const { token } = issueToken('staff', { name: 'Sophea Staff', telegramUserId: 'staff-tg-1' });
+
+    const res = await request(app)
+      .put(`/api/orders/${order.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'preparing' });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ORDER_STATUS_CHANGED', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('staff');
+    expect(logs[0].actorName).toBe('Sophea Staff');
+    expect(logs[0].oldValue).toBe('pending');
+    expect(logs[0].newValue).toBe('preparing');
+  });
+
+  it('records ORDER_STATUS_CHANGED with cancelReason when staff cancels order', async () => {
+    const order = await makeOrder();
+    const { token } = issueToken('manager', { name: 'Admin Alice', telegramUserId: 'mgr-tg-1' });
+
+    const res = await request(app)
+      .put(`/api/orders/${order.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'cancelled', cancelReason: 'Out of ingredients' });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ORDER_STATUS_CHANGED', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('manager');
+    expect(logs[0].actorName).toBe('Admin Alice');
+    expect(logs[0].oldValue).toBe('pending');
+    expect(logs[0].newValue).toBe('cancelled');
+    const metadata = JSON.parse(logs[0].metadata!);
+    expect(metadata.cancelReason).toBe('Out of ingredients');
+  });
+
+  it('records ORDER_CANCELLED when customer cancels unpaid order via POST /api/payment/aba/cancel', async () => {
+    const order = await makeOrder();
+    const res = await request(app)
+      .post('/api/payment/aba/cancel')
+      .set(asCustomer(uid))
+      .send({ orderId: order.id });
+    expect(res.status).toBe(200);
+
+    const logs = await prisma.auditLog.findMany({
+      where: { action: 'ORDER_CANCELLED', entityId: order.id },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorType).toBe('customer');
+    expect(logs[0].oldValue).toBe('pending');
+    expect(logs[0].newValue).toBe('cancelled');
+  });
+});
+

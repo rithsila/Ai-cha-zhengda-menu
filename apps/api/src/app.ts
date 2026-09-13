@@ -23,8 +23,9 @@ import {
   staffRoleOf, loginRateLimit, recordFailedLogin, clearFailedLogins,
   roleForTelegramId, resolveStaffAccount, adminTelegramIds, adminTelegramUsernames,
   resolveStaffByPhone, createStaffOtp, verifyStaffOtpCode, canonicalPhone, adminPhoneNumbers,
-  orderRateLimit, feedbackRateLimit,
+  orderRateLimit, feedbackRateLimit, getStaffSessionInfo,
 } from './auth';
+import { recordAuditLog } from './audit';
 import { sendOtpSms } from './sms';
 import {
   issueCustomerToken, requireCustomer, requireSelf, resolveCustomer,
@@ -1912,6 +1913,19 @@ export function createApp() {
         }
       }
 
+      const staff = getStaffSessionInfo(req as any);
+      await recordAuditLog(prisma, {
+        actorType: staff?.role || 'staff',
+        actorId: staff?.id || staff?.telegramUserId || null,
+        actorName: staff?.name || (staff?.role === 'manager' ? 'Admin' : 'Staff'),
+        action: 'ORDER_STATUS_CHANGED',
+        entityType: 'order',
+        entityId: id,
+        oldValue: existingOrder.status,
+        newValue: status,
+        metadata: cancelReason ? { cancelReason: String(cancelReason).trim() } : null,
+      });
+
       res.json(updatedOrder);
     } catch (error) {
       console.error(error);
@@ -2024,6 +2038,19 @@ export function createApp() {
     // Do not accept a missing or invalid amount as successful verification.
     if (result.amount == null || typeof result.amount !== 'number' || Number.isNaN(result.amount)) {
       console.error(`ABA amount missing or invalid on order ${order.id}: received ${result.amount}`);
+      await recordAuditLog(prisma, {
+        actorType: 'system',
+        actorName: 'ABA PayWay',
+        action: 'PAYMENT_MISMATCH',
+        entityType: 'payment',
+        entityId: order.id,
+        metadata: {
+          tranId: transactionId,
+          receivedAmount: result.amount,
+          expectedAmount: order.totalAmount,
+          reason: 'Paid amount missing or invalid',
+        },
+      });
       return {
         ok: false as const,
         code: 400,
@@ -2035,6 +2062,19 @@ export function createApp() {
       console.error(
         `ABA amount mismatch on order ${order.id}: paid ${result.amount}, expected ${order.totalAmount}`
       );
+      await recordAuditLog(prisma, {
+        actorType: 'system',
+        actorName: 'ABA PayWay',
+        action: 'PAYMENT_MISMATCH',
+        entityType: 'payment',
+        entityId: order.id,
+        metadata: {
+          tranId: transactionId,
+          receivedAmount: result.amount,
+          expectedAmount: order.totalAmount,
+          reason: 'Amount mismatch',
+        },
+      });
       return {
         ok: false as const,
         code: 400,
@@ -2044,6 +2084,19 @@ export function createApp() {
 
     if (result.currency && result.currency.toUpperCase() !== 'USD') {
       console.error(`ABA currency mismatch on order ${order.id}: received ${result.currency}, expected USD`);
+      await recordAuditLog(prisma, {
+        actorType: 'system',
+        actorName: 'ABA PayWay',
+        action: 'PAYMENT_MISMATCH',
+        entityType: 'payment',
+        entityId: order.id,
+        metadata: {
+          tranId: transactionId,
+          receivedCurrency: result.currency,
+          expectedCurrency: 'USD',
+          reason: 'Currency mismatch',
+        },
+      });
       return {
         ok: false as const,
         code: 400,
@@ -2059,6 +2112,18 @@ export function createApp() {
 
     if (updateResult.count > 0) {
       await settleOrderPoints(prisma, order.id);
+      await recordAuditLog(prisma, {
+        actorType: 'system',
+        actorName: 'ABA PayWay',
+        action: 'PAYMENT_APPROVED',
+        entityType: 'payment',
+        entityId: order.id,
+        metadata: {
+          tranId: transactionId,
+          amount: result.amount ?? order.totalAmount,
+          pickupCode: order.pickupCode,
+        },
+      });
     }
 
     const finalOrder = (await prisma.order.findUnique({ where: { id: order.id } }))!;
@@ -2193,6 +2258,18 @@ export function createApp() {
         data: { paymentExpiresAt: expiresAt },
       });
 
+      const staffSession = getStaffSessionInfo(req as any);
+      const callerTelegramId = (req as any).telegramUserId;
+      await recordAuditLog(prisma, {
+        actorType: staffSession ? staffSession.role : 'customer',
+        actorId: staffSession ? (staffSession.id || staffSession.telegramUserId || null) : (callerTelegramId ? String(callerTelegramId) : null),
+        actorName: staffSession ? staffSession.name : (callerTelegramId ? 'Customer' : 'Customer (Guest)'),
+        action: 'PAYMENT_INITIATED',
+        entityType: 'payment',
+        entityId: order.id,
+        metadata: { tranId: transactionId, amount: order.totalAmount },
+      });
+
       res.json({
         // checkoutUrl is optional in ABA's current API. The menu relies on the
         // deeplink and QR image instead, but keeps it for compatible callers.
@@ -2296,6 +2373,16 @@ export function createApp() {
         return res.status(404).json({ error: 'Order not found' });
       }
 
+      await recordAuditLog(prisma, {
+        actorType: 'system',
+        actorId: 'aba-webhook',
+        actorName: 'ABA Webhook',
+        action: 'PAYMENT_WEBHOOK_RECEIVED',
+        entityType: 'payment',
+        entityId: order.id,
+        metadata: { tranId, tran_id: tranId, body },
+      });
+
       // Treat callback as untrusted until verified using server-side transaction checks
       const result = await confirmAbaPayment(aba, order.id, tranId || order.transactionId || '');
       if (!result.ok) {
@@ -2367,6 +2454,20 @@ export function createApp() {
         data: { status: 'cancelled', cancelReason: 'Cancelled by customer' },
       });
       await refundOrderPoints(prisma, order.id);
+
+      const staffSession = getStaffSessionInfo(req as any);
+      const callerTelegramId = (req as any).telegramUserId;
+      await recordAuditLog(prisma, {
+        actorType: staffSession ? staffSession.role : 'customer',
+        actorId: staffSession ? (staffSession.id || staffSession.telegramUserId || null) : (callerTelegramId ? String(callerTelegramId) : null),
+        actorName: staffSession ? staffSession.name : (callerTelegramId ? 'Customer' : 'Customer (Guest)'),
+        action: 'ORDER_CANCELLED',
+        entityType: 'order',
+        entityId: order.id,
+        oldValue: order.status,
+        newValue: 'cancelled',
+        metadata: { reason: 'Cancelled by customer' },
+      });
 
       res.json({ status: 'cancelled', orderStatus: updated.status });
     } catch (error) {
