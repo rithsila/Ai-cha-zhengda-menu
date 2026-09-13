@@ -9,7 +9,7 @@ const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
  * In-memory staff sessions. Restarting the API logs everyone out, which is
  * acceptable for a single-server shop deployment and keeps tokens out of the DB.
  */
-const sessions = new Map<string, { role: StaffRole; expiresAt: number }>();
+const sessions = new Map<string, { role: StaffRole; expiresAt: number; name?: string; telegramUserId?: string; phoneNumber?: string; id?: string }>();
 
 export const staffTelegramIds = () =>
   (process.env.STAFF_TELEGRAM_IDS || '')
@@ -244,7 +244,7 @@ export function clearOtps() {
   phoneOtps.clear();
 }
 
-export function issueToken(role: StaffRole, meta?: { telegramUserId?: string; phoneNumber?: string; name?: string }) {
+export function issueToken(role: StaffRole, meta?: { telegramUserId?: string; phoneNumber?: string; name?: string; id?: string }) {
   const token = randomUUID();
   const expiresAt = Date.now() + SESSION_TTL_MS;
   sessions.set(token, { role, expiresAt, ...meta });
@@ -281,6 +281,21 @@ function bearerToken(header: unknown): string | undefined {
 /** The staff role behind this request, or null. Used for owner-or-staff checks. */
 export function staffRoleOf(req: { headers: Record<string, unknown> }): StaffRole | null {
   return verifyToken(bearerToken(req.headers.authorization));
+}
+
+/** Returns session info for a staff/manager request, or null if unauthenticated. */
+export function getStaffSessionInfo(req: { headers: Record<string, unknown> }): { role: StaffRole; name?: string; telegramUserId?: string; phoneNumber?: string; id?: string } | null {
+  const token = bearerToken(req.headers.authorization);
+  if (!token) return null;
+  const session = sessions.get(token);
+  if (!session || session.expiresAt <= Date.now()) return null;
+  return {
+    role: session.role,
+    name: session.name,
+    telegramUserId: session.telegramUserId,
+    phoneNumber: session.phoneNumber,
+    id: session.id,
+  };
 }
 
 /**
