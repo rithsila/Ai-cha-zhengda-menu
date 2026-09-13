@@ -470,3 +470,227 @@ Do NOT include translations for the sourceLocale. Only translate requested targe
     throw lastError || new TranslationError('Translation failed after retry', 502, 'PROVIDER_ERROR');
   }
 }
+
+/**
+ * Google Gemini Translation Provider (REST API)
+ */
+export class GeminiTranslationProvider implements TranslationProvider {
+  private apiKey: string;
+  private model: string;
+
+  constructor(apiKey: string, model = 'gemini-1.5-flash') {
+    this.apiKey = apiKey;
+    this.model = model;
+  }
+
+  async translate(input: TranslationDraftRequest): Promise<TranslationDraftResult> {
+    validateDraftRequest(input);
+
+    const glossaryContext = getGlossaryPromptContext();
+    const systemPrompt = `You are an expert menu translator for a dual-brand restaurant:
+1. "Ai-Cha": ice cream, soft serve, boba, fruit tea, and milk tea.
+2. "Zhengda": Taiwanese XXL crispy fried chicken, popcorn chicken, and rice bowls.
+
+Rules:
+- Translate natural F&B menu text between English (en), Khmer (km), and Chinese (zh).
+- Retain exact numbers, sizes (e.g. 400ml, 1000ml, 50%), and price/modifier meanings.
+- Never invent ingredients, allergens, or dietary claims.
+- Use Simplified Chinese characters standard in modern bubble tea and dining menus.
+- Use natural Cambodian Khmer food and beverage terminology.
+- Respect approved glossary terms:
+${glossaryContext}
+
+You must return a JSON object with:
+{
+  "requestId": string (MUST MATCH input requestId exactly),
+  "entries": [
+    {
+      "clientKey": string (MUST MATCH input clientKey exactly),
+      "detectedSourceLocale": "en" | "km" | "zh" | null,
+      "needsLanguageConfirmation": boolean,
+      "translations": {
+        [locale in "en" | "km" | "zh"]?: string
+      }
+    }
+  ]
+}
+Do NOT include translations for the sourceLocale. Only translate requested targetLocales.`;
+
+    const userPayload = JSON.stringify({
+      requestId: input.requestId,
+      items: input.entries.map((e) => ({
+        clientKey: e.clientKey,
+        text: e.text,
+        sourceLocale: e.sourceLocale,
+        targetLocales: e.targetLocales,
+        context: e.context,
+      })),
+    });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+
+    let attempt = 0;
+    let lastError: Error | null = null;
+
+    while (attempt < 2) {
+      attempt += 1;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20_000);
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: systemPrompt }],
+            },
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: userPayload }],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const status = response.status;
+          const errorJson = await response.json().catch(() => null);
+          const errorMessage = errorJson?.error?.message || (await response.text().catch(() => ''));
+          if (status >= 500 && attempt < 2) {
+            lastError = new TranslationError(`Gemini server error (${status}): ${errorMessage}`, 502, 'PROVIDER_ERROR');
+            continue;
+          }
+          throw new TranslationError(`Gemini error (${status}): ${errorMessage}`, 502, 'PROVIDER_ERROR');
+        }
+
+        const data = await response.json();
+        const textParts = (data?.candidates?.[0]?.content?.parts || [])
+          .map((p: any) => p.text)
+          .filter(Boolean);
+        const content = textParts.join('');
+        if (!content) {
+          throw new TranslationError('Gemini returned empty content', 502, 'PROVIDER_EMPTY_OUTPUT');
+        }
+
+        let cleanedContent = content.trim();
+        if (cleanedContent.startsWith('```')) {
+          cleanedContent = cleanedContent
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim();
+        }
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(cleanedContent);
+        } catch {
+          const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              parsed = JSON.parse(jsonMatch[0]);
+            } catch {
+              throw new TranslationError('Gemini returned malformed JSON', 502, 'PROVIDER_MALFORMED_JSON');
+            }
+          } else {
+            throw new TranslationError('Gemini returned malformed JSON', 502, 'PROVIDER_MALFORMED_JSON');
+          }
+        }
+
+        if (parsed.requestId !== input.requestId) {
+          throw new TranslationError(
+            `Gemini changed requestId: expected ${input.requestId}, got ${parsed.requestId}`,
+            502,
+            'PROVIDER_INVALID_OUTPUT'
+          );
+        }
+
+        if (!Array.isArray(parsed.entries)) {
+          throw new TranslationError('Gemini entries must be an array', 502, 'PROVIDER_INVALID_OUTPUT');
+        }
+
+        const resultMap = new Map<string, any>();
+        for (const pe of parsed.entries) {
+          if (!pe.clientKey) continue;
+          resultMap.set(pe.clientKey, pe);
+        }
+
+        const finalEntries = input.entries.map((reqEntry) => {
+          const resEntry = resultMap.get(reqEntry.clientKey);
+          if (!resEntry) {
+            throw new TranslationError(
+              `Gemini missing translation for clientKey: ${reqEntry.clientKey}`,
+              502,
+              'PROVIDER_MISSING_ENTRY'
+            );
+          }
+
+          let resolvedSource: Locale | null = null;
+          let needsConfirmation = false;
+
+          if (reqEntry.sourceLocale === 'auto') {
+            if (['en', 'km', 'zh'].includes(resEntry.detectedSourceLocale)) {
+              resolvedSource = resEntry.detectedSourceLocale;
+            } else {
+              const fallbackDetect = detectLocaleFromText(reqEntry.text);
+              resolvedSource = fallbackDetect.locale;
+              needsConfirmation = fallbackDetect.ambiguous;
+            }
+            if (resEntry.needsLanguageConfirmation !== undefined) {
+              needsConfirmation = Boolean(resEntry.needsLanguageConfirmation);
+            }
+          } else {
+            resolvedSource = reqEntry.sourceLocale;
+          }
+
+          const translations: Partial<Record<Locale, string>> = {};
+          if (resEntry.translations && typeof resEntry.translations === 'object') {
+            for (const target of reqEntry.targetLocales) {
+              if (target === resolvedSource) continue;
+              const val = resEntry.translations[target];
+              if (typeof val === 'string' && val.trim().length > 0) {
+                translations[target] = val.trim();
+              }
+            }
+          }
+
+          return {
+            clientKey: reqEntry.clientKey,
+            sourceLocale: resolvedSource,
+            needsLanguageConfirmation: needsConfirmation,
+            translations,
+          };
+        });
+
+        return {
+          requestId: input.requestId,
+          entries: finalEntries,
+        };
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError' || err.code === 'ABORT_ERR') {
+          lastError = new TranslationError('Gemini request timed out after 20s', 504, 'PROVIDER_TIMEOUT');
+          if (attempt < 2) continue;
+        } else if (err instanceof TranslationError) {
+          throw err;
+        } else {
+          lastError = new TranslationError(err.message || 'Gemini connection failed', 502, 'PROVIDER_NETWORK_ERROR');
+          if (attempt < 2) continue;
+        }
+      }
+    }
+
+    throw lastError || new TranslationError('Gemini translation failed after retry', 502, 'PROVIDER_ERROR');
+  }
+}
+

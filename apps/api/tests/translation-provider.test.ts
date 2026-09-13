@@ -4,6 +4,7 @@ import {
   validateDraftRequest,
   MockTranslationProvider,
   OpenAITranslationProvider,
+  GeminiTranslationProvider,
   TranslationLimiter,
   TranslationError,
 } from '../src/translations/provider.js';
@@ -290,6 +291,114 @@ describe('Translation Provider & Quality Controls (Task 1)', () => {
 
       expect(callCount).toBe(2);
       expect(result.entries[0].translations.zh).toBe('奶茶');
+    });
+  });
+
+  describe('Google Gemini Translation Provider', () => {
+    it('successfully translates and maps fields via Gemini REST payload', async () => {
+      const fakeFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      requestId: 'gemini-req-1',
+                      entries: [
+                        {
+                          clientKey: 'item-1',
+                          detectedSourceLocale: 'en',
+                          needsLanguageConfirmation: false,
+                          translations: {
+                            km: 'តែទឹកដោះគោ',
+                            zh: '奶茶',
+                          },
+                        },
+                      ],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      });
+      vi.stubGlobal('fetch', fakeFetch);
+
+      const provider = new GeminiTranslationProvider('fake-gemini-key', 'gemini-1.5-flash');
+      const result = await provider.translate({
+        requestId: 'gemini-req-1',
+        entries: [
+          {
+            clientKey: 'item-1',
+            text: 'Milk Tea',
+            sourceLocale: 'auto',
+            targetLocales: ['km', 'zh'],
+            context: { field: 'name' },
+          },
+        ],
+      });
+
+      expect(result.requestId).toBe('gemini-req-1');
+      expect(result.entries[0].translations.km).toBe('តែទឹកដោះគោ');
+      expect(result.entries[0].translations.zh).toBe('奶茶');
+      expect(fakeFetch).toHaveBeenCalledWith(
+        expect.stringContaining('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=fake-gemini-key'),
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('retries once on 5xx error from Gemini', async () => {
+      let callCount = 0;
+      const fakeFetch = vi.fn().mockImplementation(async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          return {
+            ok: false,
+            status: 503,
+            json: async () => ({ error: { message: 'Gemini Overloaded' } }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        requestId: 'gemini-retry',
+                        entries: [
+                          {
+                            clientKey: 'k1',
+                            detectedSourceLocale: 'en',
+                            translations: { km: 'តែគុជ' },
+                          },
+                        ],
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        };
+      });
+      vi.stubGlobal('fetch', fakeFetch);
+
+      const provider = new GeminiTranslationProvider('key', 'gemini-1.5-flash');
+      const result = await provider.translate({
+        requestId: 'gemini-retry',
+        entries: [
+          { clientKey: 'k1', text: 'Boba', sourceLocale: 'en', targetLocales: ['km'], context: { field: 'name' } },
+        ],
+      });
+
+      expect(callCount).toBe(2);
+      expect(result.entries[0].translations.km).toBe('តែគុជ');
     });
   });
 

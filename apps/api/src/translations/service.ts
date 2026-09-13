@@ -7,6 +7,7 @@ import {
 } from './repository.js';
 import {
   detectLocaleFromText,
+  GeminiTranslationProvider,
   MockTranslationProvider,
   OpenAITranslationProvider,
   TranslationError,
@@ -53,11 +54,25 @@ export class TranslationService {
 
     if (provider) {
       this.provider = provider;
-    } else if (this.isEnabled && process.env.TRANSLATION_API_KEY) {
-      this.provider = new OpenAITranslationProvider(
-        process.env.TRANSLATION_API_KEY,
-        process.env.TRANSLATION_MODEL || 'gpt-4o-mini'
-      );
+    } else if (this.isEnabled) {
+      const apiKey = process.env.GEMINI_API_KEY || process.env.TRANSLATION_API_KEY;
+      if (apiKey) {
+        const model = process.env.TRANSLATION_MODEL || 'gemini-1.5-flash';
+        const isGemini =
+          Boolean(process.env.GEMINI_API_KEY) ||
+          apiKey.startsWith('AIzaSy') ||
+          model.toLowerCase().includes('gemini') ||
+          process.env.TRANSLATION_PROVIDER === 'gemini';
+
+        if (isGemini) {
+          this.provider = new GeminiTranslationProvider(apiKey, model);
+        } else {
+          this.provider = new OpenAITranslationProvider(
+            apiKey,
+            process.env.TRANSLATION_MODEL || 'gpt-4o-mini'
+          );
+        }
+      }
     }
   }
 
