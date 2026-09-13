@@ -280,6 +280,13 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const sessionRole = loadSession()?.role;
   const isManager = sessionRole === 'manager';
 
+  // If role is staff, ensure activeTab stays on staff-permitted tabs
+  useEffect(() => {
+    if (!isManager && activeTab !== 'orders' && activeTab !== 'menu') {
+      setActiveTab('orders');
+    }
+  }, [isManager, activeTab]);
+
   useEffect(() => {
     apiFetch<any[]>('/api/rewards?includeInactive=1')
       .then((data) => setRewardsCount(data.length))
@@ -675,12 +682,12 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       const key = event.key.toLowerCase();
       if (key === '1') setActiveTab('orders');
       else if (key === '2') setActiveTab('menu');
-      else if (key === '3') setActiveTab('analytics');
-      else if (key === '4') setActiveTab('customers');
-      else if (key === '5') setActiveTab('feedback');
-      else if (key === '6') setActiveTab('rewards');
-      else if (key === '7') setActiveTab('settings');
-      else if (key === '8') setActiveTab('audit');
+      else if (key === '3' && isManager) setActiveTab('analytics');
+      else if (key === '4' && isManager) setActiveTab('customers');
+      else if (key === '5' && isManager) setActiveTab('feedback');
+      else if (key === '6' && isManager) setActiveTab('rewards');
+      else if (key === '7' && isManager) setActiveTab('settings');
+      else if (key === '8' && isManager) setActiveTab('audit');
       else if (key === 'r') fetchOrders(true);
       else if (key === 'm') toggleMute();
       else return;
@@ -688,7 +695,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [fetchOrders, toggleMute]);
+  }, [fetchOrders, toggleMute, isManager]);
 
   const openCount = openOrders.length;
   const showBranch = selectedBranch === '' && branches.length > 1;
@@ -707,30 +714,34 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
       icon: <ListPlus className="size-5" />,
       shortcut: '2',
     },
-    {
-      id: 'analytics' as TabId,
-      label: 'Analytics',
-      icon: <BarChart3 className="size-5" />,
-      shortcut: '3',
-    },
-    {
-      id: 'customers' as TabId,
-      label: 'Customers',
-      icon: <Users className="size-5" />,
-      shortcut: '4',
-    },
-    {
-      id: 'feedback' as TabId,
-      label: 'Feedback',
-      icon: <MessageSquare className="size-5" />,
-      shortcut: '5',
-    },
-    {
-      id: 'audit' as TabId,
-      label: 'Audit Logs',
-      icon: <FileText className="size-5" />,
-      shortcut: '8',
-    },
+    ...(isManager
+      ? [
+          {
+            id: 'analytics' as TabId,
+            label: 'Analytics',
+            icon: <BarChart3 className="size-5" />,
+            shortcut: '3',
+          },
+          {
+            id: 'customers' as TabId,
+            label: 'Customers',
+            icon: <Users className="size-5" />,
+            shortcut: '4',
+          },
+          {
+            id: 'feedback' as TabId,
+            label: 'Feedback',
+            icon: <MessageSquare className="size-5" />,
+            shortcut: '5',
+          },
+          {
+            id: 'audit' as TabId,
+            label: 'Audit Logs',
+            icon: <FileText className="size-5" />,
+            shortcut: '8',
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -848,220 +859,226 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
               })}
 
               {/* Rewards Expandable Item */}
-              <div
-                className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                  activeTab === 'rewards'
-                    ? 'bg-surface-sunken text-ink'
-                    : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeTab !== 'rewards') {
-                      setActiveTab('rewards');
-                    } else {
-                      setRewardsExpanded((prev) => !prev);
-                    }
-                  }}
-                  className="flex flex-1 items-center gap-3 text-left cursor-pointer"
-                >
-                  <Award className="size-5" />
-                  <span>Rewards</span>
-                </button>
-                <div className="flex items-center gap-1.5">
-                  <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
-                    6
-                  </kbd>
-                  <button
-                    type="button"
-                    onClick={() => setRewardsExpanded((prev) => !prev)}
-                    className="p-1 text-ink-soft hover:text-ink cursor-pointer"
-                    aria-label={rewardsExpanded ? 'Collapse rewards' : 'Expand rewards'}
-                  >
-                    <ChevronDown
-                      className={`size-4 text-ink-soft transition-transform duration-200 ${
-                        rewardsExpanded ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              {rewardsExpanded && (
-                <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('rewards');
-                      setRewardsSubTab('catalog');
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                      activeTab === 'rewards' && rewardsSubTab === 'catalog'
-                        ? 'bg-accent text-on-accent shadow-sm'
+              {isManager && (
+                <>
+                  <div
+                    className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                      activeTab === 'rewards'
+                        ? 'bg-surface-sunken text-ink'
                         : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Award className="size-4" />
-                      <span>Reward Catalog</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activeTab !== 'rewards') {
+                          setActiveTab('rewards');
+                        } else {
+                          setRewardsExpanded((prev) => !prev);
+                        }
+                      }}
+                      className="flex flex-1 items-center gap-3 text-left cursor-pointer"
+                    >
+                      <Award className="size-5" />
+                      <span>Rewards</span>
+                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
+                        6
+                      </kbd>
+                      <button
+                        type="button"
+                        onClick={() => setRewardsExpanded((prev) => !prev)}
+                        className="p-1 text-ink-soft hover:text-ink cursor-pointer"
+                        aria-label={rewardsExpanded ? 'Collapse rewards' : 'Expand rewards'}
+                      >
+                        <ChevronDown
+                          className={`size-4 text-ink-soft transition-transform duration-200 ${
+                            rewardsExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
                     </div>
-                    {rewardsCount > 0 && (
-                      <span
-                        className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                  </div>
+
+                  {rewardsExpanded && (
+                    <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('rewards');
+                          setRewardsSubTab('catalog');
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
                           activeTab === 'rewards' && rewardsSubTab === 'catalog'
-                            ? 'bg-white/25 text-on-accent'
-                            : 'bg-accent/15 text-accent'
+                            ? 'bg-accent text-on-accent shadow-sm'
+                            : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
                         }`}
                       >
-                        {rewardsCount}
-                      </span>
-                    )}
-                  </button>
+                        <div className="flex items-center gap-2.5">
+                          <Award className="size-4" />
+                          <span>Reward Catalog</span>
+                        </div>
+                        {rewardsCount > 0 && (
+                          <span
+                            className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                              activeTab === 'rewards' && rewardsSubTab === 'catalog'
+                                ? 'bg-white/25 text-on-accent'
+                                : 'bg-accent/15 text-accent'
+                            }`}
+                          >
+                            {rewardsCount}
+                          </span>
+                        )}
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('rewards');
-                      setRewardsSubTab('luckydraw');
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                      activeTab === 'rewards' && rewardsSubTab === 'luckydraw'
-                        ? 'bg-accent text-on-accent shadow-sm'
-                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Dices className="size-4" />
-                      <span>Lucky Draw Wheel</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab('rewards');
+                          setRewardsSubTab('luckydraw');
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                          activeTab === 'rewards' && rewardsSubTab === 'luckydraw'
+                            ? 'bg-accent text-on-accent shadow-sm'
+                            : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Dices className="size-4" />
+                          <span>Lucky Draw Wheel</span>
+                        </div>
+                      </button>
                     </div>
-                  </button>
-                </div>
+                  )}
+                </>
               )}
             </div>
           </div>
 
-          <div>
-            <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-              System &amp; Settings
-            </p>
-            <div className="space-y-1">
-              {/* Settings Expandable Item */}
-              <div
-                className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                  activeTab === 'settings'
-                    ? 'bg-surface-sunken text-ink'
-                    : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeTab !== 'settings') {
-                      setActiveTab('settings');
-                    } else {
-                      setSettingsExpanded((prev) => !prev);
-                    }
-                  }}
-                  className="flex flex-1 items-center gap-3 text-left cursor-pointer"
+          {isManager && (
+            <div>
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                System &amp; Settings
+              </p>
+              <div className="space-y-1">
+                {/* Settings Expandable Item */}
+                <div
+                  className={`flex w-full items-center justify-between rounded-none px-3.5 py-2.5 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                    activeTab === 'settings'
+                      ? 'bg-surface-sunken text-ink'
+                      : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                  }`}
                 >
-                  <Sliders className="size-5" />
-                  <span>Settings</span>
-                </button>
-                <div className="flex items-center gap-1.5">
-                  <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
-                    7
-                  </kbd>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsExpanded((prev) => !prev)}
-                    className="p-1 text-ink-soft hover:text-ink cursor-pointer"
-                    aria-label={settingsExpanded ? 'Collapse settings' : 'Expand settings'}
-                  >
-                    <ChevronDown
-                      className={`size-4 text-ink-soft transition-transform duration-200 ${
-                        settingsExpanded ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-
-              {settingsExpanded && (
-                <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
                   <button
                     type="button"
                     onClick={() => {
-                      setActiveTab('settings');
-                      setSettingsSubTab('store');
-                      setMobileMenuOpen(false);
+                      if (activeTab !== 'settings') {
+                        setActiveTab('settings');
+                      } else {
+                        setSettingsExpanded((prev) => !prev);
+                      }
                     }}
-                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                      activeTab === 'settings' && settingsSubTab === 'store'
-                        ? 'bg-accent text-on-accent shadow-sm'
-                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                    }`}
+                    className="flex flex-1 items-center gap-3 text-left cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Store className="size-4" />
-                      <span>Store</span>
-                    </div>
+                    <Sliders className="size-5" />
+                    <span>Settings</span>
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('settings');
-                      setSettingsSubTab('users');
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                      activeTab === 'settings' && settingsSubTab === 'users'
-                        ? 'bg-accent text-on-accent shadow-sm'
-                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Users2 className="size-4" />
-                      <span>Users</span>
-                    </div>
-                    {usersCount > 0 && (
-                      <span
-                        className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
-                          activeTab === 'settings' && settingsSubTab === 'users'
-                            ? 'bg-white/25 text-on-accent'
-                            : 'bg-accent/15 text-accent'
+                  <div className="flex items-center gap-1.5">
+                    <kbd className="hidden rounded-none px-1.5 py-0.5 font-mono text-[10px] font-bold sm:inline bg-surface-sunken text-ink-faint">
+                      7
+                    </kbd>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsExpanded((prev) => !prev)}
+                      className="p-1 text-ink-soft hover:text-ink cursor-pointer"
+                      aria-label={settingsExpanded ? 'Collapse settings' : 'Expand settings'}
+                    >
+                      <ChevronDown
+                        className={`size-4 text-ink-soft transition-transform duration-200 ${
+                          settingsExpanded ? 'rotate-180' : ''
                         }`}
-                      >
-                        {usersCount}
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab('settings');
-                      setSettingsSubTab('languages');
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
-                      activeTab === 'settings' && settingsSubTab === 'languages'
-                        ? 'bg-accent text-on-accent shadow-sm'
-                        : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Globe className="size-4" />
-                      <span>Languages</span>
-                    </div>
-                  </button>
+                      />
+                    </button>
+                  </div>
                 </div>
-              )}
+
+                {settingsExpanded && (
+                  <div className="ml-3 pl-3 border-l-2 border-border space-y-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setSettingsSubTab('store');
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                        activeTab === 'settings' && settingsSubTab === 'store'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Store className="size-4" />
+                        <span>Store</span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setSettingsSubTab('users');
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                        activeTab === 'settings' && settingsSubTab === 'users'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Users2 className="size-4" />
+                        <span>Users</span>
+                      </div>
+                      {usersCount > 0 && (
+                        <span
+                          className={`rounded-none px-1.5 py-0.5 text-xs font-black tabular-nums ${
+                            activeTab === 'settings' && settingsSubTab === 'users'
+                              ? 'bg-white/25 text-on-accent'
+                              : 'bg-accent/15 text-accent'
+                          }`}
+                        >
+                          {usersCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setSettingsSubTab('languages');
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-none px-3 py-2 text-xs sm:text-sm font-bold transition-all duration-150 ${
+                        activeTab === 'settings' && settingsSubTab === 'languages'
+                          ? 'bg-accent text-on-accent shadow-sm'
+                          : 'text-ink-soft hover:bg-surface-sunken hover:text-ink'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Globe className="size-4" />
+                        <span>Languages</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </nav>
 
         {/* Sidebar Footer Controls */}

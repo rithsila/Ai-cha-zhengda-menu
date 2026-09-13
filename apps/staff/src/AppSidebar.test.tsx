@@ -16,7 +16,7 @@ vi.hoisted(() => {
   });
 });
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import App from './App';
 import { saveSession } from './lib/api';
 
@@ -113,5 +113,30 @@ describe('Sidebar Menu & Brand Header', () => {
     expect(
       screen.getByText('Manage English, Khmer, and Chinese translations with live preview')
     ).toBeDefined();
+  });
+
+  it('hides manager-only navigation items when logged in as staff', () => {
+    localStorage.clear();
+    saveSession({
+      token: 'staff-token',
+      role: 'staff',
+      expiresAt: Date.now() + 3600000,
+    });
+
+    render(<App />);
+
+    const nav = screen.getByRole('navigation', { name: /main navigation/i });
+
+    // Staff items are visible
+    expect(within(nav).getByRole('button', { name: /orders/i })).toBeDefined();
+    expect(within(nav).getByRole('button', { name: /menu/i })).toBeDefined();
+
+    // Manager items are hidden
+    expect(within(nav).queryByRole('button', { name: /analytics/i })).toBeNull();
+    expect(within(nav).queryByRole('button', { name: /customers/i })).toBeNull();
+    expect(within(nav).queryByRole('button', { name: /feedback/i })).toBeNull();
+    expect(within(nav).queryByRole('button', { name: /audit logs/i })).toBeNull();
+    expect(within(nav).queryByRole('button', { name: /rewards/i })).toBeNull();
+    expect(within(nav).queryByRole('button', { name: /settings/i })).toBeNull();
   });
 });
