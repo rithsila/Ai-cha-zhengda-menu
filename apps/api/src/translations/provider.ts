@@ -537,13 +537,21 @@ Do NOT include translations for the sourceLocale. Only translate requested targe
       })),
     });
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const candidateModels = [this.model];
+    if (this.model === 'gemini-3.8-flash') {
+      candidateModels.push('gemini-3.6-flash');
+    } else if (this.model === 'gemini-3.6-flash') {
+      candidateModels.push('gemini-3.8-flash');
+    }
 
     let attempt = 0;
     let lastError: Error | null = null;
 
-    while (attempt < 2) {
+    while (attempt < 3) {
       attempt += 1;
+      const currentModel = candidateModels[attempt - 1] || candidateModels[0];
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(currentModel)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20_000);
 
@@ -577,8 +585,9 @@ Do NOT include translations for the sourceLocale. Only translate requested targe
           const status = response.status;
           const errorJson = await response.json().catch(() => null);
           const errorMessage = errorJson?.error?.message || (await response.text().catch(() => ''));
-          if (status >= 500 && attempt < 2) {
+          if ((status === 429 || status >= 500) && attempt < 3) {
             lastError = new TranslationError(`Gemini server error (${status}): ${errorMessage}`, 502, 'PROVIDER_ERROR');
+            await new Promise((r) => setTimeout(r, 800 * attempt));
             continue;
           }
           throw new TranslationError(`Gemini error (${status}): ${errorMessage}`, 502, 'PROVIDER_ERROR');
