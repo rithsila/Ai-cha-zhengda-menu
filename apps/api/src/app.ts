@@ -1842,6 +1842,11 @@ export function createApp() {
         return res.status(400).json({ error: `status must be one of: ${ORDER_STATUSES.join(', ')}` });
       }
 
+      const existingOrder = await prisma.order.findUnique({ where: { id } });
+      if (!existingOrder) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
       const updatedOrder = await prisma.order.update({
         where: { id },
         data: {
@@ -1852,10 +1857,18 @@ export function createApp() {
 
       if (status === 'completed' || status === 'paid') {
         await settleOrderPoints(prisma, id);
+
+        if (status === 'completed' && existingOrder.status !== 'completed' && updatedOrder.telegramUserId) {
+          const codeMsg = updatedOrder.pickupCode ? ` (#${updatedOrder.pickupCode})` : '';
+          await sendTelegramNotification(
+            updatedOrder.telegramUserId,
+            `✅ <b>Order Completed</b>\n\nYour order${codeMsg} is completed! Thank you for ordering with Ai-Cha & Zhengda.`,
+          );
+        }
       } else if (status === 'cancelled') {
         await refundOrderPoints(prisma, id);
 
-        if (updatedOrder.telegramUserId) {
+        if (existingOrder.status !== 'cancelled' && updatedOrder.telegramUserId) {
           const reasonMsg = updatedOrder.cancelReason ? `\n\n<b>Reason:</b> ${updatedOrder.cancelReason}` : '';
           const codeMsg = updatedOrder.pickupCode ? ` (#${updatedOrder.pickupCode})` : '';
           await sendTelegramNotification(
