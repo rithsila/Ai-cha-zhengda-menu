@@ -38,6 +38,7 @@ import fs from 'fs';
 import multer from 'multer';
 import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes, createPrizeClaimRecord } from './lucky-draw';
 import { uploadToR2, isR2Configured } from './r2';
+import { sniffImageType } from './image-type';
 
 export { prisma };
 
@@ -644,11 +645,15 @@ export function createApp() {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
+    const image = sniffImageType(req.file.buffer);
+    if (!image) {
+      return res.status(400).json({ error: 'Unsupported image type. Use PNG, JPEG, GIF or WebP.' });
+    }
     try {
       if (!isR2Configured()) {
         return res.status(503).json({ error: 'Image storage (R2) is not configured. Set R2_* env vars in .env' });
       }
-      const publicUrl = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype);
+      const publicUrl = await uploadToR2(req.file.buffer, image);
       res.json({ url: publicUrl });
     } catch (err: any) {
       console.error('R2 upload error:', err);

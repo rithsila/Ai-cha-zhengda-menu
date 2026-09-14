@@ -1,5 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import path from 'path';
+import { SniffedImage } from './image-type';
 
 function getR2Config() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -31,21 +31,19 @@ function createR2Client() {
 /** Upload file buffer to R2. Returns public URL. */
 export async function uploadToR2(
   fileBuffer: Buffer,
-  originalName: string,
-  mimeType: string
+  image: SniffedImage
 ): Promise<string> {
   const config = getR2Config();
   if (!config) throw new Error('R2 is not configured. Set R2_* env vars.');
 
   const client = createR2Client()!;
-  const ext = path.extname(originalName).toLowerCase() || '.png';
-  const key = `menu/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+  const key = `menu/${Date.now()}-${Math.random().toString(36).slice(2, 8)}${image.ext}`;
 
   await client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
     Body: fileBuffer,
-    ContentType: mimeType,
+    ContentType: image.mime,
   }));
 
   return `${config.publicUrl.replace(/\/$/, '')}/${key}`;
