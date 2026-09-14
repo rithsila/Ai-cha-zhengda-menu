@@ -1760,10 +1760,13 @@ export function createApp() {
           const pointsEarned = paidEligibleCount * pointsPerStamp;
 
           if (telegramUserId && pointsRedeemed > 0) {
-            await tx.user.update({
-              where: { telegramUserId },
+            const redeemed = await tx.user.updateMany({
+              where: { telegramUserId, loyaltyPoints: { gte: pointsRedeemed } },
               data: { loyaltyPoints: { decrement: pointsRedeemed } }
             });
+            if (redeemed.count !== 1) {
+              throw new Error('Not enough loyalty points to redeem');
+            }
           }
 
           const latestOrder = await tx.order.findFirst({
@@ -1821,7 +1824,7 @@ export function createApp() {
       res.json(order);
     } catch (error: any) {
       console.error(error);
-      if (error?.message && (error.message.includes('voucher') || error.message.includes('claimed'))) {
+      if (error?.message && (error.message.includes('voucher') || error.message.includes('claimed') || error.message.includes('loyalty points'))) {
         return res.status(400).json({ error: error.message });
       }
       res.status(500).json({ error: 'Failed to create order' });
@@ -3029,23 +3032,34 @@ export function createApp() {
 
       const prize = pickRandomPrize(prizes);
 
-      // Deduct tickets and award prize
-      const updatedUser = await withWriteRetry(async () => {
-        const updatePayload: any = {
-          luckyTickets: { decrement: costPerSpin },
-        };
+      // Deduct tickets and award prize. The decrement is guarded on the current
+      // balance so concurrent spins cannot all pass the check above.
+      const updatePayload: any = {
+        luckyTickets: { decrement: costPerSpin },
+      };
 
-        if (prize.type === 'points' && prize.value > 0) {
-          updatePayload.loyaltyPoints = { increment: prize.value };
-        } else if (prize.type === 'tickets' && prize.value > 0) {
-          updatePayload.luckyTickets = { decrement: costPerSpin - prize.value };
-        }
+      if (prize.type === 'points' && prize.value > 0) {
+        updatePayload.loyaltyPoints = { increment: prize.value };
+      } else if (prize.type === 'tickets' && prize.value > 0) {
+        updatePayload.luckyTickets = { decrement: costPerSpin - prize.value };
+      }
 
-        return prisma.user.update({
-          where: { telegramUserId },
-          data: updatePayload,
+      const spent = await withWriteRetry(() => prisma.user.updateMany({
+        where: { telegramUserId, luckyTickets: { gte: costPerSpin } },
+        data: updatePayload,
+      }));
+
+      if (spent.count !== 1) {
+        const current = await prisma.user.findUnique({ where: { telegramUserId } });
+        const currentTickets = current?.luckyTickets || 0;
+        return res.status(400).json({
+          error: `Not enough lucky tickets. You have ${currentTickets} tickets, but need ${costPerSpin} to spin.`,
+          requiredTickets: costPerSpin,
+          currentTickets,
         });
-      });
+      }
+
+      const updatedUser = await prisma.user.findUniqueOrThrow({ where: { telegramUserId } });
 
       let prizeClaim: any = null;
       if (prize.type === 'item') {
