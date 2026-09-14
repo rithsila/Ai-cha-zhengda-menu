@@ -109,8 +109,16 @@ export async function sendOtpSms(
   }
 
   // -------------------------------------------------------------------------
-  // 3. Local Development Console Fallback
+  // 3. Local Development Console Fallback (never in production)
   // -------------------------------------------------------------------------
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[SMS-ERROR] No OTP delivery channel available (Plasgate not configured, Telegram unavailable).');
+    return {
+      success: false,
+      error: 'Verification code could not be delivered. Please contact an administrator.',
+    };
+  }
+
   console.log(`\n========================================`);
   console.log(`[SMS-DEV-OTP] To Phone: ${rawDigits} (${toPhone})`);
   if (telegramUserId) console.log(`[SMS-DEV-OTP] Telegram ID: ${telegramUserId}`);
