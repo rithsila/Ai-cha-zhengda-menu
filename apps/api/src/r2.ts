@@ -46,6 +46,7 @@ export async function uploadToR2(
     Key: key,
     Body: fileBuffer,
     ContentType: mimeType,
+    CacheControl: 'public, max-age=31536000, immutable',
   }));
 
   return `${config.publicUrl.replace(/\/$/, '')}/${key}`;

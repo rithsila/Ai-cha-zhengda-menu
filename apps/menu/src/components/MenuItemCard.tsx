@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Heart } from '@phosphor-icons/react';
 import type { MenuItem } from '../types';
@@ -25,6 +26,7 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPrev
   const effectiveFit = item.imageFit || imageFit;
   const isCover = effectiveFit === 'cover';
   const containerBg = isCover ? 'bg-slate-100 overflow-hidden' : 'bg-transparent';
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   const longPressProps = useLongPress({
     onLongPress: () => onPreview?.(item),
@@ -42,15 +44,23 @@ export function MenuItemCard({ item, isFavorite, onToggleFavorite, onAdd, onPrev
     >
       <div className={`h-32 flex items-center justify-center relative ${containerBg}`}>
          {item.imageFallback ? (
-           <img 
-             src={item.imageFallback} 
-             alt={itemName} 
-             loading="lazy"
-             decoding="async"
-             className={`w-full h-full pointer-events-none ${
-               isCover ? 'object-cover' : 'object-contain p-2'
-             }`} 
-           />
+           <>
+             {!imageLoaded && (
+               <div className="absolute inset-0 skeleton-shimmer rounded-t-2xl" />
+             )}
+             <img 
+               src={item.imageFallback} 
+               alt={itemName} 
+               loading="lazy"
+               decoding="async"
+               onLoad={() => setImageLoaded(true)}
+               className={`w-full h-full pointer-events-none transition-opacity duration-300 ${
+                 imageLoaded ? 'opacity-100' : 'opacity-0'
+               } ${
+                 isCover ? 'object-cover' : 'object-contain p-2'
+               }`} 
+             />
+           </>
          ) : (
            <div className="p-2.5 rounded-full bg-white/95 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-white/50 ring-1 ring-black/5 pointer-events-none">
              {isAiCha ? (
