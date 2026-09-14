@@ -55,7 +55,72 @@ describe('GET /api/auth/telegram/callback', () => {
   });
 });
 
+describe('GET /api/auth/staff-telegram/callback', () => {
+  it('returns 503 without a bot token even when not in production', async () => {
+    const saved = process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    try {
+      const res = await request(app).get('/api/auth/staff-telegram/callback').query({ id: '99999' });
+      expect(res.status).toBe(503);
+    } finally {
+      process.env.TELEGRAM_BOT_TOKEN = saved;
+    }
+  });
+  it('rejects an unsigned id', async () => {
+    const res = await request(app).get('/api/auth/staff-telegram/callback')
+      .query({ id: '99999', auth_date: String(Math.floor(Date.now() / 1000)), hash: 'bad' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('POST /api/auth/staff-telegram-login', () => {
+  const freshAuth = (id: string) =>
+    signLogin({ id, first_name: 'First', auth_date: String(Math.floor(Date.now() / 1000)) }, BOT_TOKEN);
+
+  it('does not bootstrap the first verified caller as manager without BOOTSTRAP_MANAGER_TELEGRAM_ID', async () => {
+    const saved = { ...process.env };
+    delete process.env.BOOTSTRAP_MANAGER_TELEGRAM_ID;
+    delete process.env.ALLOW_UNVERIFIED_TELEGRAM;
+    delete process.env.ADMIN_TELEGRAM_IDS;
+    delete process.env.MANAGER_TELEGRAM_IDS;
+    delete process.env.ADMIN_TELEGRAM_USERNAMES;
+    try {
+      const res = await request(app)
+        .post('/api/auth/staff-telegram-login')
+        .send({ telegramAuth: freshAuth('777001') });
+      expect(res.status).toBe(403);
+    } finally {
+      process.env = saved;
+    }
+  });
+
+  it('bootstraps only the configured BOOTSTRAP_MANAGER_TELEGRAM_ID', async () => {
+    const saved = { ...process.env };
+    process.env.BOOTSTRAP_MANAGER_TELEGRAM_ID = '777002';
+    delete process.env.ALLOW_UNVERIFIED_TELEGRAM;
+    try {
+      const other = await request(app)
+        .post('/api/auth/staff-telegram-login')
+        .send({ telegramAuth: freshAuth('777003') });
+      expect(other.status).toBe(403);
+
+      const { prisma } = await import('../src/db');
+      const totalStaff = await prisma.staffAccount.count();
+      const res = await request(app)
+        .post('/api/auth/staff-telegram-login')
+        .send({ telegramAuth: freshAuth('777002') });
+      if (totalStaff === 0) {
+        expect(res.status).toBe(200);
+        expect(res.body.role).toBe('manager');
+        await prisma.staffAccount.deleteMany({ where: { telegramUserId: '777002' } });
+      } else {
+        expect(res.status).toBe(403);
+      }
+    } finally {
+      process.env = saved;
+    }
+  });
+
   it('rejects raw unverified telegramUserId without signature', async () => {
     const res = await request(app)
       .post('/api/auth/staff-telegram-login')

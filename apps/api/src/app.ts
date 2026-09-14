@@ -206,24 +206,21 @@ export function createApp() {
   app.get('/api/auth/staff-telegram/callback', async (req, res) => {
     try {
       const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) return res.status(503).json({ error: 'Telegram login is not configured on this server' });
+
       const params: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.query)) {
         if (typeof v === 'string') params[k] = v;
       }
 
-      let telegramId = params.id;
-      // In production, strictly verify Telegram signature
-      if (token) {
-        if (!verifyTelegramLogin(params, token)) {
-          return res.status(401).json({ error: 'Invalid Telegram login data' });
-        }
-        if (!isLoginFresh(params.auth_date)) {
-          return res.status(401).json({ error: 'Login expired, please try again' });
-        }
-      } else if (process.env.NODE_ENV === 'production') {
-        return res.status(503).json({ error: 'Telegram login is not configured on this server' });
+      if (!verifyTelegramLogin(params, token)) {
+        return res.status(401).json({ error: 'Invalid Telegram login data' });
+      }
+      if (!isLoginFresh(params.auth_date)) {
+        return res.status(401).json({ error: 'Login expired, please try again' });
       }
 
+      const telegramId = params.id;
       if (!telegramId) {
         return res.status(400).json({ error: 'Missing Telegram user ID' });
       }
@@ -335,13 +332,13 @@ export function createApp() {
 
       let account = await resolveStaffAccount(verifiedTelegramId, prisma, authUsername);
 
-      // Auto-bootstrap: If zero staff accounts exist in DB and no ENV admins are set,
-      // the first person to log in becomes the Store Manager automatically.
-      if (!account) {
+      // Bootstrap the first Store Manager only for the Telegram ID named in
+      // BOOTSTRAP_MANAGER_TELEGRAM_ID, and only while no staff accounts exist.
+      const bootstrapId = (process.env.BOOTSTRAP_MANAGER_TELEGRAM_ID || '').trim();
+      if (!account && bootstrapId && bootstrapId === verifiedTelegramId) {
         try {
           const totalStaff = await prisma.staffAccount.count();
-          const noEnvAdmins = adminTelegramIds().length === 0 && adminTelegramUsernames().length === 0;
-          if (totalStaff === 0 && noEnvAdmins) {
+          if (totalStaff === 0) {
             console.log(`Bootstrapping first staff account as Manager for Telegram ID: ${verifiedTelegramId}`);
             await prisma.staffAccount.create({
               data: {
@@ -358,13 +355,13 @@ export function createApp() {
         }
       }
 
-      // Fallback in local dev if using dev login or no admins/staff configured yet
+      // Local development only: dev_manager / dev_staff test accounts
       if (!account && process.env.NODE_ENV !== 'production') {
         if (verifiedTelegramId === 'dev_manager') {
           account = { role: 'manager', name: 'Dev Manager' };
         } else if (verifiedTelegramId === 'dev_staff') {
           account = { role: 'staff', name: 'Dev Staff' };
-        } else if (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && adminTelegramIds().length === 0) {
+        } else if (devIdentityAllowed() && adminTelegramIds().length === 0) {
           account = { role: 'manager', name: 'Dev Admin' };
         }
       }
