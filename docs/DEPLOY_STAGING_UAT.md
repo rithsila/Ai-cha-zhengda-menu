@@ -316,7 +316,8 @@ Promote to production by merging `staging` into `main`.
 | `WEBAPP_URL` | `https://staging-menu.…` | Login redirect + ABA return URL. |
 | `STAFF_APP_URL` | `https://staging-staff.…` | Staff login redirect. |
 | `CORS_ORIGINS` | both staging origins | Belt and braces; `*.aichazhengdaarakawa.com` already passes. |
-| `MANAGER_TELEGRAM_IDS` | tester Telegram ids | Grants analytics/catalog access. |
+| `MANAGER_TELEGRAM_IDS` | tester Telegram ids | Grants analytics/catalog access. Required: no staff can log in without env admins or a staff row. |
+| `BOOTSTRAP_MANAGER_TELEGRAM_ID` | owner's Telegram id, or unset | One-time: lets exactly this id create the first Store Manager row while the staff table is empty. Unset it afterwards. |
 | `STAFF_TELEGRAM_IDS` | tester Telegram ids | Grants kitchen access. |
 | `ADMIN_PHONE_NUMBERS` | tester phone numbers | Allowed to request staff OTP. |
 | `PLASGATE_*` | production SMS keys | Real texts; costs real credits per test. |
