@@ -87,7 +87,44 @@
         return;
       }
 
-      var targetUrl = rawUrl.startsWith('http') ? rawUrl : 'https://' + rawUrl;
+      // Keep in sync with OPEN_APP_ALLOWED_HOSTS in apps/api/src/app.ts.
+      var ALLOWED_HOSTS = {
+        facebook: ['facebook.com', 'fb.com', 'fb.me', 'fb.watch'],
+        instagram: ['instagram.com', 'instagr.am'],
+        tiktok: ['tiktok.com'],
+        youtube: ['youtube.com', 'youtu.be'],
+        maps: ['google.com', 'goo.gl', 'maps.app.goo.gl']
+      };
+
+      function resolveTarget(appType, url) {
+        var allowed = ALLOWED_HOSTS[appType];
+        if (!allowed) return null;
+        var candidate = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+        var parsed;
+        try {
+          parsed = new URL(candidate);
+        } catch (e) {
+          return null;
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+        if (parsed.username || parsed.password) return null;
+        var host = parsed.hostname.toLowerCase();
+        for (var i = 0; i < allowed.length; i++) {
+          if (host === allowed[i] || host.slice(-(allowed[i].length + 1)) === '.' + allowed[i]) {
+            return parsed.toString();
+          }
+        }
+        return null;
+      }
+
+      var targetUrl = resolveTarget(app, rawUrl);
+      if (!targetUrl) {
+        document.getElementById('title').textContent = 'Link not allowed';
+        document.getElementById('subtitle').textContent = 'This link is not one of our official pages. Please return to the menu.';
+        document.getElementById('fallbackBtn').style.display = 'none';
+        return;
+      }
+
       var fallbackBtn = document.getElementById('fallbackBtn');
       fallbackBtn.href = targetUrl;
 
