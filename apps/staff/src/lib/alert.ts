@@ -27,12 +27,51 @@ function getContext(): AudioContext | null {
   return ctx;
 }
 
-/** Call from a real user gesture (the PIN submit) so the first chime is audible. */
+/** Call from a real user gesture (tap, touch, click, or login) so chimes are audible. */
 export function unlockAlerts(): void {
   const audio = getContext();
   if (audio && audio.state === 'suspended') {
     void audio.resume();
   }
+}
+
+export function isAudioUnlocked(): boolean {
+  return ctx !== null && ctx.state === 'running';
+}
+
+export function _resetAudioContextForTesting(): void {
+  ctx = null;
+  autoUnlockAttached = false;
+}
+
+let autoUnlockAttached = false;
+
+/** Automatically unlocks audio on the very first user interaction anywhere on the tablet. */
+export function setupAutoUnlock(): () => void {
+  if (typeof window === 'undefined' || autoUnlockAttached) return () => {};
+  autoUnlockAttached = true;
+
+  const unlock = () => {
+    unlockAlerts();
+    const audio = getContext();
+    if (audio && audio.state === 'running') {
+      ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((evt) => {
+        window.removeEventListener(evt, unlock);
+      });
+      autoUnlockAttached = false;
+    }
+  };
+
+  ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((evt) => {
+    window.addEventListener(evt, unlock, { passive: true });
+  });
+
+  return () => {
+    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((evt) => {
+      window.removeEventListener(evt, unlock);
+    });
+    autoUnlockAttached = false;
+  };
 }
 
 export function isMuted(): boolean {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card } from './Card';
 import { API_BASE, saveSession } from '../../lib/api';
+import { unlockAlerts } from '../../lib/alert';
 import { AlertCircle, Phone, ShieldCheck, Sparkles, ArrowRight, RotateCcw } from 'lucide-react';
 
 interface TelegramAuthScreenProps {
@@ -53,6 +54,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
         role: data.role,
         expiresAt: data.expiresAt,
       });
+      unlockAlerts();
       onSuccess();
     } catch (err: any) {
       setError(readError(err, 'Login failed. Account is not authorized.'));
@@ -99,6 +101,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
 
       if (token) {
         saveSession({ token, role, expiresAt });
+        unlockAlerts();
         window.history.replaceState(null, '', window.location.pathname);
         onSuccess();
         return;
@@ -192,6 +195,7 @@ export function TelegramAuthScreen({ onSuccess }: TelegramAuthScreenProps) {
         role: data.role,
         expiresAt: data.expiresAt,
       });
+      unlockAlerts();
       onSuccess();
     } catch (err: any) {
       setError(readError(err, 'Verification failed. Please check the code.'));

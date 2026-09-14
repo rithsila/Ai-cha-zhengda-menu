@@ -44,6 +44,17 @@ describe('Sidebar Menu & Brand Header', () => {
       role: 'manager',
       expiresAt: Date.now() + 3600000,
     });
+    Object.defineProperty(navigator, 'wakeLock', {
+      writable: true,
+      configurable: true,
+      value: {
+        request: vi.fn().mockResolvedValue({
+          released: false,
+          release: vi.fn().mockResolvedValue(undefined),
+          addEventListener: vi.fn(),
+        }),
+      },
+    });
   });
 
   it('renders Zhengda mascot logo in sidebar header', () => {
@@ -138,5 +149,20 @@ describe('Sidebar Menu & Brand Header', () => {
     expect(within(nav).queryByRole('button', { name: /audit logs/i })).toBeNull();
     expect(within(nav).queryByRole('button', { name: /rewards/i })).toBeNull();
     expect(within(nav).queryByRole('button', { name: /settings/i })).toBeNull();
+  });
+
+  it('renders Always On screen button and toggles state when clicked', () => {
+    render(<App />);
+
+    // Initially Always On is enabled by default (present in sidebar and header)
+    const screenBtns = screen.getAllByRole('button', { name: /disable always on screen/i });
+    expect(screenBtns.length).toBeGreaterThan(0);
+
+    fireEvent.click(screenBtns[0]);
+
+    // Now it should show enable option / auto-sleep
+    const enableBtns = screen.getAllByRole('button', { name: /enable always on screen/i });
+    expect(enableBtns.length).toBeGreaterThan(0);
+    expect(localStorage.getItem('staff-wake-lock-enabled')).toBe('0');
   });
 });

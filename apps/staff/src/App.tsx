@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   BellOff,
+  BellRing,
   Building2,
   ChevronDown,
   Clock,
@@ -23,6 +24,8 @@ import {
   ShoppingBag,
   Sliders,
   Store,
+  Sun,
+  SunDim,
   TriangleAlert,
   Truck,
   User,
@@ -81,7 +84,24 @@ import {
   playReminderAlert,
   playOverdueAlert,
   setMuted,
+  setupAutoUnlock,
 } from './lib/alert';
+import {
+  isWakeLockSupported,
+  getWakeLockPreference,
+  setWakeLockPreference,
+  isWakeLockActive,
+  requestWakeLock,
+  releaseWakeLock,
+  subscribeWakeLock,
+  initWakeLockLifecycle,
+} from './lib/wakeLock';
+import {
+  isNotificationSupported,
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendOrderNotification,
+} from './lib/notification';
 import type { BadgeVariant } from './components/ui';
 import type { Branch, ConnectionState, Order } from './types';
 
@@ -322,6 +342,48 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
 
+  // Auto-unlock WebAudio on first user gesture anywhere
+  useEffect(() => {
+    return setupAutoUnlock();
+  }, []);
+
+  // Screen Wake Lock (Always-on screen for tablet POS)
+  const [wakeLockPreferred, setWakeLockPreferred] = useState(() => getWakeLockPreference());
+  const [wakeLockActive, setWakeLockActive] = useState(() => isWakeLockActive());
+  const wakeLockSupported = useMemo(() => isWakeLockSupported(), []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeWakeLock((active) => setWakeLockActive(active));
+    const cleanupLifecycle = initWakeLockLifecycle();
+    return () => {
+      unsubscribe();
+      cleanupLifecycle();
+    };
+  }, []);
+
+  const toggleWakeLock = useCallback(async () => {
+    if (!wakeLockSupported) return;
+    const next = !wakeLockPreferred;
+    setWakeLockPreferred(next);
+    setWakeLockPreference(next);
+    if (next) {
+      await requestWakeLock();
+    } else {
+      await releaseWakeLock();
+    }
+  }, [wakeLockPreferred, wakeLockSupported]);
+
+  // System notification permission
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() =>
+    getNotificationPermission(),
+  );
+  const notifSupported = useMemo(() => isNotificationSupported(), []);
+
+  const handleEnableNotifications = useCallback(async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPermission(perm);
+  }, []);
+
   const failuresRef = useRef(0);
   const chimedOrderIdsRef = useRef<Set<string> | null>(null);
   const lastReminderSoundRef = useRef<number>(0);
@@ -405,6 +467,7 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
 
           if (fresh.length > 0) {
             playNewOrderAlert();
+            sendOrderNotification(fresh);
             setNewIds((prev) => {
               const next = new Set(prev);
               fresh.forEach((o) => next.add(o.id));
@@ -1129,6 +1192,39 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
             <ThemeToggle />
           </div>
 
+          {wakeLockSupported && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={toggleWakeLock}
+              className="w-full justify-start gap-2 text-xs font-bold"
+              aria-label={wakeLockPreferred ? 'Disable always on screen' : 'Enable always on screen'}
+            >
+              {wakeLockPreferred ? (
+                <>
+                  <Sun className="size-4 text-amber-500 fill-amber-500/20" />
+                  <span className="flex-1 text-left">Screen: Always On</span>
+                  {wakeLockActive ? (
+                    <span
+                      className="size-2 rounded-none bg-emerald-500 shadow-xs animate-pulse"
+                      title="Screen wake lock is active"
+                    />
+                  ) : (
+                    <span
+                      className="size-2 rounded-none bg-amber-500"
+                      title="Waiting for window focus to activate wake lock"
+                    />
+                  )}
+                </>
+              ) : (
+                <>
+                  <SunDim className="size-4 text-ink-faint" />
+                  <span className="flex-1 text-left">Screen: Auto-sleep</span>
+                </>
+              )}
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="md"
@@ -1208,6 +1304,53 @@ function StaffApp({ onLogout }: { onLogout: () => void }) {
           </div>
 
           <div className="flex items-center gap-2.5">
+            {wakeLockSupported && (
+              <button
+                type="button"
+                onClick={toggleWakeLock}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold border transition-colors ${
+                  wakeLockPreferred
+                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'border-border bg-surface text-ink-faint hover:text-ink'
+                }`}
+                title={
+                  wakeLockPreferred
+                    ? 'Always-on screen is active (tablet screen will not turn off)'
+                    : 'Always-on screen is off (tablet screen may sleep)'
+                }
+                aria-label={wakeLockPreferred ? 'Disable always on screen' : 'Enable always on screen'}
+              >
+                {wakeLockPreferred ? (
+                  <>
+                    <Sun className="size-3.5 text-amber-500 fill-amber-500/20" />
+                    <span className="hidden sm:inline">Always On</span>
+                    {wakeLockActive && (
+                      <span className="size-1.5 rounded-none bg-emerald-500 shadow-xs animate-pulse" />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <SunDim className="size-3.5" />
+                    <span className="hidden sm:inline">Screen Sleep</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {notifSupported && notifPermission === 'default' && (
+              <button
+                type="button"
+                onClick={handleEnableNotifications}
+                className="inline-flex items-center gap-1.5 rounded-none border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-bold text-accent hover:bg-accent/20 transition-colors"
+                title="Enable tablet system notifications for incoming orders"
+                aria-label="Enable system notifications"
+              >
+                <BellRing className="size-3.5 animate-bounce" />
+                <span className="hidden sm:inline">Allow Alerts</span>
+                <span className="sm:hidden">Alerts</span>
+              </button>
+            )}
+
             {overdueOrders.length > 0 ? (
               <span
                 role="status"
