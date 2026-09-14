@@ -2988,11 +2988,39 @@ export function createApp() {
     }
   });
 
-  // App launcher bridge redirect
+  // App launcher bridge redirect. Only known social destinations are forwarded;
+  // the host allowlist must stay in sync with apps/menu/public/open-app.html.
+  const OPEN_APP_ALLOWED_HOSTS: Record<string, string[]> = {
+    facebook: ['facebook.com', 'fb.com', 'fb.me', 'fb.watch'],
+    instagram: ['instagram.com', 'instagr.am'],
+    tiktok: ['tiktok.com'],
+    youtube: ['youtube.com', 'youtu.be'],
+    maps: ['google.com', 'goo.gl', 'maps.app.goo.gl'],
+  };
+  const hostMatches = (host: string, allowed: string) => host === allowed || host.endsWith('.' + allowed);
+  const resolveOpenAppTarget = (appType: string, rawUrl: string): string | null => {
+    const allowed = OPEN_APP_ALLOWED_HOSTS[appType];
+    if (!allowed || !rawUrl) return null;
+    const candidate = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.username || parsed.password) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (!allowed.some((a) => hostMatches(host, a))) return null;
+    return parsed.toString();
+  };
   app.get('/api/open-app', (req, res) => {
-    const appType = encodeURIComponent(String(req.query.app || ''));
-    const targetUrl = encodeURIComponent(String(req.query.url || ''));
-    res.redirect(`/open-app.html?app=${appType}&url=${targetUrl}`);
+    const appType = String(req.query.app || '').toLowerCase();
+    const targetUrl = resolveOpenAppTarget(appType, String(req.query.url || ''));
+    if (!targetUrl) {
+      return res.status(400).json({ error: 'Invalid or unsupported link' });
+    }
+    res.redirect(`/open-app.html?app=${encodeURIComponent(appType)}&url=${encodeURIComponent(targetUrl)}`);
   });
 
   // Customer Lucky Draw Spin
