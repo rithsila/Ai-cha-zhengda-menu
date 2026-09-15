@@ -160,8 +160,11 @@ export async function resolveTelegramUserId(req: {
   if (fromToken) return fromToken;
 
   if (devIdentityAllowed()) {
-    const devId = req.headers['x-telegram-user-id'];
-    if (typeof devId === 'string' && devId.trim()) return devId.trim();
+    const devToken = process.env.DEV_ACCESS_TOKEN;
+    if (devToken && req.headers['x-dev-token'] === devToken) {
+      const devId = req.headers['x-telegram-user-id'];
+      if (typeof devId === 'string' && devId.trim()) return devId.trim();
+    }
   }
 
   return null;

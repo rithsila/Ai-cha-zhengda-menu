@@ -246,8 +246,9 @@ export function createApp() {
 
   // Direct Staff/Manager Login endpoint via Telegram ID / WebApp / Widget
   app.post('/api/auth/dev-customer-login', async (req, res) => {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ error: 'Not available in production' });
+    const devToken = process.env.DEV_ACCESS_TOKEN;
+    if (process.env.NODE_ENV === 'production' || !devToken || req.headers['x-dev-token'] !== devToken) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
     try {
       const {
