@@ -3735,5 +3735,11 @@ export function createApp() {
     }
   });
 
+  // Global Error Handler to prevent HTML stack traces
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Unhandled Error:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  });
+
   return app;
 }
