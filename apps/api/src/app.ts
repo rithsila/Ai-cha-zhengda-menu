@@ -38,6 +38,7 @@ import fs from 'fs';
 import multer from 'multer';
 import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes, createPrizeClaimRecord } from './lucky-draw';
 import { uploadToR2, isR2Configured } from './r2';
+import { sniffImageType } from './image-type';
 
 export { prisma };
 
@@ -206,24 +207,21 @@ export function createApp() {
   app.get('/api/auth/staff-telegram/callback', async (req, res) => {
     try {
       const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) return res.status(503).json({ error: 'Telegram login is not configured on this server' });
+
       const params: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.query)) {
         if (typeof v === 'string') params[k] = v;
       }
 
-      let telegramId = params.id;
-      // In production, strictly verify Telegram signature
-      if (token) {
-        if (!verifyTelegramLogin(params, token)) {
-          return res.status(401).json({ error: 'Invalid Telegram login data' });
-        }
-        if (!isLoginFresh(params.auth_date)) {
-          return res.status(401).json({ error: 'Login expired, please try again' });
-        }
-      } else if (process.env.NODE_ENV === 'production') {
-        return res.status(503).json({ error: 'Telegram login is not configured on this server' });
+      if (!verifyTelegramLogin(params, token)) {
+        return res.status(401).json({ error: 'Invalid Telegram login data' });
+      }
+      if (!isLoginFresh(params.auth_date)) {
+        return res.status(401).json({ error: 'Login expired, please try again' });
       }
 
+      const telegramId = params.id;
       if (!telegramId) {
         return res.status(400).json({ error: 'Missing Telegram user ID' });
       }
@@ -335,13 +333,13 @@ export function createApp() {
 
       let account = await resolveStaffAccount(verifiedTelegramId, prisma, authUsername);
 
-      // Auto-bootstrap: If zero staff accounts exist in DB and no ENV admins are set,
-      // the first person to log in becomes the Store Manager automatically.
-      if (!account) {
+      // Bootstrap the first Store Manager only for the Telegram ID named in
+      // BOOTSTRAP_MANAGER_TELEGRAM_ID, and only while no staff accounts exist.
+      const bootstrapId = (process.env.BOOTSTRAP_MANAGER_TELEGRAM_ID || '').trim();
+      if (!account && bootstrapId && bootstrapId === verifiedTelegramId) {
         try {
           const totalStaff = await prisma.staffAccount.count();
-          const noEnvAdmins = adminTelegramIds().length === 0 && adminTelegramUsernames().length === 0;
-          if (totalStaff === 0 && noEnvAdmins) {
+          if (totalStaff === 0) {
             console.log(`Bootstrapping first staff account as Manager for Telegram ID: ${verifiedTelegramId}`);
             await prisma.staffAccount.create({
               data: {
@@ -358,13 +356,13 @@ export function createApp() {
         }
       }
 
-      // Fallback in local dev if using dev login or no admins/staff configured yet
+      // Local development only: dev_manager / dev_staff test accounts
       if (!account && process.env.NODE_ENV !== 'production') {
         if (verifiedTelegramId === 'dev_manager') {
           account = { role: 'manager', name: 'Dev Manager' };
         } else if (verifiedTelegramId === 'dev_staff') {
           account = { role: 'staff', name: 'Dev Staff' };
-        } else if (process.env.ALLOW_UNVERIFIED_TELEGRAM === '1' && adminTelegramIds().length === 0) {
+        } else if (devIdentityAllowed() && adminTelegramIds().length === 0) {
           account = { role: 'manager', name: 'Dev Admin' };
         }
       }
@@ -644,11 +642,15 @@ export function createApp() {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
+    const image = sniffImageType(req.file.buffer);
+    if (!image) {
+      return res.status(400).json({ error: 'Unsupported image type. Use PNG, JPEG, GIF or WebP.' });
+    }
     try {
       if (!isR2Configured()) {
         return res.status(503).json({ error: 'Image storage (R2) is not configured. Set R2_* env vars in .env' });
       }
-      const publicUrl = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype);
+      const publicUrl = await uploadToR2(req.file.buffer, image);
       res.json({ url: publicUrl });
     } catch (err: any) {
       console.error('R2 upload error:', err);
@@ -1760,10 +1762,13 @@ export function createApp() {
           const pointsEarned = paidEligibleCount * pointsPerStamp;
 
           if (telegramUserId && pointsRedeemed > 0) {
-            await tx.user.update({
-              where: { telegramUserId },
+            const redeemed = await tx.user.updateMany({
+              where: { telegramUserId, loyaltyPoints: { gte: pointsRedeemed } },
               data: { loyaltyPoints: { decrement: pointsRedeemed } }
             });
+            if (redeemed.count !== 1) {
+              throw new Error('Not enough loyalty points to redeem');
+            }
           }
 
           const latestOrder = await tx.order.findFirst({
@@ -1821,7 +1826,7 @@ export function createApp() {
       res.json(order);
     } catch (error: any) {
       console.error(error);
-      if (error?.message && (error.message.includes('voucher') || error.message.includes('claimed'))) {
+      if (error?.message && (error.message.includes('voucher') || error.message.includes('claimed') || error.message.includes('loyalty points'))) {
         return res.status(400).json({ error: error.message });
       }
       res.status(500).json({ error: 'Failed to create order' });
@@ -2988,11 +2993,39 @@ export function createApp() {
     }
   });
 
-  // App launcher bridge redirect
+  // App launcher bridge redirect. Only known social destinations are forwarded;
+  // the host allowlist must stay in sync with apps/menu/public/open-app.html.
+  const OPEN_APP_ALLOWED_HOSTS: Record<string, string[]> = {
+    facebook: ['facebook.com', 'fb.com', 'fb.me', 'fb.watch'],
+    instagram: ['instagram.com', 'instagr.am'],
+    tiktok: ['tiktok.com'],
+    youtube: ['youtube.com', 'youtu.be'],
+    maps: ['google.com', 'goo.gl', 'maps.app.goo.gl'],
+  };
+  const hostMatches = (host: string, allowed: string) => host === allowed || host.endsWith('.' + allowed);
+  const resolveOpenAppTarget = (appType: string, rawUrl: string): string | null => {
+    const allowed = OPEN_APP_ALLOWED_HOSTS[appType];
+    if (!allowed || !rawUrl) return null;
+    const candidate = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    let parsed: URL;
+    try {
+      parsed = new URL(candidate);
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.username || parsed.password) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (!allowed.some((a) => hostMatches(host, a))) return null;
+    return parsed.toString();
+  };
   app.get('/api/open-app', (req, res) => {
-    const appType = encodeURIComponent(String(req.query.app || ''));
-    const targetUrl = encodeURIComponent(String(req.query.url || ''));
-    res.redirect(`/open-app.html?app=${appType}&url=${targetUrl}`);
+    const appType = String(req.query.app || '').toLowerCase();
+    const targetUrl = resolveOpenAppTarget(appType, String(req.query.url || ''));
+    if (!targetUrl) {
+      return res.status(400).json({ error: 'Invalid or unsupported link' });
+    }
+    res.redirect(`/open-app.html?app=${encodeURIComponent(appType)}&url=${encodeURIComponent(targetUrl)}`);
   });
 
   // Customer Lucky Draw Spin
@@ -3029,23 +3062,34 @@ export function createApp() {
 
       const prize = pickRandomPrize(prizes);
 
-      // Deduct tickets and award prize
-      const updatedUser = await withWriteRetry(async () => {
-        const updatePayload: any = {
-          luckyTickets: { decrement: costPerSpin },
-        };
+      // Deduct tickets and award prize. The decrement is guarded on the current
+      // balance so concurrent spins cannot all pass the check above.
+      const updatePayload: any = {
+        luckyTickets: { decrement: costPerSpin },
+      };
 
-        if (prize.type === 'points' && prize.value > 0) {
-          updatePayload.loyaltyPoints = { increment: prize.value };
-        } else if (prize.type === 'tickets' && prize.value > 0) {
-          updatePayload.luckyTickets = { decrement: costPerSpin - prize.value };
-        }
+      if (prize.type === 'points' && prize.value > 0) {
+        updatePayload.loyaltyPoints = { increment: prize.value };
+      } else if (prize.type === 'tickets' && prize.value > 0) {
+        updatePayload.luckyTickets = { decrement: costPerSpin - prize.value };
+      }
 
-        return prisma.user.update({
-          where: { telegramUserId },
-          data: updatePayload,
+      const spent = await withWriteRetry(() => prisma.user.updateMany({
+        where: { telegramUserId, luckyTickets: { gte: costPerSpin } },
+        data: updatePayload,
+      }));
+
+      if (spent.count !== 1) {
+        const current = await prisma.user.findUnique({ where: { telegramUserId } });
+        const currentTickets = current?.luckyTickets || 0;
+        return res.status(400).json({
+          error: `Not enough lucky tickets. You have ${currentTickets} tickets, but need ${costPerSpin} to spin.`,
+          requiredTickets: costPerSpin,
+          currentTickets,
         });
-      });
+      }
+
+      const updatedUser = await prisma.user.findUniqueOrThrow({ where: { telegramUserId } });
 
       let prizeClaim: any = null;
       if (prize.type === 'item') {
