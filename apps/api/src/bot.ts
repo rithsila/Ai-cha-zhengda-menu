@@ -152,9 +152,7 @@ export const setupBot = () => {
     }
   });
 
-  bot.launch().catch((err) => {
-    console.error('Failed to launch Telegram bot:', err);
-  });
+  
 
   // Enable graceful stop
   process.once('SIGINT', () => bot.stop('SIGINT'));

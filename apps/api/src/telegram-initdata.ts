@@ -79,39 +79,31 @@ export function verifyInitData(initData: string, botToken: string): TelegramInit
   }
 }
 
-/**
- * In-memory customer sessions, same pattern as the staff sessions in auth.ts:
- * a restart logs everyone out, which is fine for a single-server shop and keeps
- * tokens out of the database.
- */
-const customerSessions = new Map<string, { telegramUserId: string; expiresAt: number }>();
+import { redis } from './redis';
 
-export function issueCustomerToken(telegramUserId: string) {
+const CUSTOMER_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+
+export async function issueCustomerToken(telegramUserId: string) {
   const token = randomUUID();
-  const expiresAt = Date.now() + CUSTOMER_SESSION_TTL_MS;
-  customerSessions.set(token, { telegramUserId, expiresAt });
+  const expiresAt = Date.now() + (CUSTOMER_SESSION_TTL_SECONDS * 1000);
+  await redis.setex(`customer_session:${token}`, CUSTOMER_SESSION_TTL_SECONDS, telegramUserId);
   return { token, expiresAt };
 }
 
 /** Returns the telegram user id for a live token, or null when missing/expired. */
-export function verifyCustomerToken(token: string | undefined): string | null {
+export async function verifyCustomerToken(token: string | undefined): Promise<string | null> {
   if (!token) return null;
-  const session = customerSessions.get(token);
-  if (!session) return null;
-  if (session.expiresAt <= Date.now()) {
-    customerSessions.delete(token);
-    return null;
-  }
-  return session.telegramUserId;
+  return await redis.get(`customer_session:${token}`);
 }
 
-export function revokeCustomerToken(token: string) {
-  customerSessions.delete(token);
+export async function revokeCustomerToken(token: string) {
+  await redis.del(`customer_session:${token}`);
 }
 
 /** Test helper: drop every customer session. */
-export function clearCustomerSessions() {
-  customerSessions.clear();
+export async function clearCustomerSessions() {
+  const keys = await redis.keys('customer_session:*');
+  if (keys.length > 0) await redis.del(keys);
 }
 
 function bearerToken(header: unknown): string | undefined {
@@ -150,9 +142,9 @@ export function warnIfDevIdentityAllowed() {
 }
 
 /** The verified telegram user id for this request, or null when anonymous. */
-export function resolveTelegramUserId(req: {
+export async function resolveTelegramUserId(req: {
   headers: Record<string, unknown>;
-}): string | null {
+}): Promise<string | null> {
   const initData = req.headers['x-telegram-init-data'];
   if (typeof initData === 'string' && initData) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -164,7 +156,7 @@ export function resolveTelegramUserId(req: {
   }
 
   const token = bearerToken(req.headers.authorization);
-  const fromToken = verifyCustomerToken(token);
+  const fromToken = await verifyCustomerToken(token);
   if (fromToken) return fromToken;
 
   if (devIdentityAllowed()) {
@@ -176,14 +168,14 @@ export function resolveTelegramUserId(req: {
 }
 
 /** Attaches `req.telegramUserId` when the caller proved who they are. Never blocks. */
-export const resolveCustomer: RequestHandler = (req, res, next) => {
-  (req as any).telegramUserId = resolveTelegramUserId(req as any);
+export const resolveCustomer: RequestHandler = async (req, res, next) => {
+  (req as any).telegramUserId = await resolveTelegramUserId(req as any);
   next();
 };
 
 /** Customer routes: the caller must have proved who they are. */
-export const requireCustomer: RequestHandler = (req, res, next) => {
-  const id = resolveTelegramUserId(req as any);
+export const requireCustomer: RequestHandler = async (req, res, next) => {
+  const id = await resolveTelegramUserId(req as any);
   if (!id) return res.status(401).json({ error: 'Telegram sign-in required' });
   (req as any).telegramUserId = id;
   next();

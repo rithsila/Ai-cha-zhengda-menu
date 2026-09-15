@@ -193,7 +193,7 @@ export function createApp() {
 
       // Hand back a session token, not the raw id. A raw id in the URL is only
       // a claim: anyone could paste someone else's number and be believed.
-      const { token: customerToken } = issueCustomerToken(user.telegramUserId);
+      const { token: customerToken } = await issueCustomerToken(user.telegramUserId);
       const target = process.env.WEBAPP_URL || 'http://localhost:5173';
       res.redirect(`${target}#tg_token=${encodeURIComponent(customerToken)}`);
     } catch (error) {
@@ -233,7 +233,7 @@ export function createApp() {
         return res.status(403).json({ error: 'Access denied: You are not authorized as staff or manager' });
       }
 
-      const { token: staffAuthToken, expiresAt } = issueToken(account.role, { telegramUserId: telegramId, name: account.name });
+      const { token: staffAuthToken, expiresAt } = await issueToken(account.role, { telegramUserId: telegramId, name: account.name });
       const target = process.env.STAFF_APP_URL || 'http://localhost:5174';
       res.redirect(`${target}#staff_token=${encodeURIComponent(staffAuthToken)}&role=${encodeURIComponent(account.role)}&name=${encodeURIComponent(account.name)}&expiresAt=${expiresAt}`);
     } catch (error) {
@@ -284,7 +284,7 @@ export function createApp() {
           roomNumber,
         },
       });
-      const { token, expiresAt } = issueCustomerToken(uid);
+      const { token, expiresAt } = await issueCustomerToken(uid);
       res.json({ ok: true, token, telegramUserId: uid, expiresAt });
     } catch (e) {
       res.status(500).json({ error: 'Dev customer login failed' });
@@ -329,7 +329,7 @@ export function createApp() {
       }
 
       if (!verifiedTelegramId) {
-        recordFailedLogin(req);
+        await recordFailedLogin(req);
         return res.status(401).json({ error: 'Valid Telegram sign-in is required' });
       }
 
@@ -370,12 +370,12 @@ export function createApp() {
       }
 
       if (!account) {
-        recordFailedLogin(req);
+        await recordFailedLogin(req);
         return res.status(403).json({ error: 'Access denied: Telegram ID is not authorized. Please ask an Admin or Manager to add your account.' });
       }
 
-      clearFailedLogins(req);
-      const { token, expiresAt } = issueToken(account.role, { telegramUserId: verifiedTelegramId, name: account.name });
+      await clearFailedLogins(req);
+      const { token, expiresAt } = await issueToken(account.role, { telegramUserId: verifiedTelegramId, name: account.name });
       res.json({ ok: true, token, role: account.role, name: account.name, expiresAt, telegramUserId: verifiedTelegramId });
     } catch (error) {
       console.error(error);
@@ -395,13 +395,13 @@ export function createApp() {
 
       const staff = await resolveStaffByPhone(phone, prisma);
       if (!staff) {
-        recordFailedLogin(req);
+        await recordFailedLogin(req);
         return res.status(403).json({
           error: 'Access denied: Phone number is not authorized. Please ask an Admin or Manager to grant access to your phone number.',
         });
       }
 
-      const { code, allowed, waitSeconds } = createStaffOtp(phone);
+      const { code, allowed, waitSeconds } = await createStaffOtp(phone);
       if (!allowed) {
         return res.status(429).json({
           error: `Please wait ${waitSeconds || 60} seconds before requesting a new code.`,
@@ -441,18 +441,18 @@ export function createApp() {
 
       const staff = await resolveStaffByPhone(phone, prisma);
       if (!staff) {
-        recordFailedLogin(req);
+        await recordFailedLogin(req);
         return res.status(403).json({ error: 'Access denied: Phone number is not authorized.' });
       }
 
-      const otpCheck = verifyStaffOtpCode(phone, code);
+      const otpCheck = await verifyStaffOtpCode(phone, code);
       if (!otpCheck.valid) {
-        recordFailedLogin(req);
+        await recordFailedLogin(req);
         return res.status(400).json({ error: otpCheck.reason || 'Invalid verification code.' });
       }
 
-      clearFailedLogins(req);
-      const { token, expiresAt } = issueToken(staff.role, { phoneNumber: phone, name: staff.name });
+      await clearFailedLogins(req);
+      const { token, expiresAt } = await issueToken(staff.role, { phoneNumber: phone, name: staff.name });
 
       res.json({
         ok: true,
@@ -1076,7 +1076,7 @@ export function createApp() {
         return localized;
       }, WRITE_TX_OPTIONS);
 
-      const staff = getStaffSessionInfo(req as any);
+      const staff = await getStaffSessionInfo(req as any);
       if (data.basePrice !== undefined && data.basePrice !== existing.basePrice) {
         await recordAuditLog(prisma, {
           actorType: (staff?.role as any) || 'manager',
@@ -1137,7 +1137,7 @@ export function createApp() {
         return res.status(404).json({ error: 'Menu item not found' });
       }
 
-      const staff = getStaffSessionInfo(req as any);
+      const staff = await getStaffSessionInfo(req as any);
 
       // If it was ordered before, soft delete to preserve receipts
       if (item.orderItems && item.orderItems.length > 0) {
@@ -1217,7 +1217,7 @@ export function createApp() {
         where: { id },
         data: { isSoldOut }
       });
-      const staff = getStaffSessionInfo(req as any);
+      const staff = await getStaffSessionInfo(req as any);
       await recordAuditLog(prisma, {
         actorType: (staff?.role as any) || 'staff',
         actorId: staff?.id || staff?.telegramUserId || null,
@@ -1995,7 +1995,7 @@ export function createApp() {
         }
       }
 
-      const staff = getStaffSessionInfo(req as any);
+      const staff = await getStaffSessionInfo(req as any);
       await recordAuditLog(prisma, {
         actorType: staff?.role || 'staff',
         actorId: staff?.id || staff?.telegramUserId || null,
@@ -2045,14 +2045,14 @@ export function createApp() {
    * Returns null when the caller is allowed, otherwise the response to send:
    * 401 when nothing was proved at all, 403 when someone else's identity was.
    */
-  function denyPaymentAccess(
+  async function denyPaymentAccess(
     req: express.Request,
     order: { telegramUserId: string | null }
-  ): { code: number; body: { error: string } } | null {
+  ): Promise<{ code: number; body: { error: string } } | null> {
     if (order.telegramUserId == null) return null;
     const caller = (req as any).telegramUserId as string | null;
     if (caller === order.telegramUserId) return null;
-    if (staffRoleOf(req as any)) return null;
+    if (await staffRoleOf(req as any)) return null;
     if (!caller) return { code: 401, body: { error: 'Telegram sign-in required' } };
     return { code: 403, body: { error: 'This order belongs to someone else' } };
   }
@@ -2254,7 +2254,7 @@ export function createApp() {
       });
       if (!order) return res.status(404).json({ error: 'Order not found' });
 
-      const denied = denyPaymentAccess(req, order);
+      const denied = await denyPaymentAccess(req, order);
       if (denied) return res.status(denied.code).json(denied.body);
 
       // Restrict payment creation to eligible orders
@@ -2340,7 +2340,7 @@ export function createApp() {
         data: { paymentExpiresAt: expiresAt },
       });
 
-      const staffSession = getStaffSessionInfo(req as any);
+      const staffSession = await getStaffSessionInfo(req as any);
       const callerTelegramId = (req as any).telegramUserId;
       await recordAuditLog(prisma, {
         actorType: staffSession ? staffSession.role : 'customer',
@@ -2379,7 +2379,7 @@ export function createApp() {
       const order = await prisma.order.findUnique({ where: { id: String(req.params.orderId) } });
       if (!order) return res.status(404).json({ error: 'Order not found' });
 
-      const denied = denyPaymentAccess(req, order);
+      const denied = await denyPaymentAccess(req, order);
       if (denied) return res.status(denied.code).json(denied.body);
 
       const base = {
@@ -2487,7 +2487,7 @@ export function createApp() {
       const order = await prisma.order.findUnique({ where: { id: String(orderId) } });
       if (!order) return res.status(404).json({ error: 'Order not found' });
 
-      const denied = denyPaymentAccess(req, order);
+      const denied = await denyPaymentAccess(req, order);
       if (denied) return res.status(denied.code).json(denied.body);
 
       if (order.status === 'paid') {
@@ -2537,7 +2537,7 @@ export function createApp() {
       });
       await refundOrderPoints(prisma, order.id);
 
-      const staffSession = getStaffSessionInfo(req as any);
+      const staffSession = await getStaffSessionInfo(req as any);
       const callerTelegramId = (req as any).telegramUserId;
       await recordAuditLog(prisma, {
         actorType: staffSession ? staffSession.role : 'customer',

@@ -9,7 +9,7 @@ import { autoSeedIfEmpty } from './seed';
 warnIfDevIdentityAllowed();
 
 const app = createApp();
-setupBot();
+const bot = setupBot();
 
 const PORT = process.env.PORT || 4000;
 
@@ -17,6 +17,11 @@ const PORT = process.env.PORT || 4000;
 configureSqlite().then(async () => {
   // Automatically populate catalog if launching on a fresh database
   await autoSeedIfEmpty(prisma);
+
+  if (bot) {
+    const domain = process.env.WEBHOOK_DOMAIN || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://menu.aichazhengdaarakawa.com';
+    app.use(await bot.createWebhook({ domain }));
+  }
 
   // Abandoned KHQR orders never become real orders; sweeping them keeps unpaid
   // tickets off the kitchen board and returns the points they reserved.

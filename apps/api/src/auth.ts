@@ -1,5 +1,6 @@
 import { randomUUID, randomInt, timingSafeEqual } from 'crypto';
 import type { RequestHandler } from 'express';
+import { redis } from './redis';
 
 export type StaffRole = 'staff' | 'manager';
 
@@ -180,12 +181,14 @@ interface OtpEntry {
   lastSentAt: number;
 }
 
-const phoneOtps = new Map<string, OtpEntry>();
 
-export function createStaffOtp(rawPhone: string): { code: string; allowed: boolean; waitSeconds?: number } {
+
+export async function createStaffOtp(rawPhone: string): Promise<{ code: string; allowed: boolean; waitSeconds?: number }> {
   const phone = canonicalPhone(rawPhone);
   const now = Date.now();
-  const existing = phoneOtps.get(phone);
+  
+  const data = await redis.get(`otp:${phone}`);
+  const existing = data ? JSON.parse(data) : null;
 
   // Rate limit: must wait 60 seconds between resends
   if (existing && now - existing.lastSentAt < 60 * 1000) {
@@ -194,38 +197,40 @@ export function createStaffOtp(rawPhone: string): { code: string; allowed: boole
   }
 
   const code = randomInt(100000, 1000000).toString();
-  phoneOtps.set(phone, {
+  await redis.setex(`otp:${phone}`, Math.floor(OTP_TTL_MS / 1000), JSON.stringify({
     code,
-    expiresAt: now + OTP_TTL_MS,
     attempts: 0,
     lastSentAt: now,
-  });
+  }));
 
   return { code, allowed: true };
 }
 
-export function verifyStaffOtpCode(
+export async function verifyStaffOtpCode(
   rawPhone: string,
   inputCode: string
-): { valid: boolean; reason?: string } {
+): Promise<{ valid: boolean; reason?: string }> {
   const phone = canonicalPhone(rawPhone);
-  const entry = phoneOtps.get(phone);
-
-  if (!entry) {
+  
+  const data = await redis.get(`otp:${phone}`);
+  if (!data) {
     return { valid: false, reason: 'No OTP code found for this phone number. Please request a new one.' };
   }
 
-  if (Date.now() > entry.expiresAt) {
-    phoneOtps.delete(phone);
-    return { valid: false, reason: 'OTP code has expired. Please request a new one.' };
-  }
+  const entry = JSON.parse(data);
 
+  // Use entry.expiresAt for expiration check, even if Redis handles TTL
+  // because we might have fetched it right before it expires, though redis string TTL is usually enough.
+  // Actually, wait, the original had entry.expiresAt. 
+  // Let's just rely on Redis TTL. Wait, let's keep it if we need it. 
+  
   if (entry.attempts >= MAX_OTP_ATTEMPTS) {
-    phoneOtps.delete(phone);
+    await redis.del(`otp:${phone}`);
     return { valid: false, reason: 'Too many failed attempts. Please request a new OTP code.' };
   }
 
   entry.attempts += 1;
+  await redis.setex(`otp:${phone}`, Math.floor(OTP_TTL_MS / 1000), JSON.stringify(entry));
 
   const trimmed = inputCode.trim();
   const isMatch =
@@ -233,43 +238,42 @@ export function verifyStaffOtpCode(
     timingSafeEqual(Buffer.from(entry.code), Buffer.from(trimmed));
 
   if (isMatch) {
-    phoneOtps.delete(phone);
+    await redis.del(`otp:${phone}`);
     return { valid: true };
   }
 
   return { valid: false, reason: 'Invalid verification code. Please check and try again.' };
 }
 
-export function clearOtps() {
-  phoneOtps.clear();
+export async function clearOtps() {
+  const keys = await redis.keys('otp:*');
+  if (keys.length > 0) await redis.del(...keys);
 }
 
-export function issueToken(role: StaffRole, meta?: { telegramUserId?: string; phoneNumber?: string; name?: string; id?: string }) {
+export async function issueToken(role: StaffRole, meta?: { telegramUserId?: string; phoneNumber?: string; name?: string; id?: string }) {
   const token = randomUUID();
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  sessions.set(token, { role, expiresAt, ...meta });
+  await redis.setex(`staff_session:${token}`, Math.floor(SESSION_TTL_MS / 1000), JSON.stringify({ role, expiresAt, ...meta }));
   return { token, expiresAt };
 }
 
 /** Returns the role for a live token, or null when missing/expired. */
-export function verifyToken(token: string | undefined): StaffRole | null {
+export async function verifyToken(token: string | undefined): Promise<StaffRole | null> {
   if (!token) return null;
-  const session = sessions.get(token);
-  if (!session) return null;
-  if (session.expiresAt <= Date.now()) {
-    sessions.delete(token);
-    return null;
-  }
+  const data = await redis.get(`staff_session:${token}`);
+  if (!data) return null;
+  const session = JSON.parse(data);
   return session.role;
 }
 
-export function revokeToken(token: string) {
-  sessions.delete(token);
+export async function revokeToken(token: string) {
+  await redis.del(`staff_session:${token}`);
 }
 
 /** Test helper: drop every session. */
-export function clearSessions() {
-  sessions.clear();
+export async function clearSessions() {
+  const keys = await redis.keys('staff_session:*');
+  if (keys.length > 0) await redis.del(keys);
 }
 
 function bearerToken(header: unknown): string | undefined {
@@ -279,23 +283,17 @@ function bearerToken(header: unknown): string | undefined {
 }
 
 /** The staff role behind this request, or null. Used for owner-or-staff checks. */
-export function staffRoleOf(req: { headers: Record<string, unknown> }): StaffRole | null {
-  return verifyToken(bearerToken(req.headers.authorization));
+export async function staffRoleOf(req: { headers: Record<string, unknown> }): Promise<StaffRole | null> {
+  return await verifyToken(bearerToken(req.headers.authorization));
 }
 
 /** Returns session info for a staff/manager request, or null if unauthenticated. */
-export function getStaffSessionInfo(req: { headers: Record<string, unknown> }): { role: StaffRole; name?: string; telegramUserId?: string; phoneNumber?: string; id?: string } | null {
+export async function getStaffSessionInfo(req: { headers: Record<string, unknown> }): Promise<{ role: StaffRole; name?: string; telegramUserId?: string; phoneNumber?: string; id?: string } | null> {
   const token = bearerToken(req.headers.authorization);
   if (!token) return null;
-  const session = sessions.get(token);
-  if (!session || session.expiresAt <= Date.now()) return null;
-  return {
-    role: session.role,
-    name: session.name,
-    telegramUserId: session.telegramUserId,
-    phoneNumber: session.phoneNumber,
-    id: session.id,
-  };
+  const data = await redis.get(`staff_session:${token}`);
+  if (!data) return null;
+  return JSON.parse(data);
 }
 
 /**
@@ -305,15 +303,15 @@ export function getStaffSessionInfo(req: { headers: Record<string, unknown> }): 
  * way in that never expired and was one guessable value away from the whole
  * manager API, so it is gone.
  */
-export const requireStaff: RequestHandler = (req, res, next) => {
-  const role = verifyToken(bearerToken(req.headers.authorization));
+export const requireStaff: RequestHandler = async (req, res, next) => {
+  const role = await verifyToken(bearerToken(req.headers.authorization));
   if (role) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 };
 
 /** Manager only — analytics, loyalty, rewards, config. */
-export const requireManager: RequestHandler = (req, res, next) => {
-  const role = verifyToken(bearerToken(req.headers.authorization));
+export const requireManager: RequestHandler = async (req, res, next) => {
+  const role = await verifyToken(bearerToken(req.headers.authorization));
   if (role === 'manager') return next();
   return res.status(401).json({ error: 'Unauthorized' });
 };
@@ -329,58 +327,66 @@ export const requireManager: RequestHandler = (req, res, next) => {
 const MAX_FAILED_LOGINS = 5;
 const LOGIN_LOCK_MS = 15 * 60 * 1000; // 15 minutes
 
-const loginAttempts = new Map<string, { failures: number; lockedUntil: number }>();
+
 
 function clientKey(req: { ip?: string; socket?: { remoteAddress?: string } }): string {
   return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
 /** Blocks a caller that has already failed too many times. */
-export const loginRateLimit: RequestHandler = (req, res, next) => {
-  const entry = loginAttempts.get(clientKey(req));
-  if (entry && entry.lockedUntil > Date.now()) {
-    const retryAfter = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
-    res.setHeader('Retry-After', String(retryAfter));
-    return res.status(429).json({ error: 'Too many failed attempts. Try again later.', retryAfter });
+export const loginRateLimit: RequestHandler = async (req, res, next) => {
+  const key = clientKey(req);
+  const data = await redis.get(`login_attempts:${key}`);
+  if (data) {
+    const entry = JSON.parse(data);
+    if (entry.lockedUntil > Date.now()) {
+      const retryAfter = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: 'Too many failed attempts. Try again later.', retryAfter });
+    }
   }
   next();
 };
 
 /** Call after a failed login. Locks the IP once it runs out of attempts. */
-export function recordFailedLogin(req: { ip?: string; socket?: { remoteAddress?: string } }) {
+export async function recordFailedLogin(req: { ip?: string; socket?: { remoteAddress?: string } }) {
   const key = clientKey(req);
-  const entry = loginAttempts.get(key) ?? { failures: 0, lockedUntil: 0 };
+  const data = await redis.get(`login_attempts:${key}`);
+  const entry = data ? JSON.parse(data) : { failures: 0, lockedUntil: 0 };
+  
   entry.failures += 1;
   if (entry.failures >= MAX_FAILED_LOGINS) entry.lockedUntil = Date.now() + LOGIN_LOCK_MS;
-  loginAttempts.set(key, entry);
+  
+  await redis.setex(`login_attempts:${key}`, Math.floor(LOGIN_LOCK_MS / 1000) * 2, JSON.stringify(entry));
 }
 
 /** Call after a successful login — a real staff member should not stay locked out. */
-export function clearFailedLogins(req: { ip?: string; socket?: { remoteAddress?: string } }) {
-  loginAttempts.delete(clientKey(req));
+export async function clearFailedLogins(req: { ip?: string; socket?: { remoteAddress?: string } }) {
+  await redis.del(`login_attempts:${clientKey(req)}`);
 }
 
 /** Test helper: forget every failed attempt. */
-export function clearLoginAttempts() {
-  loginAttempts.clear();
+export async function clearLoginAttempts() {
+  const keys = await redis.keys('login_attempts:*');
+  if (keys.length > 0) await redis.del(...keys);
 }
 
 /** General IP sliding window rate limiter */
 export function createRateLimiter(options: { windowMs: number; max: number; message: string }): RequestHandler {
-  const hits = new Map<string, { count: number; resetAt: number }>();
-
-  return (req, res, next) => {
+  return async (req, res, next) => {
     // In test environment, skip unless testing rate limiting explicitly
     if (process.env.NODE_ENV === 'test' && !req.headers['x-test-rate-limit']) {
       return next();
     }
 
-    const key = clientKey(req);
+    const key = `ratelimit:${clientKey(req)}:${options.message.substring(0, 10).replace(/[^a-zA-Z0-9]/g, '')}`;
     const now = Date.now();
-    const record = hits.get(key);
+    
+    const data = await redis.get(key);
+    const record = data ? JSON.parse(data) : null;
 
     if (!record || now > record.resetAt) {
-      hits.set(key, { count: 1, resetAt: now + options.windowMs });
+      await redis.setex(key, Math.ceil(options.windowMs / 1000), JSON.stringify({ count: 1, resetAt: now + options.windowMs }));
       return next();
     }
 
@@ -391,6 +397,7 @@ export function createRateLimiter(options: { windowMs: number; max: number; mess
     }
 
     record.count += 1;
+    await redis.setex(key, Math.ceil((record.resetAt - now) / 1000), JSON.stringify(record));
     next();
   };
 }
