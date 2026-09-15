@@ -28,9 +28,11 @@ function createR2Client() {
   });
 }
 
-/** Upload file buffer to R2. Returns public URL. */
+import { Readable } from 'stream';
+
+/** Upload file buffer or stream to R2. Returns public URL. */
 export async function uploadToR2(
-  fileBuffer: Buffer,
+  fileBody: Buffer | Readable,
   image: SniffedImage
 ): Promise<string> {
   const config = getR2Config();
@@ -42,7 +44,7 @@ export async function uploadToR2(
   await client.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: key,
-    Body: fileBuffer,
+    Body: fileBody,
     ContentType: image.mime,
     CacheControl: 'public, max-age=31536000, immutable',
   }));

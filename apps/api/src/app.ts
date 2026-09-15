@@ -1,3 +1,8 @@
+import { z } from "zod";
+
+import fs from "fs";
+import os from "os";
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -34,7 +39,6 @@ import {
 import { prisma, withWriteRetry, WRITE_TX_OPTIONS } from './db';
 import { sendTelegramNotification, escapeTelegramHtml } from './bot';
 import path from 'path';
-import fs from 'fs';
 import multer from 'multer';
 import { LUCKY_WHEEL_PRIZES, pickRandomPrize, getLuckyWheelPrizes, createPrizeClaimRecord } from './lucky-draw';
 import { uploadToR2, isR2Configured } from './r2';
@@ -159,7 +163,7 @@ export function createApp() {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
 
-  app.use(express.json());
+  app.use(express.json({ limit: "100kb" }));
 
   app.get('/api/auth/telegram/callback', async (req, res) => {
     try {
@@ -629,8 +633,9 @@ export function createApp() {
   }
   app.use('/uploads', express.static(uploadDir));
 
+
   const upload = multer({
-    storage: multer.memoryStorage(),
+    dest: os.tmpdir(),
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (_req, file, cb) => {
       if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -642,17 +647,33 @@ export function createApp() {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file uploaded' });
     }
-    const image = sniffImageType(req.file.buffer);
-    if (!image) {
-      return res.status(400).json({ error: 'Unsupported image type. Use PNG, JPEG, GIF or WebP.' });
-    }
+    
     try {
+      // Read first 12 bytes to sniff the image type
+      const headerBuf = Buffer.alloc(12);
+      const fd = await fs.promises.open(req.file.path, 'r');
+      await fd.read(headerBuf, 0, 12, 0);
+      await fd.close();
+
+      const image = sniffImageType(headerBuf);
+      if (!image) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
+        return res.status(400).json({ error: 'Unsupported image type. Use PNG, JPEG, GIF or WebP.' });
+      }
+
       if (!isR2Configured()) {
+        await fs.promises.unlink(req.file.path).catch(() => {});
         return res.status(503).json({ error: 'Image storage (R2) is not configured. Set R2_* env vars in .env' });
       }
-      const publicUrl = await uploadToR2(req.file.buffer, image);
+
+      const stream = fs.createReadStream(req.file.path);
+      const publicUrl = await uploadToR2(stream, image);
+      await fs.promises.unlink(req.file.path).catch(() => {});
       res.json({ url: publicUrl });
     } catch (err: any) {
+      if (req.file) {
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
       console.error('R2 upload error:', err);
       res.status(500).json({ error: 'Failed to upload image' });
     }
@@ -1463,9 +1484,27 @@ export function createApp() {
     }
   });
 
+  const orderSchema = z.object({
+    items: z.array(z.any()).min(1),
+    paymentMethod: z.enum(['cash', 'khqr']),
+    branchId: z.string().optional().nullable(),
+    orderType: z.enum(['pickup', 'delivery']).optional().default('pickup'),
+    building: z.string().optional().nullable(),
+    roomNumber: z.string().optional().nullable(),
+    contactName: z.string().optional().nullable(),
+    contactPhone: z.string().optional().nullable(),
+    pointsToUse: z.number().int().min(0).optional(),
+    claimReward: z.boolean().optional(),
+    prizeClaimCode: z.string().optional().nullable(),
+  });
+
   app.post('/api/orders', orderRateLimit, resolveCustomer, async (req, res) => {
     try {
-      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward, prizeClaimCode } = req.body;
+      const parsed = orderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid order data', details: parsed.error.issues });
+      }
+      const { items, paymentMethod, branchId, orderType, building, roomNumber, contactName, contactPhone, pointsToUse, claimReward, prizeClaimCode } = parsed.data;
 
       // The owner of an order is the verified caller, never a body field —
       // a body field let anyone attach an order to a stranger and spend their
